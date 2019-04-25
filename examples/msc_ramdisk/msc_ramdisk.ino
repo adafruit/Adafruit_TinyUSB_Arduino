@@ -12,7 +12,7 @@ void setup()
   usbmsc.begin();
 
   Serial.begin(115200);
-  while ( !Serial ) delay(10);   // for nrf52840 with native usb
+  while ( !Serial ) delay(10);   // wait for native usb
 
   Serial.println("Adafruit TinyUSB Mass Storage Disk RAM example");
 }
