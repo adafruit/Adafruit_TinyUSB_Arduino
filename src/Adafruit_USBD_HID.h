@@ -22,10 +22,28 @@
  * THE SOFTWARE.
  */
 
-#ifndef ADAFRUIT_TINYUSB_H_
-#define ADAFRUIT_TINYUSB_H_
+#ifndef ADAFRUIT_USBD_HID_H_
+#define ADAFRUIT_USBD_HID_H_
 
-#include "Adafruit_USBD_MSC.h"
-#include "Adafruit_USBD_HID.h"
+#include "Adafruit_TinyUSB_core.h"
 
-#endif /* ADAFRUIT_TINYUSB_H_ */
+class Adafruit_USBD_HID : Adafruit_USBD_Interface
+{
+  public:
+    Adafruit_USBD_HID(void);
+
+    void setBootProtocol(uint8_t protocol); // 0: None, 1: Keyboard, 2:Mouse
+    void setReportDescriptor(uint8_t const* desc_report, uint16_t len);
+
+    bool begin(void);
+
+    // from Adafruit_USBD_Interface
+    virtual uint16_t getDescriptor(uint8_t* buf, uint16_t bufsize);
+
+  private:
+    uint8_t _protocol;
+    uint8_t const* _desc_report;
+    uint16_t _desc_report_len;
+};
+
+#endif /* ADAFRUIT_USBD_HID_H_ */

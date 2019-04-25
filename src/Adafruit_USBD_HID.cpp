@@ -22,10 +22,46 @@
  * THE SOFTWARE.
  */
 
-#ifndef ADAFRUIT_TINYUSB_H_
-#define ADAFRUIT_TINYUSB_H_
-
-#include "Adafruit_USBD_MSC.h"
 #include "Adafruit_USBD_HID.h"
 
-#endif /* ADAFRUIT_TINYUSB_H_ */
+#define EPOUT   0x00
+#define EPIN    0x80
+
+//------------- IMPLEMENTATION -------------//
+Adafruit_USBD_HID::Adafruit_USBD_HID(void)
+{
+  _protocol = HID_PROTOCOL_NONE;
+  _desc_report = NULL;
+  _desc_report_len = 0;
+}
+
+void Adafruit_USBD_HID::setBootProtocol(uint8_t protocol)
+{
+  _protocol = protocol;
+}
+
+void Adafruit_USBD_HID::setReportDescriptor(uint8_t const* desc_report, uint16_t len)
+{
+  _desc_report = desc_report;
+  _desc_report_len = len;
+}
+
+uint16_t Adafruit_USBD_HID::getDescriptor(uint8_t* buf, uint16_t bufsize)
+{
+  if ( !_desc_report_len ) return 0;
+
+  uint8_t desc[] = { TUD_HID_DESCRIPTOR(0, 0, _protocol, _desc_report_len, EPIN, 16, 4) };
+  uint16_t const len = sizeof(desc);
+
+  if ( bufsize < len ) return 0;
+  memcpy(buf, desc, len);
+  return len;
+}
+
+bool Adafruit_USBD_HID::begin(void)
+{
+  if ( !USBDevice.addInterface(*this) ) return false;
+  tud_desc_set.hid_report = _desc_report;
+
+  return true;
+}
