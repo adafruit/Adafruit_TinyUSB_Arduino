@@ -32,8 +32,8 @@ static Adafruit_USBD_MSC* _msc_dev = NULL;
 
 Adafruit_USBD_MSC::Adafruit_USBD_MSC(void)
 {
-  _block_count = 0;
-  _block_size = 0;
+  _maxlun = 1;
+  memset(_lun, 0, sizeof(_lun));
 }
 
 uint16_t Adafruit_USBD_MSC::getDescriptor(uint8_t* buf, uint16_t bufsize)
@@ -46,23 +46,33 @@ uint16_t Adafruit_USBD_MSC::getDescriptor(uint8_t* buf, uint16_t bufsize)
   return len;
 }
 
-void Adafruit_USBD_MSC::setCapacity(uint32_t block_count, uint16_t block_size)
+void Adafruit_USBD_MSC::setMaxLun(uint8_t maxlun)
 {
-  _block_count = block_count;
-  _block_size = block_size;
+  _maxlun = maxlun;
 }
 
-void Adafruit_USBD_MSC::getCapacity(uint32_t* block_count, uint16_t* block_size)
+uint8_t Adafruit_USBD_MSC::getMaxLun(void)
 {
-  (*block_count) = _block_count;
-  (*block_size) = _block_size;
+  return _maxlun;
 }
 
-void Adafruit_USBD_MSC::setCallback(read_callback_t rd_cb, write_callback_t wr_cb, flush_callback_t fl_cb)
+void Adafruit_USBD_MSC::setCapacity(uint8_t lun, uint32_t block_count, uint16_t block_size)
 {
-  _rd_cb = rd_cb;
-  _wr_cb = wr_cb;
-  _fl_cb = fl_cb;
+  _lun[lun].block_count = block_count;
+  _lun[lun].block_size = block_size;
+}
+
+void Adafruit_USBD_MSC::getCapacity(uint8_t lun, uint32_t* block_count, uint16_t* block_size)
+{
+  *block_count = _lun[lun].block_count;
+  *block_size  = _lun[lun].block_size;
+}
+
+void Adafruit_USBD_MSC::setCallback(uint8_t lun, read_callback_t rd_cb, write_callback_t wr_cb, flush_callback_t fl_cb)
+{
+  _lun[lun].rd_cb = rd_cb;
+  _lun[lun].wr_cb = wr_cb;
+  _lun[lun].fl_cb = fl_cb;
 }
 
 bool Adafruit_USBD_MSC::begin(void)
@@ -75,6 +85,20 @@ bool Adafruit_USBD_MSC::begin(void)
 
 extern "C"
 {
+
+// Invoked to determine max LUN
+uint8_t tud_msc_maxlun_cb(void)
+{
+  if (!_msc_dev) return 0;
+  return _msc_dev->getMaxLun();
+}
+
+// Callback invoked to determine disk's size
+void tud_msc_capacity_cb(uint8_t lun, uint32_t* block_count, uint16_t* block_size)
+{
+  if (!_msc_dev) return;
+  _msc_dev->getCapacity(lun, block_count, block_size);
+}
 
 // Callback invoked when received an SCSI command not in built-in list below
 // - READ_CAPACITY10, READ_FORMAT_CAPACITY, INQUIRY, MODE_SENSE6, REQUEST_SENSE
@@ -132,36 +156,28 @@ int32_t tud_msc_scsi_cb (uint8_t lun, const uint8_t scsi_cmd[16], void* buffer, 
 // Copy disk's data to buffer (up to bufsize) and return number of copied bytes.
 int32_t tud_msc_read10_cb (uint8_t lun, uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize)
 {
-  if ( !(_msc_dev && _msc_dev->_rd_cb) ) return -1;
+  if ( !(_msc_dev && _msc_dev->_lun[lun].rd_cb) ) return -1;
 
-  return _msc_dev->_rd_cb(lun, lba, offset, buffer, bufsize);
+  return _msc_dev->_lun[lun].rd_cb(lba, buffer, bufsize);
 }
 
 // Callback invoked when received WRITE10 command.
 // Process data in buffer to disk's storage and return number of written bytes
 int32_t tud_msc_write10_cb (uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t bufsize)
 {
-  if ( !(_msc_dev && _msc_dev->_wr_cb) ) return -1;
+  if ( !(_msc_dev && _msc_dev->_lun[lun].wr_cb) ) return -1;
 
-  return _msc_dev->_wr_cb(lun, lba, offset, buffer, bufsize);
+  return _msc_dev->_lun[lun].wr_cb(lba, buffer, bufsize);
 }
 
 // Callback invoked when WRITE10 command is completed (status received and accepted by host).
 // used to flush any pending cache.
 void tud_msc_write10_complete_cb (uint8_t lun)
 {
-  if ( !(_msc_dev && _msc_dev->_fl_cb) ) return;
+  if ( !(_msc_dev && _msc_dev->_lun[lun].fl_cb) ) return;
 
   // flush pending cache when write10 is complete
-  return _msc_dev->_fl_cb(lun);
-}
-
-void tud_msc_capacity_cb(uint8_t lun, uint32_t* block_count, uint16_t* block_size)
-{
-  (void) lun;
-  if (!_msc_dev) return;
-
-  _msc_dev->getCapacity(block_count, block_size);
+  return _msc_dev->_lun[lun].fl_cb();
 }
 
 }

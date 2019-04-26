@@ -30,28 +30,37 @@
 class Adafruit_USBD_MSC : Adafruit_USBD_Interface
 {
   public:
-    typedef int32_t (*read_callback_t ) (uint8_t lun, uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize);
-    typedef int32_t (*write_callback_t) (uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t bufsize);
-    typedef void    (*flush_callback_t) (uint8_t lun);
+    typedef int32_t (*read_callback_t ) (uint32_t lba, void* buffer, uint32_t bufsize);
+    typedef int32_t (*write_callback_t) (uint32_t lba, uint8_t* buffer, uint32_t bufsize);
+    typedef void    (*flush_callback_t) (void);
 
     Adafruit_USBD_MSC(void);
 
     bool begin(void);
 
-    void setCapacity(uint32_t block_count, uint16_t block_size);
-    void getCapacity(uint32_t* block_count, uint16_t* block_size);
-    void setCallback(read_callback_t rd_cb, write_callback_t wr_cb, flush_callback_t fl_cb);
+    void setMaxLun(uint8_t maxlun);
+    uint8_t getMaxLun(void);
+
+    void setCapacity(uint8_t lun, uint32_t block_count, uint16_t block_size);
+    void getCapacity(uint8_t lun, uint32_t* block_count, uint16_t* block_size);
+
+    void setCallback(uint8_t lun, read_callback_t rd_cb, write_callback_t wr_cb, flush_callback_t fl_cb);
 
     // from Adafruit_USBD_Interface
     virtual uint16_t getDescriptor(uint8_t* buf, uint16_t bufsize);
 
   private:
-    uint32_t _block_count;
-    uint16_t _block_size;
+    enum { MAX_LUN = 2 };
+    struct {
+        read_callback_t  rd_cb;
+        write_callback_t wr_cb;
+        flush_callback_t fl_cb;
 
-    read_callback_t  _rd_cb;
-    write_callback_t _wr_cb;
-    flush_callback_t _fl_cb;
+        uint32_t block_count;
+        uint16_t block_size;
+    } _lun[MAX_LUN];
+
+    uint8_t _maxlun;
 
     friend int32_t tud_msc_read10_cb (uint8_t lun, uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize);
     friend int32_t tud_msc_write10_cb (uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t bufsize);

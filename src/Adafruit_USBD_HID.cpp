@@ -65,3 +65,15 @@ bool Adafruit_USBD_HID::begin(void)
 
   return true;
 }
+
+bool Adafruit_USBD_HID::ready(void)
+{
+  return tud_hid_ready();
+}
+
+bool Adafruit_USBD_HID::sendReport(uint8_t report_id, void const* report, uint8_t len)
+{
+  return tud_hid_report(report_id, report, len);
+}
+
+

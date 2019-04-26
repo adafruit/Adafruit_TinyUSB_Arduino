@@ -30,12 +30,19 @@
 class Adafruit_USBD_HID : Adafruit_USBD_Interface
 {
   public:
+    typedef uint16_t (*get_report_callback_t) (uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen);
+    typedef void (*set_report_callback_t)(uint8_t report_id, hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize);
+
     Adafruit_USBD_HID(void);
 
     void setBootProtocol(uint8_t protocol); // 0: None, 1: Keyboard, 2:Mouse
     void setReportDescriptor(uint8_t const* desc_report, uint16_t len);
+    void setReportCallback();
 
     bool begin(void);
+
+    bool ready(void);
+    bool sendReport(uint8_t report_id, void const* report, uint8_t len);
 
     // from Adafruit_USBD_Interface
     virtual uint16_t getDescriptor(uint8_t* buf, uint16_t bufsize);
@@ -44,6 +51,9 @@ class Adafruit_USBD_HID : Adafruit_USBD_Interface
     uint8_t _protocol;
     uint8_t const* _desc_report;
     uint16_t _desc_report_len;
+
+    get_report_callback_t _get_report_cb;
+    set_report_callback_t _set_report_cb;
 };
 
 #endif /* ADAFRUIT_USBD_HID_H_ */
