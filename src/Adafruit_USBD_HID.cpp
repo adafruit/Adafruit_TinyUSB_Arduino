@@ -30,9 +30,15 @@
 //------------- IMPLEMENTATION -------------//
 Adafruit_USBD_HID::Adafruit_USBD_HID(void)
 {
+  _interval_ms = 10;
   _protocol = HID_PROTOCOL_NONE;
   _desc_report = NULL;
   _desc_report_len = 0;
+}
+
+void Adafruit_USBD_HID::setPollInterval(uint8_t interval_ms)
+{
+  _interval_ms = interval_ms;
 }
 
 void Adafruit_USBD_HID::setBootProtocol(uint8_t protocol)
@@ -46,11 +52,17 @@ void Adafruit_USBD_HID::setReportDescriptor(uint8_t const* desc_report, uint16_t
   _desc_report_len = len;
 }
 
+void Adafruit_USBD_HID::setReportCallback(get_report_callback_t get_report, set_report_callback_t set_report)
+{
+  _get_report_cb = get_report;
+  _set_report_cb = set_report;
+}
+
 uint16_t Adafruit_USBD_HID::getDescriptor(uint8_t* buf, uint16_t bufsize)
 {
   if ( !_desc_report_len ) return 0;
 
-  uint8_t desc[] = { TUD_HID_DESCRIPTOR(0, 0, _protocol, _desc_report_len, EPIN, 16, 4) };
+  uint8_t desc[] = { TUD_HID_DESCRIPTOR(0, 0, _protocol, _desc_report_len, EPIN, 16, _interval_ms) };
   uint16_t const len = sizeof(desc);
 
   if ( bufsize < len ) return 0;

@@ -6,9 +6,10 @@ Adafruit_USBD_MSC usbmsc;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
-  // block count and size are defined in variant.h
+  // Set disk size and callback for Logical Unit 0 (LUN 0)
   usbmsc.setCapacity(0, DISK_BLOCK_NUM, DISK_BLOCK_SIZE);
   usbmsc.setCallback(0, ram_read_cb, ram_write_cb, ram_flush_cb);
+  
   usbmsc.begin();
 
   Serial.begin(115200);
