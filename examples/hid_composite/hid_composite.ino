@@ -40,8 +40,8 @@ enum
 // HID report descriptor using TinyUSB's template
 uint8_t const desc_hid_report[] =
 {
-  HID_REPORT_DESC_KEYBOARD( HID_REPORT_ID(RID_KEYBOARD), ),
-  HID_REPORT_DESC_MOUSE   ( HID_REPORT_ID(RID_MOUSE), )
+  TUD_HID_REPORT_DESC_KEYBOARD( HID_REPORT_ID(RID_KEYBOARD), ),
+  TUD_HID_REPORT_DESC_MOUSE   ( HID_REPORT_ID(RID_MOUSE), )
 };
 
 Adafruit_USBD_HID usb_hid;
@@ -62,7 +62,7 @@ void setup()
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.println("Adafruit TinyUSB HID Composit example");
+  Serial.println("Adafruit TinyUSB HID Composite example");
 }
 
 void loop()
