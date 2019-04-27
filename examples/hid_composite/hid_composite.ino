@@ -111,7 +111,7 @@ void loop()
     }else
     {
       // send empty key report if previously has key pressed
-      if (has_key) usb_hid.keyboardKeyRelease(RID_KEYBOARD);
+      if (has_key) usb_hid.keyboardRelease(RID_KEYBOARD);
       has_key = false;
     }
   }
