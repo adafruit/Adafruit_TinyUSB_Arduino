@@ -45,6 +45,18 @@ class Adafruit_USBD_HID : Adafruit_USBD_Interface
     bool ready(void);
     bool sendReport(uint8_t report_id, void const* report, uint8_t len);
 
+    //------------- Keyboard API -------------//
+    bool keyboadReport(uint8_t report_id, uint8_t modifier, uint8_t keycode[6]);
+    bool keyboardKeyPress(uint8_t report_id, char ch);
+    bool keyboardKeyRelease(uint8_t report_id);
+
+    //------------- Mouse API -------------//
+    bool mouseReport(uint8_t report_id, uint8_t buttons, int8_t x, int8_t y, int8_t scroll, int8_t pan);
+    bool mouseMove(uint8_t report_id, int8_t x, int8_t y);
+    bool mouseScroll(uint8_t report_id, int8_t scroll, int8_t pan);
+    bool mouseButtonPress(uint8_t report_id, uint8_t buttons);
+    static inline bool mouseButtonRelease(uint8_t report_id);
+
     // from Adafruit_USBD_Interface
     virtual uint16_t getDescriptor(uint8_t* buf, uint16_t bufsize);
 

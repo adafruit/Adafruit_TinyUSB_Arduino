@@ -88,4 +88,46 @@ bool Adafruit_USBD_HID::sendReport(uint8_t report_id, void const* report, uint8_
   return tud_hid_report(report_id, report, len);
 }
 
+//--------------------------------------------------------------------+
+// Keyboard
+//--------------------------------------------------------------------+
+
+bool Adafruit_USBD_HID::keyboadReport(uint8_t report_id, uint8_t modifier, uint8_t keycode[6])
+{
+  return tud_hid_keyboard_report(report_id, modifier, keycode);
+}
+
+bool Adafruit_USBD_HID::keyboardKeyRelease(uint8_t report_id)
+{
+  return tud_hid_keyboard_key_release(report_id);
+}
+
+//--------------------------------------------------------------------+
+// Mouse
+//--------------------------------------------------------------------+
+
+bool Adafruit_USBD_HID::mouseReport(uint8_t report_id, uint8_t buttons, int8_t x, int8_t y, int8_t scroll, int8_t pan)
+{
+  return tud_hid_mouse_report(report_id, buttons, x, y, scroll, pan);
+}
+
+bool Adafruit_USBD_HID::mouseMove(uint8_t report_id, int8_t x, int8_t y)
+{
+  return tud_hid_mouse_move(report_id, x, y);
+}
+
+bool Adafruit_USBD_HID::mouseScroll(uint8_t report_id, int8_t scroll, int8_t pan)
+{
+  return tud_hid_mouse_scroll(report_id, scroll, pan);
+}
+
+bool Adafruit_USBD_HID::mouseButtonPress(uint8_t report_id, uint8_t buttons)
+{
+  return tud_hid_mouse_report(report_id, buttons, 0, 0, 0, 0);
+}
+
+bool Adafruit_USBD_HID::mouseButtonRelease(uint8_t report_id)
+{
+  return tud_hid_mouse_report(report_id, 0, 0, 0, 0, 0);
+}
 
