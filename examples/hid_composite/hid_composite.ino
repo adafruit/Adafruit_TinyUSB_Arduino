@@ -62,7 +62,7 @@ void setup()
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.println("Adafruit TinyUSB Mass Storage Disk RAM example");
+  Serial.println("Adafruit TinyUSB HID Composit example");
 }
 
 void loop()
