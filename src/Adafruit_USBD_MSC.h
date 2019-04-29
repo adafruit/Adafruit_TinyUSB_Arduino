@@ -25,7 +25,7 @@
 #ifndef ADAFRUIT_USBD_MSC_H_
 #define ADAFRUIT_USBD_MSC_H_
 
-#include "Adafruit_TinyUSB_core.h"
+#include "Adafruit_TinyUSB_Core.h"
 
 class Adafruit_USBD_MSC : Adafruit_USBD_Interface
 {
