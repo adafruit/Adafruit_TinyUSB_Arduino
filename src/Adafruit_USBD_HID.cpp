@@ -38,8 +38,14 @@ Adafruit_USBD_HID::Adafruit_USBD_HID(void)
 {
   _interval_ms = 10;
   _protocol = HID_PROTOCOL_NONE;
+
+  _mouse_button = 0;
+
   _desc_report = NULL;
   _desc_report_len = 0;
+
+  _get_report_cb = NULL;
+  _set_report_cb = NULL;
 }
 
 void Adafruit_USBD_HID::setPollInterval(uint8_t interval_ms)
@@ -110,31 +116,35 @@ bool Adafruit_USBD_HID::keyboardPress(uint8_t report_id, char ch)
 
   if ( _ascii2keycode[ch][0] ) modifier = KEYBOARD_MODIFIER_LEFTSHIFT;
   keycode[0] = _ascii2keycode[ch][1];
-  tud_hid_keyboard_report(report_id, modifier, keycode);
+
+  return tud_hid_keyboard_report(report_id, modifier, keycode);
 }
 
 bool Adafruit_USBD_HID::keyboardRelease(uint8_t report_id)
 {
-  return tud_hid_keyboard_key_release(report_id);
+  return tud_hid_keyboard_report(report_id, 0, NULL);
 }
 
 //--------------------------------------------------------------------+
 // Mouse
 //--------------------------------------------------------------------+
 
-bool Adafruit_USBD_HID::mouseReport(uint8_t report_id, uint8_t buttons, int8_t x, int8_t y, int8_t scroll, int8_t pan)
+bool Adafruit_USBD_HID::mouseReport(uint8_t report_id, uint8_t buttons, int8_t x, int8_t y, int8_t vertical, int8_t horizontal)
 {
-  return tud_hid_mouse_report(report_id, buttons, x, y, scroll, pan);
+  // cache mouse button for other API such as move, scroll
+  _mouse_button = buttons;
+
+  return tud_hid_mouse_report(report_id, buttons, x, y, vertical, horizontal);
 }
 
 bool Adafruit_USBD_HID::mouseMove(uint8_t report_id, int8_t x, int8_t y)
 {
-  return tud_hid_mouse_move(report_id, x, y);
+  return tud_hid_mouse_report(report_id, _mouse_button, x, y, 0, 0);
 }
 
 bool Adafruit_USBD_HID::mouseScroll(uint8_t report_id, int8_t scroll, int8_t pan)
 {
-  return tud_hid_mouse_scroll(report_id, scroll, pan);
+  return tud_hid_mouse_report(report_id, _mouse_button, 0, 0, scroll, pan);
 }
 
 bool Adafruit_USBD_HID::mouseButtonPress(uint8_t report_id, uint8_t buttons)
