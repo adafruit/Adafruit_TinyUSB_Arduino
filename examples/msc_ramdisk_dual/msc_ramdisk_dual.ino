@@ -25,22 +25,22 @@
 #include "Adafruit_TinyUSB.h"
 #include "ramdisk.h"
 
-Adafruit_USBD_MSC usbmsc;
+Adafruit_USBD_MSC usb_msc;
 
 // the setup function runs once when you press reset or power the board
 void setup()
 {
-  usbmsc.setMaxLun(2);
+  usb_msc.setMaxLun(2);
   
   // Set disk size and callback for Logical Unit 0 (LUN 0)
-  usbmsc.setCapacity(0, DISK_BLOCK_NUM, DISK_BLOCK_SIZE);
-  usbmsc.setCallback(0, ram0_read_cb, ram0_write_cb, ram0_flush_cb);
+  usb_msc.setCapacity(0, DISK_BLOCK_NUM, DISK_BLOCK_SIZE);
+  usb_msc.setCallback(0, ram0_read_cb, ram0_write_cb, ram0_flush_cb);
 
   // Set disk size and callback for Logical Unit 1 (LUN 1)
-  usbmsc.setCapacity(1, DISK_BLOCK_NUM, DISK_BLOCK_SIZE);
-  usbmsc.setCallback(1, ram1_read_cb, ram1_write_cb, ram1_flush_cb);
+  usb_msc.setCapacity(1, DISK_BLOCK_NUM, DISK_BLOCK_SIZE);
+  usb_msc.setCallback(1, ram1_read_cb, ram1_write_cb, ram1_flush_cb);
     
-  usbmsc.begin();
+  usb_msc.begin();
 
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // wait for native usb
