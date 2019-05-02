@@ -37,6 +37,7 @@ class Adafruit_USBD_HID : Adafruit_USBD_Interface
 
     void setPollInterval(uint8_t interval_ms);
     void setBootProtocol(uint8_t protocol); // 0: None, 1: Keyboard, 2:Mouse
+    void enableOutEndpoint(bool enable);
     void setReportDescriptor(uint8_t const* desc_report, uint16_t len);
     void setReportCallback(get_report_callback_t get_report, set_report_callback_t set_report);
 
@@ -63,6 +64,7 @@ class Adafruit_USBD_HID : Adafruit_USBD_Interface
   private:
     uint8_t _interval_ms;
     uint8_t _protocol;
+    bool    _out_endpoint;
     uint8_t _mouse_button;
 
     uint16_t _desc_report_len;
@@ -70,6 +72,9 @@ class Adafruit_USBD_HID : Adafruit_USBD_Interface
 
     get_report_callback_t _get_report_cb;
     set_report_callback_t _set_report_cb;
+
+    friend uint16_t tud_hid_get_report_cb(uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen);
+    friend void tud_hid_set_report_cb(uint8_t report_id, hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize);
 };
 
 #endif /* ADAFRUIT_USBD_HID_H_ */

@@ -83,6 +83,7 @@ bool Adafruit_USBD_MSC::begin(void)
   return true;
 }
 
+//------------- TinyUSB callbacks -------------//
 extern "C"
 {
 
@@ -180,5 +181,5 @@ void tud_msc_write10_complete_cb (uint8_t lun)
   return _msc_dev->_lun[lun].fl_cb();
 }
 
-}
+} // extern "C"
 

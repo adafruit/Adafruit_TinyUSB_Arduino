@@ -24,14 +24,12 @@
 
 #include "Adafruit_USBD_HID.h"
 
-
-//--------------------------------------------------------------------+
-//
-//--------------------------------------------------------------------+
 #define EPOUT   0x00
 #define EPIN    0x80
 
 uint8_t const _ascii2keycode[128][2] =  { HID_ASCII_TO_KEYCODE };
+
+static Adafruit_USBD_HID* _hid_dev = NULL;
 
 //------------- IMPLEMENTATION -------------//
 Adafruit_USBD_HID::Adafruit_USBD_HID(void)
@@ -39,6 +37,7 @@ Adafruit_USBD_HID::Adafruit_USBD_HID(void)
   _interval_ms = 10;
   _protocol = HID_PROTOCOL_NONE;
 
+  _out_endpoint = false;
   _mouse_button = 0;
 
   _desc_report = NULL;
@@ -58,6 +57,11 @@ void Adafruit_USBD_HID::setBootProtocol(uint8_t protocol)
   _protocol = protocol;
 }
 
+void Adafruit_USBD_HID::enableOutEndpoint(bool enable)
+{
+  _out_endpoint = enable;
+}
+
 void Adafruit_USBD_HID::setReportDescriptor(uint8_t const* desc_report, uint16_t len)
 {
   _desc_report = desc_report;
@@ -74,18 +78,33 @@ uint16_t Adafruit_USBD_HID::getDescriptor(uint8_t* buf, uint16_t bufsize)
 {
   if ( !_desc_report_len ) return 0;
 
-  uint8_t desc[] = { TUD_HID_DESCRIPTOR(0, 0, _protocol, _desc_report_len, EPIN, 16, _interval_ms) };
-  uint16_t const len = sizeof(desc);
+  if ( _out_endpoint )
+  {
+    uint8_t desc[] = { TUD_HID_INOUT_DESCRIPTOR(0, 0, _protocol, _desc_report_len, EPIN, EPOUT, CFG_TUD_HID_BUFSIZE, _interval_ms) };
+    uint16_t const len = sizeof(desc);
 
-  if ( bufsize < len ) return 0;
-  memcpy(buf, desc, len);
-  return len;
+    if ( bufsize < len ) return 0;
+    memcpy(buf, desc, len);
+
+    return len;
+  }else
+  {
+    uint8_t desc[] = { TUD_HID_DESCRIPTOR(0, 0, _protocol, _desc_report_len, EPIN, CFG_TUD_HID_BUFSIZE, _interval_ms) };
+    uint16_t const len = sizeof(desc);
+
+    if ( bufsize < len ) return 0;
+    memcpy(buf, desc, len);
+
+    return len;
+  }
 }
 
 bool Adafruit_USBD_HID::begin(void)
 {
   if ( !USBDevice.addInterface(*this) ) return false;
+
   tud_desc_set.hid_report = _desc_report;
+  _hid_dev = this;
 
   return true;
 }
@@ -99,6 +118,31 @@ bool Adafruit_USBD_HID::sendReport(uint8_t report_id, void const* report, uint8_
 {
   return tud_hid_report(report_id, report, len);
 }
+
+//------------- TinyUSB callbacks -------------//
+extern "C"
+{
+
+// Invoked when received GET_REPORT control request
+// Application must fill buffer report's content and return its length.
+// Return zero will cause the stack to STALL request
+uint16_t tud_hid_get_report_cb(uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen)
+{
+  if ( !(_hid_dev && _hid_dev->_get_report_cb) ) return 0;
+
+  return _hid_dev->_get_report_cb(report_id, report_type, buffer, reqlen);
+}
+
+// Invoked when received SET_REPORT control request or
+// received data on OUT endpoint ( Report ID = 0, Type = 0 )
+void tud_hid_set_report_cb(uint8_t report_id, hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize)
+{
+  if ( !(_hid_dev && _hid_dev->_set_report_cb) ) return;
+
+  _hid_dev->_set_report_cb(report_id, report_type, buffer, bufsize);
+}
+
+} // extern "C"
 
 //--------------------------------------------------------------------+
 // Keyboard
