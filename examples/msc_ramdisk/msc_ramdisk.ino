@@ -30,8 +30,13 @@ Adafruit_USBD_MSC usb_msc;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
-  // Set disk size and callback for Logical Unit 0 (LUN 0)
+  // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
+  usb_msc.setID(0, "Adafruit", "Mass Storage", "1.0");
+  
+  // Set disk size
   usb_msc.setCapacity(0, DISK_BLOCK_NUM, DISK_BLOCK_SIZE);
+
+  // Set callback
   usb_msc.setCallback(0, ram_read_cb, ram_write_cb, ram_flush_cb);
   
   usb_msc.begin();

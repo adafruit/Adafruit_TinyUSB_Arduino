@@ -41,6 +41,8 @@ class Adafruit_USBD_MSC : Adafruit_USBD_Interface
     void setMaxLun(uint8_t maxlun);
     uint8_t getMaxLun(void);
 
+    void setID(uint8_t lun, const char* vendor_id, const char* product_id, const char* product_rev);
+
     void setCapacity(uint8_t lun, uint32_t block_count, uint16_t block_size);
     void getCapacity(uint8_t lun, uint32_t* block_count, uint16_t* block_size);
 
@@ -58,6 +60,10 @@ class Adafruit_USBD_MSC : Adafruit_USBD_Interface
 
         uint32_t block_count;
         uint16_t block_size;
+
+        const char* _inquiry_vid;
+        const char* _inquiry_pid;
+        const char* _inquiry_rev;
     } _lun[MAX_LUN];
 
     uint8_t _maxlun;
@@ -65,6 +71,7 @@ class Adafruit_USBD_MSC : Adafruit_USBD_Interface
     friend int32_t tud_msc_read10_cb (uint8_t lun, uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize);
     friend int32_t tud_msc_write10_cb (uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t bufsize);
     friend void tud_msc_write10_complete_cb (uint8_t lun);
+    friend void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16], uint8_t product_rev[4]);
 };
 
 #endif /* ADAFRUIT_USBD_MSC_H_ */

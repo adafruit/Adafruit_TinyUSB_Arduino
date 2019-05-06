@@ -56,6 +56,13 @@ uint8_t Adafruit_USBD_MSC::getMaxLun(void)
   return _maxlun;
 }
 
+void Adafruit_USBD_MSC::setID(uint8_t lun, const char* vendor_id, const char* product_id, const char* product_rev)
+{
+   _lun[lun]._inquiry_vid = vendor_id;
+   _lun[lun]._inquiry_pid = product_id;
+   _lun[lun]._inquiry_rev = product_rev;
+}
+
 void Adafruit_USBD_MSC::setCapacity(uint8_t lun, uint32_t block_count, uint16_t block_size)
 {
   _lun[lun].block_count = block_count;
@@ -88,10 +95,34 @@ extern "C"
 {
 
 // Invoked to determine max LUN
-uint8_t tud_msc_maxlun_cb(void)
+uint8_t tud_msc_get_maxlun_cb(void)
 {
   if (!_msc_dev) return 0;
   return _msc_dev->getMaxLun();
+}
+
+// Invoked when received SCSI_CMD_INQUIRY
+// Application fill vendor id, product id and revision with string up to 8, 16, 4 characters respectively
+void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16], uint8_t product_rev[4])
+{
+  if (!_msc_dev) return;
+
+  const char* vid = (_msc_dev->_lun[lun]._inquiry_vid ? _msc_dev->_lun[lun]._inquiry_vid : "Adafruit");
+  const char* pid = (_msc_dev->_lun[lun]._inquiry_pid ? _msc_dev->_lun[lun]._inquiry_pid : "Mass Storage");
+  const char* rev = (_msc_dev->_lun[lun]._inquiry_rev ? _msc_dev->_lun[lun]._inquiry_rev : "1.0");
+
+  memcpy(vendor_id  , vid, tu_min32(strlen(vid), 8 ));
+  memcpy(product_id , pid, tu_min32(strlen(pid), 16));
+  memcpy(product_rev, rev, tu_min32(strlen(rev), 4 ));
+}
+
+// Invoked when received Test Unit Ready command.
+// return true allowing host to read/write this LUN e.g SD card inserted
+bool tud_msc_test_unit_ready_cb(uint8_t lun)
+{
+  (void) lun;
+
+  return true; // RAM disk is always ready
 }
 
 // Callback invoked to determine disk's size
@@ -111,24 +142,8 @@ int32_t tud_msc_scsi_cb (uint8_t lun, const uint8_t scsi_cmd[16], void* buffer, 
 
   switch ( scsi_cmd[0] )
   {
-    case SCSI_CMD_TEST_UNIT_READY:
-      // Command that host uses to check our readiness before sending other commands
-      resplen = 0;
-    break;
-
     case SCSI_CMD_PREVENT_ALLOW_MEDIUM_REMOVAL:
       // Host is about to read/write etc ... better not to disconnect disk
-      resplen = 0;
-    break;
-
-    case SCSI_CMD_START_STOP_UNIT:
-      // Host try to eject/safe remove/poweroff us. We could safely disconnect with disk storage, or go into lower power
-      /* scsi_start_stop_unit_t const * start_stop = (scsi_start_stop_unit_t const *) scsi_cmd;
-       // Start bit = 0 : low power mode, if load_eject = 1 : unmount disk storage as well
-       // Start bit = 1 : Ready mode, if load_eject = 1 : mount disk storage
-       start_stop->start;
-       start_stop->load_eject;
-       */
       resplen = 0;
     break;
 
