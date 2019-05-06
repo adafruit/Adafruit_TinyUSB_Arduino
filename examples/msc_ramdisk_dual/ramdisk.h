@@ -25,12 +25,6 @@
 #ifndef RAMDISK_H_
 #define RAMDISK_H_
 
-enum
-{
-  DISK_BLOCK_NUM  = 16, // 8KB is the smallest size that windows allow to mount
-  DISK_BLOCK_SIZE = 512
-};
-
 //--------------------------------------------------------------------+
 // LUN 0
 //--------------------------------------------------------------------+

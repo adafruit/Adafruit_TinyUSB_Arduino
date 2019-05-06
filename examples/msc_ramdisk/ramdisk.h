@@ -28,12 +28,6 @@
 #define README_CONTENTS \
 "This is Adafruit TinyUSB MassStorage device demo on RAM disk."
 
-enum
-{
-  DISK_BLOCK_NUM  = 16, // 8KB is the smallest size that windows allow to mount
-  DISK_BLOCK_SIZE = 512
-};
-
 uint8_t msc_disk[DISK_BLOCK_NUM][DISK_BLOCK_SIZE] =
 {
   //------------- Block0: Boot Sector -------------//

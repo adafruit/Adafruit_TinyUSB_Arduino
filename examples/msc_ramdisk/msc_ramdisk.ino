@@ -23,6 +23,10 @@
  */
 
 #include "Adafruit_TinyUSB.h"
+
+// 8KB is the smallest size that windows allow to mount
+#define DISK_BLOCK_NUM  16
+#define DISK_BLOCK_SIZE 512
 #include "ramdisk.h"
 
 Adafruit_USBD_MSC usb_msc;
