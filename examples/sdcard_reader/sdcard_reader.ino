@@ -23,35 +23,65 @@
  */
 
 #include "Adafruit_TinyUSB.h"
+#include "SD.h"
 
-// 8KB is the smallest size that windows allow to mount
-#define DISK_BLOCK_NUM  16
-#define DISK_BLOCK_SIZE 512
-#include "ramdisk.h"
+#ifdef ARDUINO_NRF52832_FEATHER
+const int chipSelect = 11;
+#else
+const int chipSelect = 10;
+#endif
 
 Adafruit_USBD_MSC usb_msc;
+
+Sd2Card card;
+SdVolume volume;
 
 // the setup function runs once when you press reset or power the board
 void setup()
 {
   // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
-  usb_msc.setID(0, "Adafruit", "Mass Storage", "1.0");
-  
-  // Set disk size
-  usb_msc.setCapacity(0, DISK_BLOCK_NUM, DISK_BLOCK_SIZE);
+  usb_msc.setID(0, "Adafruit", "SD Card", "1.0");
 
-  // Set callback
-  usb_msc.setReadWriteCallback(0, ram_read_cb, ram_write_cb, ram_flush_cb);
+  // Set read write callback
+  usb_msc.setReadWriteCallback(0, sd_read_cb, sd_write_cb, sd_flush_cb);
 
-  // Set Lun ready (RAM disk is always ready)
-  usb_msc.setUnitReady(0, true);
-  
+  // Still initialize MSC but tell usb stack that MSC is not ready to read/write
+  // If we don't initialize, board will be enumerated as CDC only
+  usb_msc.setUnitReady(0, false);
   usb_msc.begin();
 
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.println("Adafruit TinyUSB Mass Storage Disk RAM example");
+  Serial.println("Adafruit TinyUSB SD Card Reader example");
+
+  Serial.println("\nInitializing SD card...");
+
+  if ( !card.init(SPI_HALF_SPEED, chipSelect) )
+  {
+    Serial.println("initialization failed. Things to check:");
+    Serial.println("* is a card inserted?");
+    Serial.println("* is your wiring correct?");
+    Serial.println("* did you change the chipSelect pin to match your shield or module?");
+    while (1) delay(1);
+  }
+
+  // Now we will try to open the 'volume'/'partition' - it should be FAT16 or FAT32
+  if (!volume.init(card)) {
+    Serial.println("Could not find FAT16/FAT32 partition.\nMake sure you've formatted the card");
+    while (1) delay(1);
+  }
+  
+  uint32_t block_count = volume.blocksPerCluster()*volume.clusterCount();
+
+  Serial.print("Volume size (MB):  ");
+  Serial.println((block_count/2) / 1024);
+
+  // Set disk size, SD block size is always 512
+  usb_msc.setCapacity(0, block_count, 512);
+
+  // MSC is ready for read/write
+  usb_msc.setUnitReady(0, true);
 }
 
 void loop()
@@ -59,31 +89,23 @@ void loop()
   // nothing to do
 }
 
-// Callback invoked when received READ10 command.
-// Copy disk's data to buffer (up to bufsize) and 
-// return number of copied bytes (must be multiple of block size) 
-int32_t ram_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
+int32_t sd_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 {
-  uint8_t const* addr = msc_disk[lba];
-  memcpy(buffer, addr, bufsize);
-
-  return bufsize;
+  (void) bufsize;
+  return card.readBlock(lba, (uint8_t*) buffer) ? 512 : -1;
 }
 
 // Callback invoked when received WRITE10 command.
 // Process data in buffer to disk's storage and 
 // return number of written bytes (must be multiple of block size)
-int32_t ram_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
+int32_t sd_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 {
-  uint8_t* addr = msc_disk[lba];
-  memcpy(addr, buffer, bufsize);
-
-  return bufsize;
+  return card.writeBlock(lba, buffer) ? 512 : -1;
 }
 
 // Callback invoked when WRITE10 command is completed (status received and accepted by host).
 // used to flush any pending cache.
-void ram_flush_cb (void)
+void sd_flush_cb (void)
 {
   // nothing to do
 }

@@ -75,11 +75,21 @@ void Adafruit_USBD_MSC::getCapacity(uint8_t lun, uint32_t* block_count, uint16_t
   *block_size  = _lun[lun].block_size;
 }
 
-void Adafruit_USBD_MSC::setCallback(uint8_t lun, read_callback_t rd_cb, write_callback_t wr_cb, flush_callback_t fl_cb)
+void Adafruit_USBD_MSC::setUnitReady(uint8_t lun, bool ready)
+{
+  _lun[lun].unit_ready = ready;
+}
+
+void Adafruit_USBD_MSC::setReadWriteCallback(uint8_t lun, read_callback_t rd_cb, write_callback_t wr_cb, flush_callback_t fl_cb)
 {
   _lun[lun].rd_cb = rd_cb;
   _lun[lun].wr_cb = wr_cb;
   _lun[lun].fl_cb = fl_cb;
+}
+
+void Adafruit_USBD_MSC::setReadyCallback(uint8_t lun, ready_callback_t cb)
+{
+  _lun[lun].ready_cb = cb;
 }
 
 bool Adafruit_USBD_MSC::begin(void)
@@ -107,6 +117,7 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16
 {
   if (!_msc_dev) return;
 
+  // If not set use default ID "Adafruit - Mass Storage - 1.0"
   const char* vid = (_msc_dev->_lun[lun]._inquiry_vid ? _msc_dev->_lun[lun]._inquiry_vid : "Adafruit");
   const char* pid = (_msc_dev->_lun[lun]._inquiry_pid ? _msc_dev->_lun[lun]._inquiry_pid : "Mass Storage");
   const char* rev = (_msc_dev->_lun[lun]._inquiry_rev ? _msc_dev->_lun[lun]._inquiry_rev : "1.0");
@@ -120,9 +131,14 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16
 // return true allowing host to read/write this LUN e.g SD card inserted
 bool tud_msc_test_unit_ready_cb(uint8_t lun)
 {
-  (void) lun;
+  if (!_msc_dev) return false;
 
-  return true; // RAM disk is always ready
+  if (_msc_dev->_lun[lun].ready_cb)
+  {
+    _msc_dev->_lun[lun].unit_ready = _msc_dev->_lun[lun].ready_cb();
+  }
+
+  return _msc_dev->_lun[lun].unit_ready;
 }
 
 // Callback invoked to determine disk's size
