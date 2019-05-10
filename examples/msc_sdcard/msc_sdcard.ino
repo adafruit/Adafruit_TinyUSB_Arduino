@@ -43,7 +43,7 @@ void setup()
   usb_msc.setID(0, "Adafruit", "SD Card", "1.0");
 
   // Set read write callback
-  usb_msc.setReadWriteCallback(0, sd_read_cb, sd_write_cb, sd_flush_cb);
+  usb_msc.setReadWriteCallback(0, msc_read_cb, msc_write_cb, msc_flush_cb);
 
   // Still initialize MSC but tell usb stack that MSC is not ready to read/write
   // If we don't initialize, board will be enumerated as CDC only
@@ -53,7 +53,7 @@ void setup()
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.println("Adafruit TinyUSB MSC SD Card example");
+  Serial.println("Mass Storage SD Card example");
 
   Serial.println("\nInitializing SD card...");
 
@@ -89,7 +89,7 @@ void loop()
   // nothing to do
 }
 
-int32_t sd_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
+int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 {
   (void) bufsize;
   return card.readBlock(lba, (uint8_t*) buffer) ? 512 : -1;
@@ -98,14 +98,14 @@ int32_t sd_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 // Callback invoked when received WRITE10 command.
 // Process data in buffer to disk's storage and 
 // return number of written bytes (must be multiple of block size)
-int32_t sd_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
+int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 {
   return card.writeBlock(lba, buffer) ? 512 : -1;
 }
 
 // Callback invoked when WRITE10 command is completed (status received and accepted by host).
 // used to flush any pending cache.
-void sd_flush_cb (void)
+void msc_flush_cb (void)
 {
   // nothing to do
 }
