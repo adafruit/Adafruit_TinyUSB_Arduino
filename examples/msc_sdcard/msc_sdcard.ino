@@ -53,7 +53,7 @@ void setup()
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.println("Adafruit TinyUSB SD Card Reader example");
+  Serial.println("Adafruit TinyUSB MSC SD Card example");
 
   Serial.println("\nInitializing SD card...");
 
