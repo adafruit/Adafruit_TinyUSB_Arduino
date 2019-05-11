@@ -103,9 +103,7 @@ bool Adafruit_USBD_HID::begin(void)
 {
   if ( !USBDevice.addInterface(*this) ) return false;
 
-  tud_desc_set.hid_report = _desc_report;
   _hid_dev = this;
-
   return true;
 }
 
@@ -122,6 +120,13 @@ bool Adafruit_USBD_HID::sendReport(uint8_t report_id, void const* report, uint8_
 //------------- TinyUSB callbacks -------------//
 extern "C"
 {
+
+uint8_t const * tud_hid_descriptor_report_cb(void)
+{
+  if (!_hid_dev) return NULL;
+
+  return _hid_dev->_desc_report;
+}
 
 // Invoked when received GET_REPORT control request
 // Application must fill buffer report's content and return its length.
