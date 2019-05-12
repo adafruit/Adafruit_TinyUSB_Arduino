@@ -121,6 +121,8 @@ bool Adafruit_USBD_HID::sendReport(uint8_t report_id, void const* report, uint8_
 extern "C"
 {
 
+// Invoked when received GET HID REPORT DESCRIPTOR
+// Application return pointer to descriptor, whose contents must exist long enough for transfer to complete
 uint8_t const * tud_hid_descriptor_report_cb(void)
 {
   if (!_hid_dev) return NULL;
