@@ -40,14 +40,14 @@ SdVolume volume;
 void setup()
 {
   // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
-  usb_msc.setID(0, "Adafruit", "SD Card", "1.0");
+  usb_msc.setID("Adafruit", "SD Card", "1.0");
 
   // Set read write callback
-  usb_msc.setReadWriteCallback(0, msc_read_cb, msc_write_cb, msc_flush_cb);
+  usb_msc.setReadWriteCallback(msc_read_cb, msc_write_cb, msc_flush_cb);
 
   // Still initialize MSC but tell usb stack that MSC is not ready to read/write
   // If we don't initialize, board will be enumerated as CDC only
-  usb_msc.setUnitReady(0, false);
+  usb_msc.setUnitReady(false);
   usb_msc.begin();
 
   Serial.begin(115200);
@@ -78,10 +78,10 @@ void setup()
   Serial.println((block_count/2) / 1024);
 
   // Set disk size, SD block size is always 512
-  usb_msc.setCapacity(0, block_count, 512);
+  usb_msc.setCapacity(block_count, 512);
 
   // MSC is ready for read/write
-  usb_msc.setUnitReady(0, true);
+  usb_msc.setUnitReady(true);
 }
 
 void loop()

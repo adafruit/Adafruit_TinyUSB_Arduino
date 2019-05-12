@@ -35,16 +35,16 @@ Adafruit_USBD_MSC usb_msc;
 void setup()
 {
   // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
-  usb_msc.setID(0, "Adafruit", "Mass Storage", "1.0");
+  usb_msc.setID("Adafruit", "Mass Storage", "1.0");
   
   // Set disk size
-  usb_msc.setCapacity(0, DISK_BLOCK_NUM, DISK_BLOCK_SIZE);
+  usb_msc.setCapacity(DISK_BLOCK_NUM, DISK_BLOCK_SIZE);
 
   // Set callback
-  usb_msc.setReadWriteCallback(0, msc_read_cb, msc_write_cb, msc_flush_cb);
+  usb_msc.setReadWriteCallback(msc_read_cb, msc_write_cb, msc_flush_cb);
 
   // Set Lun ready (RAM disk is always ready)
-  usb_msc.setUnitReady(0, true);
+  usb_msc.setUnitReady(true);
   
   usb_msc.begin();
 

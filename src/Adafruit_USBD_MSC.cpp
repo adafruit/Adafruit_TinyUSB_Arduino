@@ -69,12 +69,6 @@ void Adafruit_USBD_MSC::setCapacity(uint8_t lun, uint32_t block_count, uint16_t 
   _lun[lun].block_size = block_size;
 }
 
-void Adafruit_USBD_MSC::getCapacity(uint8_t lun, uint32_t* block_count, uint16_t* block_size)
-{
-  *block_count = _lun[lun].block_count;
-  *block_size  = _lun[lun].block_size;
-}
-
 void Adafruit_USBD_MSC::setUnitReady(uint8_t lun, bool ready)
 {
   _lun[lun].unit_ready = ready;
@@ -145,7 +139,9 @@ bool tud_msc_test_unit_ready_cb(uint8_t lun)
 void tud_msc_capacity_cb(uint8_t lun, uint32_t* block_count, uint16_t* block_size)
 {
   if (!_msc_dev) return;
-  _msc_dev->getCapacity(lun, block_count, block_size);
+
+  *block_count = _msc_dev->_lun[lun].block_count;
+  *block_size  = _msc_dev->_lun[lun].block_size;
 }
 
 // Callback invoked when received an SCSI command not in built-in list below
