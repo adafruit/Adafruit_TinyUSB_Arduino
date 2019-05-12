@@ -1,8 +1,5 @@
-/*
- * The MIT License (MIT)
- *
+/* The MIT License (MIT)
  * Copyright (c) 2019 Ha Thach for Adafruit Industries
- *
  */
 
 /* This example demonstrate HID Generic raw Input & Output.

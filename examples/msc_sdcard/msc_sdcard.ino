@@ -1,9 +1,5 @@
-/*
- * The MIT License (MIT)
- *
- * Copyright (c) 2019 Ha Thach for Adafruit Industries
- *
- */
+// The MIT License (MIT)
+// Copyright (c) 2019 Ha Thach for Adafruit Industries
 
 #include "Adafruit_TinyUSB.h"
 #include "SD.h"

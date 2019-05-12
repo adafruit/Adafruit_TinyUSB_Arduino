@@ -1,9 +1,5 @@
-/*
- * The MIT License (MIT)
- *
- * Copyright (c) 2019 Ha Thach for Adafruit Industries
- *
- */
+// The MIT License (MIT)
+// Copyright (c) 2019 Ha Thach for Adafruit Industries
 
 #include "Adafruit_TinyUSB.h"
 #include "Adafruit_SPIFlash.h"
@@ -15,7 +11,6 @@
                                               // If you change this be
                                               // sure to change the fatfs
                                               // object type below to match.
-
 
 #if defined(__SAMD51__)
   // Alternatively you can define and use non-SPI pins, QSPI isnt on a sercom
