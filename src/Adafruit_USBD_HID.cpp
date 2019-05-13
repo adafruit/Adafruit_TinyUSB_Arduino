@@ -155,7 +155,7 @@ void tud_hid_set_report_cb(uint8_t report_id, hid_report_type_t report_type, uin
 // Keyboard
 //--------------------------------------------------------------------+
 
-bool Adafruit_USBD_HID::keyboadReport(uint8_t report_id, uint8_t modifier, uint8_t keycode[6])
+bool Adafruit_USBD_HID::keyboardReport(uint8_t report_id, uint8_t modifier, uint8_t keycode[6])
 {
   return tud_hid_keyboard_report(report_id, modifier, keycode);
 }
