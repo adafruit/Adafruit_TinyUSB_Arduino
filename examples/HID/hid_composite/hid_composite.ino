@@ -84,7 +84,7 @@ void loop()
       uint8_t keycode[6] = { 0 };
       keycode[0] = HID_KEY_A;
 
-      usb_hid.keyboadReport(RID_KEYBOARD, 0, keycode);
+      usb_hid.keyboardReport(RID_KEYBOARD, 0, keycode);
 
       has_key = true;
     }else
