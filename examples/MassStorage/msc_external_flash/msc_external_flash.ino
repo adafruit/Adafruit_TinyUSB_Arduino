@@ -1,21 +1,31 @@
 // The MIT License (MIT)
 // Copyright (c) 2019 Ha Thach for Adafruit Industries
 
+/* This example demo how to expose on-board external Flash as USB Mass Storage.
+ * - For Feather/Metro M0 express series with SPI flash device
+ *   follow library is required
+ *   https://github.com/adafruit/Adafruit_SPIFlash
+ *
+ * - For Feather/Metro M4 expres series with QSPI flash, additional QSPI is reuiqred
+ *   https://github.com/adafruit/Adafruit_QSPI
+ */
+
 #include "Adafruit_TinyUSB.h"
 #include "Adafruit_SPIFlash.h"
 
-// Configuration of the flash chip pins and flash fatfs object.
-// You don't normally need to change these if using a Feather/Metro
-// M0 express board.
-#define FLASH_TYPE     SPIFLASHTYPE_W25Q16BV  // Flash chip type.
-                                              // If you change this be
-                                              // sure to change the fatfs
-                                              // object type below to match.
-
 #if defined(__SAMD51__)
-  // Alternatively you can define and use non-SPI pins, QSPI isnt on a sercom
-  Adafruit_SPIFlash flash(PIN_QSPI_SCK, PIN_QSPI_IO1, PIN_QSPI_IO0, PIN_QSPI_CS);
+  // use QSPI libary for M4 series
+  #include "Adafruit_QSPI_GD25Q.h"
+
+  Adafruit_QSPI_GD25Q flash;
 #else
+  // Configuration of the flash chip pins and flash fatfs object.
+  // You don't normally need to change these if using a Feather/Metro
+  // M0 express board.
+
+  // Flash chip type. If you change this be sure to change the fatfs to match as well
+  #define FLASH_TYPE     SPIFLASHTYPE_W25Q16BV
+
   #if (SPI_INTERFACES_COUNT == 1)
     #define FLASH_SS       SS                    // Flash chip SS pin.
     #define FLASH_SPI_PORT SPI                   // What SPI port is Flash on?
@@ -24,17 +34,20 @@
     #define FLASH_SPI_PORT SPI1                   // What SPI port is Flash on?
   #endif
 
-Adafruit_SPIFlash flash(FLASH_SS, &FLASH_SPI_PORT);     // Use hardware SPI
+  Adafruit_SPIFlash flash(FLASH_SS, &FLASH_SPI_PORT);     // Use hardware SPI
 #endif
 
 Adafruit_USBD_MSC usb_msc;
 
-
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+#if defined(__SAMD51__)
+  flash.begin();
+#else
   flash.begin(FLASH_TYPE);
-    
+#endif
+
   // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
   usb_msc.setID("Adafruit", "SPI Flash", "1.0");
 
