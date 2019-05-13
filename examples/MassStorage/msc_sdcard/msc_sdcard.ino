@@ -32,7 +32,7 @@ void setup()
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.println("Mass Storage SD Card example");
+  Serial.println("Adafruit TinyUSB Mass Storage SD Card example");
 
   Serial.println("\nInitializing SD card...");
 

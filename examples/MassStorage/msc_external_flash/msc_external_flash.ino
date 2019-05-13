@@ -65,7 +65,7 @@ void setup()
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.println("Mass Storage SPI Flash example");
+  Serial.println("Adafruit TinyUSB Mass Storage SPI Flash example");
   Serial.print("Page size: "); Serial.println(flash.pageSize());
   Serial.print("Page num : "); Serial.println(flash.numPages());
 }
