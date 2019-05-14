@@ -30,7 +30,7 @@ void setup()
 {
   usb_hid.setPollInterval(2);
   usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
-  usb_hid.setReportCallback(NULL, set_report_callback_t set_report);
+  usb_hid.setReportCallback(NULL, hid_report_callback);
 
   usb_hid.begin();
 
@@ -83,7 +83,7 @@ void loop()
       // 6 is max keycode per report
       if (count == 6)
       {
-        usb_hid.keyboadReport(0, 0, keycode);
+        usb_hid.keyboardReport(0, 0, keycode);
         delay(2); // delay for report to send out
 
         // reset report
@@ -100,7 +100,7 @@ void loop()
   // Send any remaining keys (not accumulated up to 6)
   if ( count )
   {
-    usb_hid.keyboadReport(0, 0, keycode);
+    usb_hid.keyboardReport(0, 0, keycode);
   }
 
   // Send All-zero report to indicate there is no keys pressed
