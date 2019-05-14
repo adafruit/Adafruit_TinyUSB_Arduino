@@ -5,9 +5,8 @@
 
 /* This sketch demonstrates USB HID keyboard.
  * - PIN A0-A5 is used to send digit '0' to '5' respectively
- * - LED will be turned on when one of Caplock/NumLock/ScrollLock/Compose/Kana is set by Host
+ * - LED will be used as Caplock indicator
  */
-
 
 // HID report descriptor using TinyUSB's template
 // Single Report (no ID) decriptor
@@ -35,19 +34,14 @@ void setup()
   usb_hid.begin();
 
   // led pin
-  pinMode(PIN_LED, OUTPUT);
-  digitalWrite(PIN_LED, 0);
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
 
   // Set up pin as input
   for (uint8_t i=0; i<pincount; i++)
   {
     pinMode(pins[i], INPUT_PULLUP);
   }
-
-  Serial.begin(115200);
-  while ( !Serial ) delay(10);   // wait for native usb
-
-  Serial.println("Adafruit TinyUSB HID Keyboard example");
 }
 
 
@@ -123,6 +117,6 @@ void hid_report_callback(uint8_t report_id, hid_report_type_t report_type, uint8
   // Kana (4) | Compose (3) | ScrollLock (2) | CapsLock (1) | Numlock (0)
   uint8_t ledIndicator = buffer[0];
 
-  // turn on LED if any indicator is set
-  digitalWrite(PIN_LED, ledIndicator);
+  // turn on LED if caplock is set
+  digitalWrite(LED_BUILTIN, ledIndicator & KEYBOARD_LED_CAPSLOCK);
 }
