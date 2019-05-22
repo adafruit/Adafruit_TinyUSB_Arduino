@@ -13,11 +13,12 @@
 #include "Adafruit_TinyUSB.h"
 #include "Adafruit_SPIFlash.h"
 
-#if defined(__SAMD51__)
+#if defined(__SAMD51__) || defined(NRF52840_XXAA)
   // use QSPI libary for M4 series
-  #include "Adafruit_QSPI_GD25Q.h"
+  #include "Adafruit_QSPI.h"
+  #include "Adafruit_QSPI_Flash.h"
 
-  Adafruit_QSPI_GD25Q flash;
+  Adafruit_QSPI_Flash flash;
 #else
   // Configuration of the flash chip pins and flash fatfs object.
   // You don't normally need to change these if using a Feather/Metro
@@ -42,11 +43,13 @@ Adafruit_USBD_MSC usb_msc;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
-#if defined(__SAMD51__)
+#if defined(__SAMD51__) || defined(NRF52840_XXAA)
   flash.begin();
 #else
   flash.begin(FLASH_TYPE);
 #endif
+
+  pinMode(LED_BUILTIN, OUTPUT);
 
   // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
   usb_msc.setID("Adafruit", "SPI Flash", "1.0");
@@ -68,6 +71,7 @@ void setup()
   Serial.println("Adafruit TinyUSB Mass Storage SPI Flash example");
   Serial.print("Page size: "); Serial.println(flash.pageSize());
   Serial.print("Page num : "); Serial.println(flash.numPages());
+  Serial.print("JEDEC ID: "); Serial.println(flash.GetJEDECID(), HEX);
 }
 
 void loop()
@@ -127,12 +131,12 @@ void flash_cache_flush (void)
   if ( cache_addr == FLASH_CACHE_INVALID_ADDR ) return;
 
   // indicator
-//  ledOn(LED_BUILTIN);
+  digitalWrite(LED_BUILTIN, HIGH);
 
   flash.eraseSector(cache_addr/FLASH_CACHE_SIZE);
   flash.writeBuffer(cache_addr, cache_buf, FLASH_CACHE_SIZE);
 
-//  ledOff(LED_BUILTIN);
+  digitalWrite(LED_BUILTIN, LOW);
 
   cache_addr = FLASH_CACHE_INVALID_ADDR;
 }
