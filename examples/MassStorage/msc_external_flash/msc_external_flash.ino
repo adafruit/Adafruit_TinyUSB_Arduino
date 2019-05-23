@@ -2,11 +2,11 @@
 // Copyright (c) 2019 Ha Thach for Adafruit Industries
 
 /* This example demo how to expose on-board external Flash as USB Mass Storage.
- * - For Feather/Metro M0 express series with SPI flash device
+ * - For M0 express series with SPI flash device
  *   follow library is required
  *   https://github.com/adafruit/Adafruit_SPIFlash
  *
- * - For Feather/Metro M4 expres series with QSPI flash, additional QSPI is reuiqred
+ * - For M4 expres series and nRF52840 with QSPI flash, additional library is reuiqred
  *   https://github.com/adafruit/Adafruit_QSPI
  */
 
@@ -14,7 +14,6 @@
 #include "Adafruit_SPIFlash.h"
 
 #if defined(__SAMD51__) || defined(NRF52840_XXAA)
-  // use QSPI libary for M4 series
   #include "Adafruit_QSPI.h"
   #include "Adafruit_QSPI_Flash.h"
 
