@@ -69,7 +69,7 @@ void loop()
       usb_hid.mouseMove(RID_MOUSE, delta, delta); // right + down
 
       // delay a bit before attempt to send keyboard report
-      delay(2);
+      delay(10);
     }
   }
 
