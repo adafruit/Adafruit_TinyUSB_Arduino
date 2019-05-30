@@ -9,19 +9,20 @@ git:
   quiet: true
 env:
   global:
-     - PRETTYNAME="Adafruit QSPI Library"
-     #- DOXYFILE=$TRAVIS_BUILD_DIR/.doxyfile
+    - PRETTYNAME="Adafruit QSPI Library"
+    #- DOXYFILE=$TRAVIS_BUILD_DIR/.doxyfile
 
 before_install:
-   - source <(curl -SLs https://raw.githubusercontent.com/adafruit/travis-ci-arduino/master/install.sh)
+    - source <(curl -SLs https://raw.githubusercontent.com/adafruit/travis-ci-arduino/master/install.sh)
 
 install:
-   - arduino --install-library "Adafruit SPIFlash","Adafruit QSPI"
+    - arduino --install-library "Adafruit SPIFlash","Adafruit QSPI"
 
 script:
-   - build_m4_platforms
+    - export M4_PLATFORMS='declare -A m4_platforms=( [m4]="adafruit:samd:adafruit_metro_m4:speed=120:usbstack=tinyusb", [trellis_m4]="adafruit:samd:adafruit_trellis_m4:speed=120:usbstack=tinyusb" )'
+    - build_m4_platforms
 
 # Generate and deploy documentation
 after_success:
-  - source <(curl -SLs  https://raw.githubusercontent.com/adafruit/travis-ci-arduino/master/library_check.sh)
-  #- source <(curl -SLs  https://raw.githubusercontent.com/adafruit/travis-ci-arduino/master/doxy_gen_and_deploy.sh)
+    - source <(curl -SLs  https://raw.githubusercontent.com/adafruit/travis-ci-arduino/master/library_check.sh)
+    #- source <(curl -SLs  https://raw.githubusercontent.com/adafruit/travis-ci-arduino/master/doxy_gen_and_deploy.sh)
