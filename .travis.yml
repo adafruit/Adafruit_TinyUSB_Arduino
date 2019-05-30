@@ -19,7 +19,7 @@ install:
     - arduino --install-library "Adafruit SPIFlash","Adafruit QSPI"
 
 script:
-    - export M4_PLATFORMS='declare -A m4_platforms=( [m4]="adafruit:samd:adafruit_metro_m4:speed=120:usbstack=tinyusb", [trellis_m4]="adafruit:samd:adafruit_trellis_m4:speed=120:usbstack=tinyusb" )'
+    - export M4_PLATFORMS='declare -A m4_platforms=( [m4]="adafruit:samd:adafruit_metro_m4:speed=120,usbstack=tinyusb", [trellis_m4]="adafruit:samd:adafruit_trellis_m4:speed=120,usbstack=tinyusb" )'
     - build_m4_platforms
 
 # Generate and deploy documentation
