@@ -13,13 +13,13 @@ env:
     #- DOXYFILE=$TRAVIS_BUILD_DIR/.doxyfile
 
 before_install:
-    - source <(curl -SLs https://raw.githubusercontent.com/adafruit/travis-ci-arduino/master/install.sh)
+    - source <(curl -SLs https://raw.githubusercontent.com/hathach/travis-ci-arduino/tinyusb-option/install.sh)
 
 install:
     - arduino --install-library "Adafruit SPIFlash","Adafruit QSPI"
 
 script:
-    - export M4_PLATFORMS='declare -A m4_platforms=( [m4]="adafruit:samd:adafruit_metro_m4:speed=120,usbstack=tinyusb", [trellis_m4]="adafruit:samd:adafruit_trellis_m4:speed=120,usbstack=tinyusb" )'
+    #- export M4_PLATFORMS='declare -A m4_platforms=( [m4]="adafruit:samd:adafruit_metro_m4:speed=120,usbstack=tinyusb", [trellis_m4]="adafruit:samd:adafruit_trellis_m4:speed=120,usbstack=tinyusb" )'
     - build_m4_platforms
 
 # Generate and deploy documentation
