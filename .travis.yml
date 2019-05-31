@@ -14,7 +14,7 @@ env:
 
 before_install:
     - wget -q https://raw.githubusercontent.com/adafruit/travis-ci-arduino/master/install.sh
-    # add tinyusb option
+    # add tinyusb option for m4
     - sed -i 's/\(m4:speed=120\)/\1,usbstack=tinyusb/g' install.sh
     - source install.sh
 
@@ -23,6 +23,7 @@ install:
 
 script:
     - build_m4_platforms
+    - build_nrf5x_platforms
 
 # Generate and deploy documentation
 after_success:
