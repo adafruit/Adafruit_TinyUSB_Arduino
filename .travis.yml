@@ -15,7 +15,7 @@ env:
 before_install:
     - wget -q https://raw.githubusercontent.com/adafruit/travis-ci-arduino/master/install.sh
     # add tinyusb option
-    - sed -i 's/\(m4:speed=120\)/\1,usbstack=tinyusb/' install.sh
+    - sed -i 's/\(m4:speed=120\)/\1,usbstack=tinyusb/g' install.sh
     - source install.sh
 
 install:
