@@ -13,9 +13,10 @@ env:
     #- DOXYFILE=$TRAVIS_BUILD_DIR/.doxyfile
 
 before_install:
-    - curl -SLs https://raw.githubusercontent.com/adafruit/travis-ci-arduino/master/install.sh
+    - wget -q https://raw.githubusercontent.com/adafruit/travis-ci-arduino/master/install.sh
     # add tinyusb option
     - sed -i 's/\(m4:speed=120\)/\1,usbstack=tinyusb/' install.sh
+    - source install.sh
 
 install:
     - arduino --install-library "Adafruit SPIFlash","Adafruit QSPI"
