@@ -52,7 +52,7 @@ class Adafruit_USBD_MSC : Adafruit_USBD_Interface
     //------------- Single LUN API -------------//
     void setID(const char* vendor_id, const char* product_id, const char* product_rev)
     {
-      setID(0, vendor_id, product_rev, product_rev);
+      setID(0, vendor_id, product_id, product_rev);
     }
 
     void setCapacity(uint32_t block_count, uint16_t block_size)
