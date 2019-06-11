@@ -1,17 +1,18 @@
 // The MIT License (MIT)
 // Copyright (c) 2019 Ha Thach for Adafruit Industries
 
-/* This example demo how to expose on-board external Flash as USB Mass Storage.
- * - For M0 express series with SPI flash device
- *   follow library is required
- *   https://github.com/adafruit/Adafruit_SPIFlash
- *
- * - For M4 expres series and nRF52840 with QSPI flash, additional library is reuiqred
- *   https://github.com/adafruit/Adafruit_QSPI
+/* This example exposes both external flash and SD card as mass storage
+ * using Adafruit_SPIFlash+Adafruit_QSPI and SdFat Library
  */
+
+#include "SPI.h"
+#include "SdFat.h"
 
 #include "Adafruit_TinyUSB.h"
 #include "Adafruit_SPIFlash.h"
+
+const int chipSelect = 10;
+const int spi_freq_mhz = 50;
 
 #if defined(__SAMD51__) || defined(NRF52840_XXAA)
   #include "Adafruit_QSPI.h"
@@ -38,39 +39,42 @@
 #endif
 
 Adafruit_USBD_MSC usb_msc;
+SdFat sd;
 
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+  // MSC with 2 Logical Units
+  usb_msc.setMaxLun(2);
+
+  //------------- Lun 0 for external flash -------------//
 #if defined(__SAMD51__) || defined(NRF52840_XXAA)
   flash.begin();
 #else
   flash.begin(FLASH_TYPE);
 #endif
+  usb_msc.setID(0, "Adafruit", "External Flash", "1.0");
+  usb_msc.setCapacity(0, flash.pageSize()*flash.numPages()/512, 512);
+  usb_msc.setReadWriteCallback(0, external_flash_read_cb, external_flash_write_cb, external_flash_flush_cb);
+  usb_msc.setUnitReady(0, true);
 
-  pinMode(LED_BUILTIN, OUTPUT);
+  //------------- Lun 1 for SD card -------------//
+  usb_msc.setID(1, "Adafruit", "SD Card", "1.0");
+  usb_msc.setReadWriteCallback(1, sdcard_read_cb, sdcard_write_cb, sdcard_flush_cb);
 
-  // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
-  usb_msc.setID("Adafruit", "External Flash", "1.0");
+  if ( sd.cardBegin(chipSelect, SD_SCK_MHZ(spi_freq_mhz)) )
+  {
+    uint32_t block_count = sd.card()->cardSize();
+    usb_msc.setCapacity(1, block_count, 512);
+    usb_msc.setUnitReady(1, true);
+  }
 
-  // Set callback
-  usb_msc.setReadWriteCallback(msc_read_cb, msc_write_cb, msc_flush_cb);
-
-  // Set disk size, block size should be 512 regardless of spi flash page size
-  usb_msc.setCapacity(flash.pageSize()*flash.numPages()/512, 512);
-
-  // MSC is ready for read/write
-  usb_msc.setUnitReady(true);
-  
   usb_msc.begin();
 
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.println("Adafruit TinyUSB Mass Storage SPI Flash example");
-  Serial.print("Page size: "); Serial.println(flash.pageSize());
-  Serial.print("Page num : "); Serial.println(flash.numPages());
-  Serial.print("JEDEC ID: "); Serial.println(flash.GetJEDECID(), HEX);
+  Serial.println("Adafruit TinyUSB Mass Storage External Flash + SD Card example");
 }
 
 void loop()
@@ -78,10 +82,41 @@ void loop()
   // nothing to do
 }
 
+
+//--------------------------------------------------------------------+
+// SD Card callbacks
+//--------------------------------------------------------------------+
+
+int32_t sdcard_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
+{
+  (void) bufsize;
+  return sd.card()->readBlocks(lba, (uint8_t*) buffer, bufsize/512) ? bufsize : -1;
+}
+
+// Callback invoked when received WRITE10 command.
+// Process data in buffer to disk's storage and 
+// return number of written bytes (must be multiple of block size)
+int32_t sdcard_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
+{
+  return sd.card()->writeBlocks(lba, buffer, bufsize/512) ? bufsize : -1;
+}
+
+// Callback invoked when WRITE10 command is completed (status received and accepted by host).
+// used to flush any pending cache.
+void sdcard_flush_cb (void)
+{
+  sd.card()->syncBlocks();
+}
+
+
+//--------------------------------------------------------------------+
+// External Flash callbacks
+//--------------------------------------------------------------------+
+
 // Callback invoked when received READ10 command.
-// Copy disk's data to buffer (up to bufsize) and 
-// return number of copied bytes (must be multiple of block size) 
-int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
+// Copy disk's data to buffer (up to bufsize) and
+// return number of copied bytes (must be multiple of block size)
+int32_t external_flash_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 {
   const uint32_t addr = lba*512;
   flash_cache_read((uint8_t*) buffer, addr, bufsize);
@@ -89,9 +124,9 @@ int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 }
 
 // Callback invoked when received WRITE10 command.
-// Process data in buffer to disk's storage and 
+// Process data in buffer to disk's storage and
 // return number of written bytes (must be multiple of block size)
-int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
+int32_t external_flash_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 {
   // need to erase & caching write back
   const uint32_t addr = lba*512;
@@ -101,13 +136,14 @@ int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 
 // Callback invoked when WRITE10 command is completed (status received and accepted by host).
 // used to flush any pending cache.
-void msc_flush_cb (void)
+void external_flash_flush_cb (void)
 {
   flash_cache_flush();
 }
 
+
 //--------------------------------------------------------------------+
-// Flash Caching
+// Flash Caching for External Flash
 //--------------------------------------------------------------------+
 #define FLASH_CACHE_SIZE          4096        // must be a erasable page size
 #define FLASH_CACHE_INVALID_ADDR  0xffffffff

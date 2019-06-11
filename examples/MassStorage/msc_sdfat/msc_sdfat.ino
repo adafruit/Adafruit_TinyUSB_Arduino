@@ -2,7 +2,7 @@
 // Copyright (c) 2019 Ha Thach for Adafruit Industries
 
 /* This example expose SD card as mass storage using
- * default SdFat Library
+ * SdFat Library
  */
 
 #include "SPI.h"
@@ -66,6 +66,9 @@ void loop()
   // nothing to do
 }
 
+// Callback invoked when received READ10 command.
+// Copy disk's data to buffer (up to bufsize) and
+// return number of copied bytes (must be multiple of block size)
 int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 {
   (void) bufsize;
