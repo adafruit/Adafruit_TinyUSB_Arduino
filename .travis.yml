@@ -26,7 +26,7 @@ before_install:
     - source install.sh
 
 install:
-    - arduino --install-library "Adafruit SPIFlash","Adafruit QSPI"
+    - arduino --install-library "Adafruit SPIFlash","Adafruit QSPI","SdFat"
     - pip3 install --user adafruit-nrfutil
 
 script:

@@ -2,18 +2,20 @@
 // Copyright (c) 2019 Ha Thach for Adafruit Industries
 
 /* This example expose SD card as mass storage using
- * default SD Library
+ * default SdFat Library
  */
 
-#include "SD.h"
+#include "SPI.h"
+#include "SdFat.h"
+
 #include "Adafruit_TinyUSB.h"
 
 const int chipSelect = 10;
+const int spi_freq_mhz = 50;
 
 Adafruit_USBD_MSC usb_msc;
 
-Sd2Card card;
-SdVolume volume;
+SdFat sd;
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -34,9 +36,10 @@ void setup()
 
   Serial.println("Adafruit TinyUSB Mass Storage SD Card example");
 
-  Serial.println("\nInitializing SD card...");
+  Serial.print("\nInitializing SD card ... ");
+  Serial.print(" CS = "); Serial.println(chipSelect);
 
-  if ( !card.init(SPI_HALF_SPEED, chipSelect) )
+  if ( !sd.cardBegin(chipSelect, SD_SCK_MHZ(spi_freq_mhz)) )
   {
     Serial.println("initialization failed. Things to check:");
     Serial.println("* is a card inserted?");
@@ -45,13 +48,8 @@ void setup()
     while (1) delay(1);
   }
 
-  // Now we will try to open the 'volume'/'partition' - it should be FAT16 or FAT32
-  if (!volume.init(card)) {
-    Serial.println("Could not find FAT16/FAT32 partition.\nMake sure you've formatted the card");
-    while (1) delay(1);
-  }
-  
-  uint32_t block_count = volume.blocksPerCluster()*volume.clusterCount();
+  // Size in blocks (512 bytes)
+  uint32_t block_count = sd.card()->cardSize();
 
   Serial.print("Volume size (MB):  ");
   Serial.println((block_count/2) / 1024);
@@ -71,7 +69,7 @@ void loop()
 int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 {
   (void) bufsize;
-  return card.readBlock(lba, (uint8_t*) buffer) ? 512 : -1;
+  return sd.card()->readBlocks(lba, (uint8_t*) buffer, bufsize/512) ? bufsize : -1;
 }
 
 // Callback invoked when received WRITE10 command.
@@ -79,12 +77,12 @@ int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 // return number of written bytes (must be multiple of block size)
 int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 {
-  return card.writeBlock(lba, buffer) ? 512 : -1;
+  return sd.card()->writeBlocks(lba, buffer, bufsize/512) ? bufsize : -1;
 }
 
 // Callback invoked when WRITE10 command is completed (status received and accepted by host).
 // used to flush any pending cache.
 void msc_flush_cb (void)
 {
-  // nothing to do
+  sd.card()->syncBlocks();
 }
