@@ -2,23 +2,23 @@
 // Copyright (c) 2019 Ha Thach for Adafruit Industries
 
 /* This example exposes both external flash and SD card as mass storage
- * using Adafruit_SPIFlash+Adafruit_QSPI and SdFat Library
+ * using Adafruit_SPIFlash and SdFat Library
+ *   - SdFat https://github.com/greiman/SdFat
+ *   - Adafruit_SPIFlash https://github.com/adafruit/Adafruit_SPIFlash
  */
 
 #include "SPI.h"
 #include "SdFat.h"
-
-#include "Adafruit_TinyUSB.h"
 #include "Adafruit_SPIFlash.h"
+#include "Adafruit_TinyUSB.h"
 
 const int chipSelect = 10;
-const int spi_freq_mhz = 50;
 
 #if defined(__SAMD51__) || defined(NRF52840_XXAA)
   Adafruit_FlashTransport_QSPI flashTransport(PIN_QSPI_SCK, PIN_QSPI_CS, PIN_QSPI_IO0, PIN_QSPI_IO1, PIN_QSPI_IO2, PIN_QSPI_IO3);
 #else
   #if (SPI_INTERFACES_COUNT == 1)
-    Adafruit_FlashTransport_SPI flashTransport(SS0, &SPI);
+    Adafruit_FlashTransport_SPI flashTransport(SS, &SPI);
   #else
     Adafruit_FlashTransport_SPI flashTransport(SS1, &SPI1);
   #endif
@@ -46,7 +46,7 @@ void setup()
   usb_msc.setID(1, "Adafruit", "SD Card", "1.0");
   usb_msc.setReadWriteCallback(1, sdcard_read_cb, sdcard_write_cb, sdcard_flush_cb);
 
-  if ( sd.cardBegin(chipSelect, SD_SCK_MHZ(spi_freq_mhz)) )
+  if ( sd.cardBegin(chipSelect, SD_SCK_MHZ(50)) )
   {
     uint32_t block_count = sd.card()->cardSize();
     usb_msc.setCapacity(1, block_count, 512);

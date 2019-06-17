@@ -11,7 +11,6 @@
 #include "Adafruit_TinyUSB.h"
 
 const int chipSelect = 10;
-const int spi_freq_mhz = 50;
 
 Adafruit_USBD_MSC usb_msc;
 
@@ -37,9 +36,9 @@ void setup()
   Serial.println("Adafruit TinyUSB Mass Storage SD Card example");
 
   Serial.print("\nInitializing SD card ... ");
-  Serial.print(" CS = "); Serial.println(chipSelect);
+  Serial.print("CS = "); Serial.println(chipSelect);
 
-  if ( !sd.cardBegin(chipSelect, SD_SCK_MHZ(spi_freq_mhz)) )
+  if ( !sd.cardBegin(chipSelect, SD_SCK_MHZ(50)) )
   {
     Serial.println("initialization failed. Things to check:");
     Serial.println("* is a card inserted?");
