@@ -2,16 +2,28 @@
 // Copyright (c) 2019 Ha Thach for Adafruit Industries
 
 /* This sketch demonstrates USB Mass Storage and HID mouse (and CDC)
- * - Enumerated as 8KB flash disk
+ * - Enumerated as disk using on-board external flash
  * - Press button pin will move mouse toward bottom right of monitor
  */
 
+#include "SPI.h"
+#include "SdFat.h"
+#include "Adafruit_SPIFlash.h"
 #include "Adafruit_TinyUSB.h"
 
-// 8KB is the smallest size that windows allow to mount
-#define DISK_BLOCK_NUM  16
-#define DISK_BLOCK_SIZE 512
-#include "ramdisk.h"
+#if defined(__SAMD51__) || defined(NRF52840_XXAA)
+  Adafruit_FlashTransport_QSPI flashTransport(PIN_QSPI_SCK, PIN_QSPI_CS, PIN_QSPI_IO0, PIN_QSPI_IO1, PIN_QSPI_IO2, PIN_QSPI_IO3);
+#else
+  #if (SPI_INTERFACES_COUNT == 1)
+    Adafruit_FlashTransport_SPI flashTransport(SS, &SPI);
+  #else
+    Adafruit_FlashTransport_SPI flashTransport(SS1, &SPI1);
+  #endif
+#endif
+
+Adafruit_SPIFlash flash(&flashTransport);
+
+Adafruit_USBD_MSC usb_msc;
 
 // HID report descriptor using TinyUSB's template
 // Single Report (no ID) descriptor
@@ -21,26 +33,30 @@ uint8_t const desc_hid_report[] =
 };
 
 Adafruit_USBD_HID usb_hid;
-Adafruit_USBD_MSC usb_msc;
 
 const int pin = 7;
 
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+  flash.begin();
+
+  pinMode(LED_BUILTIN, OUTPUT);
+
   // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
-  usb_msc.setID("Adafruit", "Mass Storage", "1.0");
-  
-  // Set disk size
-  usb_msc.setCapacity(DISK_BLOCK_NUM, DISK_BLOCK_SIZE);
+  usb_msc.setID("Adafruit", "External Flash", "1.0");
 
   // Set callback
   usb_msc.setReadWriteCallback(msc_read_cb, msc_write_cb, msc_flush_cb);
 
-  // Set Lun ready (RAM disk is always ready)
+  // Set disk size, block size should be 512 regardless of spi flash page size
+  usb_msc.setCapacity(flash.pageSize()*flash.numPages()/512, 512);
+
+  // MSC is ready for read/write
   usb_msc.setUnitReady(true);
   
   usb_msc.begin();
+
 
   // Set up button
   pinMode(pin, INPUT_PULLUP);
@@ -51,7 +67,7 @@ void setup()
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.println("Adafruit TinyUSB Mouse + Mass Storage (ramdisk) example");
+  Serial.println("Adafruit TinyUSB Mouse + Mass Storage (external flash) example");
 }
 
 void loop()
@@ -89,9 +105,9 @@ void loop()
 // return number of copied bytes (must be multiple of block size) 
 int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 {
-  uint8_t const* addr = msc_disk[lba];
-  memcpy(buffer, addr, bufsize);
-
+  // Note: SPIFLash Bock API: readBlocks/writeBlocks/syncBlocks
+  // already include 4K sector caching internally. We don't need to cache it, yahhhh!!
+  flash.readBlocks(lba, (uint8_t*) buffer, bufsize/512);
   return bufsize;
 }
 
@@ -100,9 +116,9 @@ int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 // return number of written bytes (must be multiple of block size)
 int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 {
-  uint8_t* addr = msc_disk[lba];
-  memcpy(addr, buffer, bufsize);
-
+  // Note: SPIFLash Bock API: readBlocks/writeBlocks/syncBlocks
+  // already include 4K sector caching internally. We don't need to cache it, yahhhh!!
+  flash.writeBlocks(lba, buffer, bufsize/512);
   return bufsize;
 }
 
@@ -110,5 +126,5 @@ int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 // used to flush any pending cache.
 void msc_flush_cb (void)
 {
-  // nothing to do
+  flash.syncBlocks();
 }
