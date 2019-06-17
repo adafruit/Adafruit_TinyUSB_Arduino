@@ -9,7 +9,7 @@
  */
 
 // HID report descriptor using TinyUSB's template
-// Single Report (no ID) decriptor
+// Single Report (no ID) descriptor
 uint8_t const desc_hid_report[] =
 {
   TUD_HID_REPORT_DESC_KEYBOARD(),
