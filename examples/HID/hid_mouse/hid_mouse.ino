@@ -22,13 +22,13 @@ const int pin = 7;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+  // Set up button
+  pinMode(pin, INPUT_PULLUP);
+
   usb_hid.setPollInterval(2);
   usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
 
   usb_hid.begin();
-
-  // Set up button
-  pinMode(pin, INPUT_PULLUP);
 
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // wait for native usb
