@@ -107,8 +107,7 @@ int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 {
   // Note: SPIFLash Bock API: readBlocks/writeBlocks/syncBlocks
   // already include 4K sector caching internally. We don't need to cache it, yahhhh!!
-  flash.readBlocks(lba, (uint8_t*) buffer, bufsize/512);
-  return bufsize;
+  return flash.readBlocks(lba, (uint8_t*) buffer, bufsize/512) ? bufsize : -1;
 }
 
 // Callback invoked when received WRITE10 command.
@@ -118,8 +117,7 @@ int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 {
   // Note: SPIFLash Bock API: readBlocks/writeBlocks/syncBlocks
   // already include 4K sector caching internally. We don't need to cache it, yahhhh!!
-  flash.writeBlocks(lba, buffer, bufsize/512);
-  return bufsize;
+  return flash.writeBlocks(lba, buffer, bufsize/512) ? bufsize : -1;
 }
 
 // Callback invoked when WRITE10 command is completed (status received and accepted by host).

@@ -3,7 +3,7 @@
 
 /* This example exposes both external flash and SD card as mass storage
  * using Adafruit_SPIFlash and SdFat Library
- *   - SdFat https://github.com/greiman/SdFat
+ *   - SdFat https://github.com/adafruit/SdFat
  *   - Adafruit_SPIFlash https://github.com/adafruit/Adafruit_SPIFlash
  */
 
@@ -11,8 +11,6 @@
 #include "SdFat.h"
 #include "Adafruit_SPIFlash.h"
 #include "Adafruit_TinyUSB.h"
-
-const int chipSelect = 10;
 
 #if defined(__SAMD51__) || defined(NRF52840_XXAA)
   Adafruit_FlashTransport_QSPI flashTransport(PIN_QSPI_SCK, PIN_QSPI_CS, PIN_QSPI_IO0, PIN_QSPI_IO1, PIN_QSPI_IO2, PIN_QSPI_IO3);
@@ -26,8 +24,10 @@ const int chipSelect = 10;
 
 Adafruit_SPIFlash flash(&flashTransport);
 
-Adafruit_USBD_MSC usb_msc;
+const int chipSelect = 10;
 SdFat sd;
+
+Adafruit_USBD_MSC usb_msc;
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -103,8 +103,7 @@ int32_t external_flash_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 {
   // Note: SPIFLash Bock API: readBlocks/writeBlocks/syncBlocks
   // already include 4K sector caching internally. We don't need to cache it, yahhhh!!
-  flash.readBlocks(lba, (uint8_t*) buffer, bufsize/512);
-  return bufsize;
+  return flash.readBlocks(lba, (uint8_t*) buffer, bufsize/512) ? bufsize : -1;
 }
 
 // Callback invoked when received WRITE10 command.
@@ -114,8 +113,7 @@ int32_t external_flash_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize
 {
   // Note: SPIFLash Bock API: readBlocks/writeBlocks/syncBlocks
   // already include 4K sector caching internally. We don't need to cache it, yahhhh!!
-  flash.writeBlocks(lba, buffer, bufsize/512);
-  return bufsize;
+  return flash.writeBlocks(lba, buffer, bufsize/512) ? bufsize : -1;
 }
 
 // Callback invoked when WRITE10 command is completed (status received and accepted by host).
