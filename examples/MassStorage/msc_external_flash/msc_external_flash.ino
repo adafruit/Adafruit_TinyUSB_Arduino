@@ -104,7 +104,7 @@ void loop()
     Serial.println();
 
     changed = false;
-    delay(1000); // refresh every 1 second
+    delay(1000); // refresh every 0.5 second
   }
 }
 
@@ -132,7 +132,11 @@ int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 // used to flush any pending cache.
 void msc_flush_cb (void)
 {
+  // sync with flash
   flash.syncBlocks();
+
+  // clear file system's cache to force refresh
+  fatfs.cacheClear();
 
   changed = true;
 }
