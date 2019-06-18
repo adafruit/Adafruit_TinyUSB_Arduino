@@ -24,7 +24,17 @@
 
 Adafruit_SPIFlash flash(&flashTransport);
 
+// file system object from SdFat
+FatFileSystem fatfs;
+
+FatFile root;
+FatFile file;
+
+// USB Mass Storage object
 Adafruit_USBD_MSC usb_msc;
+
+// Set to true when PC write to flash
+bool changed;
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -53,11 +63,49 @@ void setup()
   Serial.println("Adafruit TinyUSB Mass Storage SPI Flash example");
   Serial.print("JEDEC ID: "); Serial.println(flash.getJEDECID(), HEX);
   Serial.print("Flash size: "); Serial.println(flash.size());
+
+  // Init file system on the flash
+  fatfs.begin(&flash);
+
+  changed = true; // to print contents initially
 }
 
 void loop()
 {
-  // nothing to do
+  if ( changed )
+  {
+    if ( !root.open("/") )
+    {
+      Serial.println("open root failed");
+      return;
+    }
+
+    Serial.println("Flash contents:");
+
+    // Open next file in root.
+    // Warning, openNext starts at the current directory position
+    // so a rewind of the directory may be required.
+    while ( file.openNext(&root, O_RDONLY) )
+    {
+      file.printFileSize(&Serial);
+      Serial.write(' ');
+      file.printName(&Serial);
+      if ( file.isDir() )
+      {
+        // Indicate a directory.
+        Serial.write('/');
+      }
+      Serial.println();
+      file.close();
+    }
+
+    root.close();
+
+    Serial.println();
+
+    changed = false;
+    delay(1000); // refresh every 1 second
+  }
 }
 
 // Callback invoked when received READ10 command.
@@ -85,4 +133,6 @@ int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 void msc_flush_cb (void)
 {
   flash.syncBlocks();
+
+  changed = true;
 }
