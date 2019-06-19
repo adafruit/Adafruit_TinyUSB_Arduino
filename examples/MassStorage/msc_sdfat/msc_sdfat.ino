@@ -7,7 +7,6 @@
 
 #include "SPI.h"
 #include "SdFat.h"
-
 #include "Adafruit_TinyUSB.h"
 
 const int chipSelect = 10;
@@ -15,6 +14,12 @@ const int chipSelect = 10;
 Adafruit_USBD_MSC usb_msc;
 
 SdFat sd;
+
+SdFile root;
+SdFile file;
+
+// Set to true when PC write to flash
+bool changed;
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -38,7 +43,7 @@ void setup()
   Serial.print("\nInitializing SD card ... ");
   Serial.print("CS = "); Serial.println(chipSelect);
 
-  if ( !sd.cardBegin(chipSelect, SD_SCK_MHZ(50)) )
+  if ( !sd.begin(chipSelect, SD_SCK_MHZ(50)) )
   {
     Serial.println("initialization failed. Things to check:");
     Serial.println("* is a card inserted?");
@@ -58,11 +63,41 @@ void setup()
 
   // MSC is ready for read/write
   usb_msc.setUnitReady(true);
+
+  changed = true; // to print contents initially
 }
 
 void loop()
 {
-  // nothing to do
+  if ( changed )
+  {
+    root.open("/");
+    Serial.println("Flash contents:");
+
+    // Open next file in root.
+    // Warning, openNext starts at the current directory position
+    // so a rewind of the directory may be required.
+    while ( file.openNext(&root, O_RDONLY) )
+    {
+      file.printFileSize(&Serial);
+      Serial.write(' ');
+      file.printName(&Serial);
+      if ( file.isDir() )
+      {
+        // Indicate a directory.
+        Serial.write('/');
+      }
+      Serial.println();
+      file.close();
+    }
+
+    root.close();
+
+    Serial.println();
+
+    changed = false;
+    delay(1000); // refresh every 0.5 second
+  }
 }
 
 // Callback invoked when received READ10 command.
@@ -87,4 +122,9 @@ int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 void msc_flush_cb (void)
 {
   sd.card()->syncBlocks();
+
+  // clear file system's cache to force refresh
+  sd.cacheClear();
+
+  changed = true;
 }
