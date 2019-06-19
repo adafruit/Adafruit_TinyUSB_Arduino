@@ -24,46 +24,119 @@
 
 Adafruit_SPIFlash flash(&flashTransport);
 
+// File system object on external flash from SdFat
+FatFileSystem fatfs;
+
 const int chipSelect = 10;
+
+// File system on SD Card
 SdFat sd;
 
+// USB Mass Storage object
 Adafruit_USBD_MSC usb_msc;
+
+// Set to true when PC write to flash
+bool sd_changed = false;
+bool flash_changed = false;
 
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+  pinMode(LED_BUILTIN, OUTPUT);
+
   // MSC with 2 Logical Units
   usb_msc.setMaxLun(2);
 
+  usb_msc.setID(0, "Adafruit", "External Flash", "1.0");
+  usb_msc.setID(1, "Adafruit", "SD Card", "1.0");
+
+  // Since initialize both external flash and SD card can take time.
+  // If it takes too long, our board could be enumerated as CDC device only
+  // i.e without Mass Storage. To prevent this, we call Mass Storage begin first
+  // LUN readiness will always be set later on
+  usb_msc.begin();
+
   //------------- Lun 0 for external flash -------------//
   flash.begin();
-  usb_msc.setID(0, "Adafruit", "External Flash", "1.0");
+  fatfs.begin(&flash);
+
   usb_msc.setCapacity(0, flash.pageSize()*flash.numPages()/512, 512);
   usb_msc.setReadWriteCallback(0, external_flash_read_cb, external_flash_write_cb, external_flash_flush_cb);
   usb_msc.setUnitReady(0, true);
 
-  //------------- Lun 1 for SD card -------------//
-  usb_msc.setID(1, "Adafruit", "SD Card", "1.0");
-  usb_msc.setReadWriteCallback(1, sdcard_read_cb, sdcard_write_cb, sdcard_flush_cb);
+  flash_changed = true; // to print contents initially
 
-  if ( sd.cardBegin(chipSelect, SD_SCK_MHZ(50)) )
+  //------------- Lun 1 for SD card -------------//
+  if ( sd.begin(chipSelect, SD_SCK_MHZ(50)) )
   {
     uint32_t block_count = sd.card()->cardSize();
     usb_msc.setCapacity(1, block_count, 512);
+    usb_msc.setReadWriteCallback(1, sdcard_read_cb, sdcard_write_cb, sdcard_flush_cb);
     usb_msc.setUnitReady(1, true);
-  }
 
-  usb_msc.begin();
+    sd_changed = true; // to print contents initially
+  }
 
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // wait for native usb
 
   Serial.println("Adafruit TinyUSB Mass Storage External Flash + SD Card example");
+  delay(1000);
+}
+
+void print_rootdir(File* rdir)
+{
+  File file;
+
+  // Open next file in root.
+  // Warning, openNext starts at the current directory position
+  // so a rewind of the directory may be required.
+  while ( file.openNext(rdir, O_RDONLY) )
+  {
+    file.printFileSize(&Serial);
+    Serial.write(' ');
+    file.printName(&Serial);
+    if ( file.isDir() )
+    {
+      // Indicate a directory.
+      Serial.write('/');
+    }
+    Serial.println();
+    file.close();
+  }
 }
 
 void loop()
 {
-  // nothing to do
+  if ( flash_changed )
+  {
+    File root;
+    root = fatfs.open("/");
+
+    Serial.println("Flash contents:");
+    print_rootdir(&root);
+    Serial.println();
+
+    root.close();
+
+    flash_changed = false;
+  }
+
+  if ( sd_changed )
+  {
+    File root;
+    root = sd.open("/");
+
+    Serial.println("SD contents:");
+    print_rootdir(&root);
+    Serial.println();
+
+    root.close();
+
+    sd_changed = false;
+  }
+
+  delay(1000); // refresh every 1 second
 }
 
 
@@ -73,7 +146,6 @@ void loop()
 
 int32_t sdcard_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 {
-  (void) bufsize;
   return sd.card()->readBlocks(lba, (uint8_t*) buffer, bufsize/512) ? bufsize : -1;
 }
 
@@ -82,6 +154,8 @@ int32_t sdcard_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 // return number of written bytes (must be multiple of block size)
 int32_t sdcard_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 {
+  digitalWrite(LED_BUILTIN, HIGH);
+
   return sd.card()->writeBlocks(lba, buffer, bufsize/512) ? bufsize : -1;
 }
 
@@ -90,6 +164,13 @@ int32_t sdcard_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 void sdcard_flush_cb (void)
 {
   sd.card()->syncBlocks();
+
+  // clear file system's cache to force refresh
+  sd.cacheClear();
+
+  sd_changed = true;
+
+  digitalWrite(LED_BUILTIN, LOW);
 }
 
 //--------------------------------------------------------------------+
@@ -111,6 +192,8 @@ int32_t external_flash_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 // return number of written bytes (must be multiple of block size)
 int32_t external_flash_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 {
+  digitalWrite(LED_BUILTIN, HIGH);
+
   // Note: SPIFLash Bock API: readBlocks/writeBlocks/syncBlocks
   // already include 4K sector caching internally. We don't need to cache it, yahhhh!!
   return flash.writeBlocks(lba, buffer, bufsize/512) ? bufsize : -1;
@@ -121,4 +204,11 @@ int32_t external_flash_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize
 void external_flash_flush_cb (void)
 {
   flash.syncBlocks();
+
+  // clear file system's cache to force refresh
+  fatfs.cacheClear();
+
+  flash_changed = true;
+
+  digitalWrite(LED_BUILTIN, LOW);
 }

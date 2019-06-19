@@ -39,9 +39,9 @@ bool changed;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
-  flash.begin();
-
   pinMode(LED_BUILTIN, OUTPUT);
+
+  flash.begin();
 
   // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
   usb_msc.setID("Adafruit", "External Flash", "1.0");
@@ -123,6 +123,8 @@ int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 // return number of written bytes (must be multiple of block size)
 int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 {
+  digitalWrite(LED_BUILTIN, HIGH);
+
   // Note: SPIFLash Bock API: readBlocks/writeBlocks/syncBlocks
   // already include 4K sector caching internally. We don't need to cache it, yahhhh!!
   return flash.writeBlocks(lba, buffer, bufsize/512) ? bufsize : -1;
@@ -139,4 +141,6 @@ void msc_flush_cb (void)
   fatfs.cacheClear();
 
   changed = true;
+
+  digitalWrite(LED_BUILTIN, LOW);
 }

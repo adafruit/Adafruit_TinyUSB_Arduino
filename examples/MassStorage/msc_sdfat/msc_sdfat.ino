@@ -11,12 +11,14 @@
 
 const int chipSelect = 10;
 
-Adafruit_USBD_MSC usb_msc;
-
+// File system on SD Card
 SdFat sd;
 
 SdFile root;
 SdFile file;
+
+// USB Mass Storage object
+Adafruit_USBD_MSC usb_msc;
 
 // Set to true when PC write to flash
 bool changed;
@@ -24,6 +26,8 @@ bool changed;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+  pinMode(LED_BUILTIN, OUTPUT);
+
   // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
   usb_msc.setID("Adafruit", "SD Card", "1.0");
 
@@ -72,7 +76,7 @@ void loop()
   if ( changed )
   {
     root.open("/");
-    Serial.println("Flash contents:");
+    Serial.println("SD contents:");
 
     // Open next file in root.
     // Warning, openNext starts at the current directory position
@@ -105,7 +109,6 @@ void loop()
 // return number of copied bytes (must be multiple of block size)
 int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 {
-  (void) bufsize;
   return sd.card()->readBlocks(lba, (uint8_t*) buffer, bufsize/512) ? bufsize : -1;
 }
 
@@ -114,6 +117,8 @@ int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 // return number of written bytes (must be multiple of block size)
 int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 {
+  digitalWrite(LED_BUILTIN, HIGH);
+
   return sd.card()->writeBlocks(lba, buffer, bufsize/512) ? bufsize : -1;
 }
 
@@ -127,4 +132,6 @@ void msc_flush_cb (void)
   sd.cacheClear();
 
   changed = true;
+
+  digitalWrite(LED_BUILTIN, LOW);
 }
