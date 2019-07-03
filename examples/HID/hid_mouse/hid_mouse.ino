@@ -11,24 +11,16 @@
 
 #include "Adafruit_TinyUSB.h"
 
-/* This sketch demonstrates multiple report USB HID.
+/* This sketch demonstrates USB HID mouse
  * Press button pin will move
  * - mouse toward bottom right of monitor
- * - send 'a' key
  */
 
-// Report ID
-enum
-{
-  RID_KEYBOARD = 1,
-  RID_MOUSE
-};
-
 // HID report descriptor using TinyUSB's template
+// Single Report (no ID) descriptor
 uint8_t const desc_hid_report[] =
 {
-  TUD_HID_REPORT_DESC_KEYBOARD( HID_REPORT_ID(RID_KEYBOARD), ),
-  TUD_HID_REPORT_DESC_MOUSE   ( HID_REPORT_ID(RID_MOUSE), )
+  TUD_HID_REPORT_DESC_MOUSE()
 };
 
 Adafruit_USBD_HID usb_hid;
@@ -38,18 +30,19 @@ const int pin = 7;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+  // Set up button
+  pinMode(pin, INPUT_PULLUP);
+
   usb_hid.setPollInterval(2);
   usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
 
   usb_hid.begin();
 
-  // Set up button
-  pinMode(pin, INPUT_PULLUP);
-
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.println("Adafruit TinyUSB HID Composite example");
+  Serial.println("Adafruit TinyUSB HID Mouse example");
+  Serial.print("Wire pin "); Serial.print(pin); Serial.println(" to GND to move cursor to bottom right corner.")
 }
 
 void loop()
@@ -74,32 +67,10 @@ void loop()
     if ( btn )
     {
       int8_t const delta = 5;
-      usb_hid.mouseMove(RID_MOUSE, delta, delta); // right + down
+      usb_hid.mouseMove(0, delta, delta); // no ID: right + down
 
       // delay a bit before attempt to send keyboard report
       delay(10);
-    }
-  }
-
-  /*------------- Keyboard -------------*/
-  if ( usb_hid.ready() )
-  {
-    // use to avoid send multiple consecutive zero report for keyboard
-    static bool has_key = false;
-
-    if ( btn )
-    {
-      uint8_t keycode[6] = { 0 };
-      keycode[0] = HID_KEY_A;
-
-      usb_hid.keyboardReport(RID_KEYBOARD, 0, keycode);
-
-      has_key = true;
-    }else
-    {
-      // send empty key report if previously has key pressed
-      if (has_key) usb_hid.keyboardRelease(RID_KEYBOARD);
-      has_key = false;
     }
   }
 }

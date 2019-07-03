@@ -1,14 +1,22 @@
-// The MIT License (MIT)
-// Copyright (c) 2019 Ha Thach for Adafruit Industries
+/*********************************************************************
+ Adafruit invests time and resources providing this open source code,
+ please support Adafruit and open-source hardware by purchasing
+ products from Adafruit!
 
-#include "Adafruit_TinyUSB.h"
+ MIT license, check LICENSE for more information
+ Copyright (c) 2019 Ha Thach for Adafruit Industries
+ All text above, and the splash screen below must be included in
+ any redistribution
+*********************************************************************/
+
+/* This example expose SD card as mass storage using
+ * default SD Library
+ */
+
 #include "SD.h"
+#include "Adafruit_TinyUSB.h"
 
-#ifdef ARDUINO_NRF52832_FEATHER
-const int chipSelect = 11;
-#else
 const int chipSelect = 10;
-#endif
 
 Adafruit_USBD_MSC usb_msc;
 
@@ -68,6 +76,9 @@ void loop()
   // nothing to do
 }
 
+// Callback invoked when received READ10 command.
+// Copy disk's data to buffer (up to bufsize) and
+// return number of copied bytes (must be multiple of block size)
 int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 {
   (void) bufsize;

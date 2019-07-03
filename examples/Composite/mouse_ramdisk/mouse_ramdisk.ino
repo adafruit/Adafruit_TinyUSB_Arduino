@@ -9,6 +9,11 @@
  any redistribution
 *********************************************************************/
 
+/* This sketch demonstrates USB Mass Storage and HID mouse (and CDC)
+ * - Enumerated as 8KB flash disk
+ * - Press button pin will move mouse toward bottom right of monitor
+ */
+
 #include "Adafruit_TinyUSB.h"
 
 // 8KB is the smallest size that windows allow to mount
@@ -16,7 +21,17 @@
 #define DISK_BLOCK_SIZE 512
 #include "ramdisk.h"
 
+// HID report descriptor using TinyUSB's template
+// Single Report (no ID) descriptor
+uint8_t const desc_hid_report[] =
+{
+  TUD_HID_REPORT_DESC_MOUSE()
+};
+
+Adafruit_USBD_HID usb_hid;
 Adafruit_USBD_MSC usb_msc;
+
+const int pin = 7;
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -35,15 +50,46 @@ void setup()
   
   usb_msc.begin();
 
+  // Set up button
+  pinMode(pin, INPUT_PULLUP);
+
+  usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
+  usb_hid.begin();
+
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.println("Adafruit TinyUSB Mass Storage RAM Disk example");
+  Serial.println("Adafruit TinyUSB Mouse + Mass Storage (ramdisk) example");
 }
 
 void loop()
 {
-  // nothing to do
+  // poll gpio once each 10 ms
+  delay(10);
+
+  // button is active low
+  uint32_t const btn = 1 - digitalRead(pin);
+
+  // Remote wakeup
+  if ( tud_suspended() && btn )
+  {
+    // Wake up host if we are in suspend mode
+    // and REMOTE_WAKEUP feature is enabled by host
+    tud_remote_wakeup();
+  }
+
+  /*------------- Mouse -------------*/
+  if ( usb_hid.ready() )
+  {
+    if ( btn )
+    {
+      int8_t const delta = 5;
+      usb_hid.mouseMove(0, delta, delta); // no ID: right + down
+
+      // delay a bit before attempt to send keyboard report
+      delay(10);
+    }
+  }
 }
 
 // Callback invoked when received READ10 command.

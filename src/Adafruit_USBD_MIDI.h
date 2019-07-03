@@ -1,7 +1,7 @@
 /* 
  * The MIT License (MIT)
  *
- * Copyright (c) 2019 Ha Thach for Adafruit Industries
+ * Copyright (c) 2019 hathach for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,11 +22,30 @@
  * THE SOFTWARE.
  */
 
-#ifndef ADAFRUIT_TINYUSB_H_
-#define ADAFRUIT_TINYUSB_H_
+#ifndef ADAFRUIT_USBD_MIDI_H_
+#define ADAFRUIT_USBD_MIDI_H_
 
-#include "Adafruit_USBD_MSC.h"
-#include "Adafruit_USBD_HID.h"
-#include "Adafruit_USBD_MIDI.h"
+#include "Adafruit_TinyUSB_Core.h"
 
-#endif /* ADAFRUIT_TINYUSB_H_ */
+class Adafruit_USBD_MIDI : public Stream, Adafruit_USBD_Interface
+{
+  public:
+    Adafruit_USBD_MIDI(void);
+
+    bool begin(void);
+
+    // for MIDI library
+    bool begin(uint32_t baud) { (void) baud; return begin(); }
+
+    // Stream interface to use with MIDI Library
+    virtual int    read       ( void );
+    virtual size_t write      ( uint8_t b );
+    virtual int    available  ( void );
+    virtual int    peek       ( void );
+    virtual void   flush      ( void );
+
+    // fron Adafruit_USBD_Interface
+    virtual uint16_t getDescriptor(uint8_t* buf, uint16_t bufsize);
+};
+
+#endif /* ADAFRUIT_USBD_MIDI_H_ */

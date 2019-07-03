@@ -38,6 +38,7 @@ Adafruit_USBD_MSC::Adafruit_USBD_MSC(void)
 
 uint16_t Adafruit_USBD_MSC::getDescriptor(uint8_t* buf, uint16_t bufsize)
 {
+  // usb core will automatically update interface number and endpoint number
   uint8_t desc[] = { TUD_MSC_DESCRIPTOR(0, 0, EPOUT, EPIN, EPSIZE) };
   uint16_t const len = sizeof(desc);
 
@@ -184,6 +185,8 @@ int32_t tud_msc_scsi_cb (uint8_t lun, const uint8_t scsi_cmd[16], void* buffer, 
 // Copy disk's data to buffer (up to bufsize) and return number of copied bytes.
 int32_t tud_msc_read10_cb (uint8_t lun, uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize)
 {
+  (void) offset;
+
   if ( !(_msc_dev && _msc_dev->_lun[lun].rd_cb) ) return -1;
 
   return _msc_dev->_lun[lun].rd_cb(lba, buffer, bufsize);
@@ -193,6 +196,8 @@ int32_t tud_msc_read10_cb (uint8_t lun, uint32_t lba, uint32_t offset, void* buf
 // Process data in buffer to disk's storage and return number of written bytes
 int32_t tud_msc_write10_cb (uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t bufsize)
 {
+  (void) offset;
+
   if ( !(_msc_dev && _msc_dev->_lun[lun].wr_cb) ) return -1;
 
   return _msc_dev->_lun[lun].wr_cb(lba, buffer, bufsize);

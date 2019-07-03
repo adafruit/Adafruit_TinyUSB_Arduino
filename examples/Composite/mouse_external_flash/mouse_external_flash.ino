@@ -9,10 +9,9 @@
  any redistribution
 *********************************************************************/
 
-/* This example demo how to expose on-board external Flash as USB Mass Storage.
- * Following library is required
- *   - SdFat https://github.com/adafruit/SdFat
- *   - Adafruit_SPIFlash https://github.com/adafruit/Adafruit_SPIFlash
+/* This sketch demonstrates USB Mass Storage and HID mouse (and CDC)
+ * - Enumerated as disk using on-board external flash
+ * - Press button pin will move mouse toward bottom right of monitor
  */
 
 #include "SPI.h"
@@ -32,24 +31,25 @@
 
 Adafruit_SPIFlash flash(&flashTransport);
 
-// file system object from SdFat
-FatFileSystem fatfs;
-
-FatFile root;
-FatFile file;
-
-// USB Mass Storage object
 Adafruit_USBD_MSC usb_msc;
 
-// Set to true when PC write to flash
-bool changed;
+// HID report descriptor using TinyUSB's template
+// Single Report (no ID) descriptor
+uint8_t const desc_hid_report[] =
+{
+  TUD_HID_REPORT_DESC_MOUSE()
+};
+
+Adafruit_USBD_HID usb_hid;
+
+const int pin = 7;
 
 // the setup function runs once when you press reset or power the board
 void setup()
 {
-  pinMode(LED_BUILTIN, OUTPUT);
-
   flash.begin();
+
+  pinMode(LED_BUILTIN, OUTPUT);
 
   // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
   usb_msc.setID("Adafruit", "External Flash", "1.0");
@@ -65,54 +65,46 @@ void setup()
   
   usb_msc.begin();
 
+
+  // Set up button
+  pinMode(pin, INPUT_PULLUP);
+
+  usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
+  usb_hid.begin();
+
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.println("Adafruit TinyUSB Mass Storage SPI Flash example");
-  Serial.print("JEDEC ID: "); Serial.println(flash.getJEDECID(), HEX);
-  Serial.print("Flash size: "); Serial.println(flash.size());
-
-  // Init file system on the flash
-  fatfs.begin(&flash);
-
-  changed = true; // to print contents initially
+  Serial.println("Adafruit TinyUSB Mouse + Mass Storage (external flash) example");
 }
 
 void loop()
 {
-  if ( changed )
+  // poll gpio once each 10 ms
+  delay(10);
+
+  // button is active low
+  uint32_t const btn = 1 - digitalRead(pin);
+
+  // Remote wakeup
+  if ( tud_suspended() && btn )
   {
-    if ( !root.open("/") )
+    // Wake up host if we are in suspend mode
+    // and REMOTE_WAKEUP feature is enabled by host
+    tud_remote_wakeup();
+  }
+
+  /*------------- Mouse -------------*/
+  if ( usb_hid.ready() )
+  {
+    if ( btn )
     {
-      Serial.println("open root failed");
-      return;
+      int8_t const delta = 5;
+      usb_hid.mouseMove(0, delta, delta); // no ID: right + down
+
+      // delay a bit before attempt to send keyboard report
+      delay(10);
     }
-
-    Serial.println("Flash contents:");
-
-    // Open next file in root.
-    // Warning, openNext starts at the current directory position
-    // so a rewind of the directory may be required.
-    while ( file.openNext(&root, O_RDONLY) )
-    {
-      file.printFileSize(&Serial);
-      Serial.write(' ');
-      file.printName(&Serial);
-      if ( file.isDir() )
-      {
-        // Indicate a directory.
-        Serial.write('/');
-      }
-      Serial.println();
-      file.close();
-    }
-
-    root.close();
-
-    Serial.println();
-
-    changed = false;
-    delay(1000); // refresh every 0.5 second
   }
 }
 
@@ -131,8 +123,6 @@ int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 // return number of written bytes (must be multiple of block size)
 int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 {
-  digitalWrite(LED_BUILTIN, HIGH);
-
   // Note: SPIFLash Bock API: readBlocks/writeBlocks/syncBlocks
   // already include 4K sector caching internally. We don't need to cache it, yahhhh!!
   return flash.writeBlocks(lba, buffer, bufsize/512) ? bufsize : -1;
@@ -142,13 +132,5 @@ int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 // used to flush any pending cache.
 void msc_flush_cb (void)
 {
-  // sync with flash
   flash.syncBlocks();
-
-  // clear file system's cache to force refresh
-  fatfs.cacheClear();
-
-  changed = true;
-
-  digitalWrite(LED_BUILTIN, LOW);
 }
