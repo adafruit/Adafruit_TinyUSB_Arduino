@@ -9,6 +9,12 @@
  any redistribution
 *********************************************************************/
 
+/* This sketch is enumerated as USB MIDI device. 
+ * Following library is required
+ * - MIDI Library by Forty Seven Effects
+ * https://github.com/FortySevenEffects/arduino_midi_library
+ */
+
 #include <Arduino.h>
 #include "Adafruit_TinyUSB.h"
 #include <MIDI.h>
