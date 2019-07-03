@@ -1,5 +1,13 @@
-// The MIT License (MIT)
-// Copyright (c) 2019 Ha Thach for Adafruit Industries
+/*********************************************************************
+ Adafruit invests time and resources providing this open source code,
+ please support Adafruit and open-source hardware by purchasing
+ products from Adafruit!
+
+ MIT license, check LICENSE for more information
+ Copyright (c) 2019 Ha Thach for Adafruit Industries
+ All text above, and the splash screen below must be included in
+ any redistribution
+*********************************************************************/
 
 #include "Adafruit_TinyUSB.h"
 
