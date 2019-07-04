@@ -14,7 +14,21 @@
 /* This sketch demonstrates USB HID mouse
  * Press button pin will move
  * - mouse toward bottom right of monitor
+ * 
+ * Depending on the board, the button pin
+ * and its active state (when pressed) are different
  */
+#if defined ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS
+  const int pin = 4; // Left Button
+  bool activeState = true;
+#elif defined ARDUINO_NRF52840_FEATHER
+  const int pin = 7; // UserSw
+  bool activeState = false;
+#else
+  const int pin = 12;
+  bool activeState = false;
+#endif
+  
 
 // HID report descriptor using TinyUSB's template
 // Single Report (no ID) descriptor
@@ -25,13 +39,11 @@ uint8_t const desc_hid_report[] =
 
 Adafruit_USBD_HID usb_hid;
 
-const int pin = 7;
-
 // the setup function runs once when you press reset or power the board
 void setup()
 {
-  // Set up button
-  pinMode(pin, INPUT_PULLUP);
+  // Set up button, pullup opposite to active state
+  pinMode(pin, activeState ? INPUT_PULLDOWN : INPUT_PULLUP);
 
   usb_hid.setPollInterval(2);
   usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
@@ -39,10 +51,11 @@ void setup()
   usb_hid.begin();
 
   Serial.begin(115200);
-  while ( !Serial ) delay(10);   // wait for native usb
 
   Serial.println("Adafruit TinyUSB HID Mouse example");
-  Serial.print("Wire pin "); Serial.print(pin); Serial.println(" to GND to move cursor to bottom right corner.")
+  Serial.print("Wire pin "); 
+  Serial.print(pin); 
+  Serial.println(" to GND to move cursor to bottom right corner.");
 }
 
 void loop()
@@ -51,10 +64,10 @@ void loop()
   delay(10);
 
   // button is active low
-  uint32_t const btn = 1 - digitalRead(pin);
+  uint32_t const btn = digitalRead(pin);
 
   // Remote wakeup
-  if ( tud_suspended() && btn )
+  if ( tud_suspended() && (btn == activeState) )
   {
     // Wake up host if we are in suspend mode
     // and REMOTE_WAKEUP feature is enabled by host
@@ -64,7 +77,7 @@ void loop()
   /*------------- Mouse -------------*/
   if ( usb_hid.ready() )
   {
-    if ( btn )
+    if ( btn == activeState )
     {
       int8_t const delta = 5;
       usb_hid.mouseMove(0, delta, delta); // no ID: right + down
