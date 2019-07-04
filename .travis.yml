@@ -26,7 +26,7 @@ before_install:
     - source install.sh
 
 install:
-    - arduino --install-library "Adafruit SPIFlash"
+    - arduino --install-library "Adafruit SPIFlash","MIDI Library"
     - git clone --quiet https://github.com/adafruit/SdFat.git $HOME/Arduino/libraries/SdFat
     - pip3 install --user adafruit-nrfutil
 
