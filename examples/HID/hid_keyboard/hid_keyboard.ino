@@ -63,7 +63,7 @@ void loop()
 //  {
 //    // Wake up host if we are in suspend mode
 //    // and REMOTE_WAKEUP feature is enabled by host
-//    tud_remote_wakeup();
+//    USBDevice.remoteWakeup();
 //  }
 
   if ( !usb_hid.ready() ) return;

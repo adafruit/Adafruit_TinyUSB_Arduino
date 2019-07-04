@@ -37,6 +37,7 @@ uint8_t const desc_hid_report[] =
   TUD_HID_REPORT_DESC_MOUSE()
 };
 
+// USB HID object
 Adafruit_USBD_HID usb_hid;
 
 // the setup function runs once when you press reset or power the board
@@ -53,9 +54,6 @@ void setup()
   Serial.begin(115200);
 
   Serial.println("Adafruit TinyUSB HID Mouse example");
-  Serial.print("Wire pin "); 
-  Serial.print(pin); 
-  Serial.println(" to GND to move cursor to bottom right corner.");
 }
 
 void loop()
@@ -71,7 +69,7 @@ void loop()
   {
     // Wake up host if we are in suspend mode
     // and REMOTE_WAKEUP feature is enabled by host
-    tud_remote_wakeup();
+    USBDevice.remoteWakeup();
   }
 
   /*------------- Mouse -------------*/
