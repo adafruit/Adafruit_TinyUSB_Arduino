@@ -11,8 +11,12 @@
 
 /* This example demo how to expose on-board external Flash as USB Mass Storage.
  * Following library is required
- *   - SdFat https://github.com/adafruit/SdFat
  *   - Adafruit_SPIFlash https://github.com/adafruit/Adafruit_SPIFlash
+ *   - SdFat https://github.com/adafruit/SdFat
+ *
+ * Note: Adafruit fork of SdFat enabled ENABLE_EXTENDED_TRANSFER_CLASS and FAT12_SUPPORT
+ * in SdFatConfig.h, which is needed to run SdFat on external flash. You can use original
+ * SdFat library and manually change those macros
  */
 
 #include "SPI.h"
@@ -68,7 +72,7 @@ void setup()
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.println("Adafruit TinyUSB Mass Storage SPI Flash example");
+  Serial.println("Adafruit TinyUSB Mass Storage External Flash example");
   Serial.print("JEDEC ID: "); Serial.println(flash.getJEDECID(), HEX);
   Serial.print("Flash size: "); Serial.println(flash.size());
 

@@ -9,10 +9,14 @@
  any redistribution
 *********************************************************************/
 
-/* This example exposes both external flash and SD card as mass storage
- * using Adafruit_SPIFlash and SdFat Library
- *   - SdFat https://github.com/adafruit/SdFat
+/* This example exposes both external flash and SD card as mass storage (dual LUNs)
+ * Following library is required
  *   - Adafruit_SPIFlash https://github.com/adafruit/Adafruit_SPIFlash
+ *   - SdFat https://github.com/adafruit/SdFat
+ *
+ * Note: Adafruit fork of SdFat enabled ENABLE_EXTENDED_TRANSFER_CLASS and FAT12_SUPPORT
+ * in SdFatConfig.h, which is needed to run SdFat on external flash. You can use original
+ * SdFat library and manually change those macros
  */
 
 #include "SPI.h"
