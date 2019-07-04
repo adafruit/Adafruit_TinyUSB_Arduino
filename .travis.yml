@@ -30,7 +30,7 @@ install:
     - pip3 install --user adafruit-nrfutil
 
 script:
-    - build_samd_platforms
+    - build_m4_platforms
     - build_nrf5x_platforms
 
 # Generate and deploy documentation
