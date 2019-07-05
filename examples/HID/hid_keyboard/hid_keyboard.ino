@@ -50,6 +50,9 @@ void setup()
   {
     pinMode(pins[i], INPUT_PULLUP);
   }
+
+  // wait until device mounted
+  while( !USBDevice.mounted() ) delay(1);
 }
 
 

@@ -61,6 +61,9 @@ void setup()
 
   Serial.begin(115200);
   Serial.println("Adafruit TinyUSB HID Composite example");
+
+  // wait until device mounted
+  while( !USBDevice.mounted() ) delay(1);
 }
 
 void loop()

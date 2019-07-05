@@ -75,6 +75,9 @@ void setup()
 
   last_y = ss.analogRead(2);
   last_x = ss.analogRead(3);
+
+  // wait until device mounted
+  while( !USBDevice.mounted() ) delay(1);
 }
 
 void loop()

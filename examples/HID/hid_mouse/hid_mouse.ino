@@ -53,6 +53,9 @@ void setup()
 
   Serial.begin(115200);
 
+  // wait until device mounted
+  while( !USBDevice.mounted() ) delay(1);
+
   Serial.println("Adafruit TinyUSB HID Mouse example");
 }
 
