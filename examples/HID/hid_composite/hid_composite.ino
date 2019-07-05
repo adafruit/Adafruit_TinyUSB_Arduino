@@ -92,7 +92,7 @@ void loop()
   /*------------- Keyboard -------------*/
   if ( usb_hid.ready() )
   {
-    // use to avoid send multiple consecutive zero report for keyboard
+    // use to prevent sending multiple consecutive zero report
     static bool has_key = false;
 
     if ( btn_pressed )

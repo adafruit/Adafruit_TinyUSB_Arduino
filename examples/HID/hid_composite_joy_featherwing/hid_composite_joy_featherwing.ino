@@ -9,8 +9,12 @@
  any redistribution
 *********************************************************************/
 
-/* This sketch demonstrates USB HID mouse using Joystick Feather Wing
- *  https://www.adafruit.com/product/3632
+/* This sketch demonstrates USB HID Mouse and Keyboard with Joy Feather Wing.
+ * - The analog stick move mouse cursor
+ * - Button A, B, X, Y will send character a, b, x, y
+ * - Any actions will wake up PC host if it is in suspended (standby) mode.
+ *
+ * Joy Feather Wing: https://www.adafruit.com/product/3632
  *
  * Following library is required
  *  - Adafruit_seesaw
@@ -19,21 +23,27 @@
 #include "Adafruit_TinyUSB.h"
 #include "Adafruit_seesaw.h"
 
-#define BUTTON_RIGHT 6
-#define BUTTON_DOWN  7
-#define BUTTON_LEFT  9
-#define BUTTON_UP    10
-#define BUTTON_SEL   14
-uint32_t button_mask = (1 << BUTTON_RIGHT) | (1 << BUTTON_DOWN) |
-                (1 << BUTTON_LEFT) | (1 << BUTTON_UP) | (1 << BUTTON_SEL);
+#define BUTTON_A  6
+#define BUTTON_B  7
+#define BUTTON_Y  9
+#define BUTTON_X  10
+uint32_t button_mask = (1 << BUTTON_A) | (1 << BUTTON_B) |
+                       (1 << BUTTON_Y) | (1 << BUTTON_X);
 
 Adafruit_seesaw ss;
 
+// Report ID
+enum
+{
+  RID_KEYBOARD = 1,
+  RID_MOUSE
+};
+
 // HID report descriptor using TinyUSB's template
-// Single Report (no ID) descriptor
 uint8_t const desc_hid_report[] =
 {
-  TUD_HID_REPORT_DESC_MOUSE()
+  TUD_HID_REPORT_DESC_KEYBOARD( HID_REPORT_ID(RID_KEYBOARD), ),
+  TUD_HID_REPORT_DESC_MOUSE   ( HID_REPORT_ID(RID_MOUSE), )
 };
 
 // USB HID object
@@ -72,26 +82,24 @@ void loop()
   // poll gpio once each 10 ms
   delay(10);
 
+  // If either analog stick or any buttons is pressed
+  bool has_action = false;
+
+  /*------------- Mouse -------------*/
   int y = ss.analogRead(2);
   int x = ss.analogRead(3);
 
-  int dx = x - last_x;
-  int dy = y - last_y;
+  // reduce the delta by half to slow down the cursor move
+  int dx = (x - last_x) / 2;
+  int dy = (y - last_y) / 2;
 
-  if ( (abs(dx) > 3) || (abs(dy) > 30) )
+  if ( (abs(dx) > 3) || (abs(dy) > 3) )
   {
-    // Remote wakeup if PC is suspended
-    if ( USBDevice.suspended() )
-    {
-      // Wake up host if we are in suspend mode
-      // and REMOTE_WAKEUP feature is enabled by host
-      USBDevice.remoteWakeup();
-    }
+    has_action = true;
 
-    /*------------- Mouse -------------*/
     if ( usb_hid.ready() )
     {
-      usb_hid.mouseMove(0, dx, dy); // no ID: right + down
+      usb_hid.mouseMove(RID_MOUSE, dx, dy); // no ID: right + down
 
       last_x = x;
       last_y = y;
@@ -99,5 +107,45 @@ void loop()
       // delay a bit before attempt to send keyboard report
       delay(10);
     }
+  }
+
+
+  /*------------- Keyboard -------------*/
+  // button is active low, invert read value for convenience
+  uint32_t buttons = ~ss.digitalReadBulk(button_mask);
+
+  if ( usb_hid.ready() )
+  {
+    // use to prevent sending multiple consecutive zero report
+    static bool has_key = false;
+
+    if ( buttons & button_mask )
+    {
+      has_action = true;
+      has_key = true;
+
+      uint8_t keycode[6] = { 0 };
+      
+      if ( buttons & (1 << BUTTON_A) ) keycode[0] = HID_KEY_A;
+      if ( buttons & (1 << BUTTON_B) ) keycode[0] = HID_KEY_B;
+      if ( buttons & (1 << BUTTON_X) ) keycode[0] = HID_KEY_X;
+      if ( buttons & (1 << BUTTON_Y) ) keycode[0] = HID_KEY_Y;
+
+      usb_hid.keyboardReport(RID_KEYBOARD, 0, keycode);
+    }else
+    {
+      // send empty key report if previously has key pressed
+      if (has_key) usb_hid.keyboardRelease(RID_KEYBOARD);
+      has_key = false;
+    }
+  }
+
+  /*------------- Remote Wakeup -------------*/
+  // Remote wakeup if PC is suspended and we has user interaction with joy feather wing
+  if ( has_action && USBDevice.suspended() )
+  {
+    // Wake up only works if REMOTE_WAKEUP feature is enable by host
+    // Usually this is the case with Mouse/Keyboard device
+    USBDevice.remoteWakeup();
   }
 }
