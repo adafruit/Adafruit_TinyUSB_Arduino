@@ -87,7 +87,7 @@ void loop()
   uint32_t const btn = 1 - digitalRead(pin);
 
   // Remote wakeup
-  if ( tud_suspended() && btn )
+  if ( USBDevice.suspended() && btn )
   {
     // Wake up host if we are in suspend mode
     // and REMOTE_WAKEUP feature is enabled by host

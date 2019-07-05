@@ -59,7 +59,7 @@ void loop()
   delay(2);
 
 //  // Remote wakeup
-//  if ( tud_suspended() && btn )
+//  if ( USBDevice.suspended() && btn )
 //  {
 //    // Wake up host if we are in suspend mode
 //    // and REMOTE_WAKEUP feature is enabled by host

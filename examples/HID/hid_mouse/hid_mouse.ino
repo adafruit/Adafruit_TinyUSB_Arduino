@@ -61,27 +61,23 @@ void loop()
   // poll gpio once each 10 ms
   delay(10);
 
-  // button is active low
-  uint32_t const btn = digitalRead(pin);
+  // Whether button is pressed
+  bool btn_pressed = (digitalRead(pin) == activeState);
+
+  // nothing to do if button is not pressed
+  if (!btn_pressed) return;
 
   // Remote wakeup
-  if ( tud_suspended() && (btn == activeState) )
+  if ( USBDevice.suspended() )
   {
     // Wake up host if we are in suspend mode
     // and REMOTE_WAKEUP feature is enabled by host
     USBDevice.remoteWakeup();
   }
 
-  /*------------- Mouse -------------*/
   if ( usb_hid.ready() )
   {
-    if ( btn == activeState )
-    {
-      int8_t const delta = 5;
-      usb_hid.mouseMove(0, delta, delta); // no ID: right + down
-
-      // delay a bit before attempt to send keyboard report
-      delay(10);
-    }
+    int8_t const delta = 5;
+    usb_hid.mouseMove(0, delta, delta); // no ID: right + down
   }
 }

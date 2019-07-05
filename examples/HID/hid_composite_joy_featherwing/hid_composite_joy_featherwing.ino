@@ -81,7 +81,7 @@ void loop()
   if ( (abs(dx) > 3) || (abs(dy) > 30) )
   {
     // Remote wakeup if PC is suspended
-    if ( tud_suspended() )
+    if ( USBDevice.suspended() )
     {
       // Wake up host if we are in suspend mode
       // and REMOTE_WAKEUP feature is enabled by host
