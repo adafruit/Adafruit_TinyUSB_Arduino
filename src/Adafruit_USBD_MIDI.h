@@ -45,7 +45,7 @@ class Adafruit_USBD_MIDI : public Stream, Adafruit_USBD_Interface
     virtual void   flush      ( void );
 
     // fron Adafruit_USBD_Interface
-    virtual uint16_t getDescriptor(uint8_t* buf, uint16_t bufsize);
+    virtual uint16_t getDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize);
 };
 
 #endif /* ADAFRUIT_USBD_MIDI_H_ */

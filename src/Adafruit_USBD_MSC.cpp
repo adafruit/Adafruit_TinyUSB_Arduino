@@ -36,10 +36,10 @@ Adafruit_USBD_MSC::Adafruit_USBD_MSC(void)
   memset(_lun, 0, sizeof(_lun));
 }
 
-uint16_t Adafruit_USBD_MSC::getDescriptor(uint8_t* buf, uint16_t bufsize)
+uint16_t Adafruit_USBD_MSC::getDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize)
 {
-  // usb core will automatically update interface number and endpoint number
-  uint8_t desc[] = { TUD_MSC_DESCRIPTOR(0, 0, EPOUT, EPIN, EPSIZE) };
+  // usb core will automatically update endpoint number
+  uint8_t desc[] = { TUD_MSC_DESCRIPTOR(itfnum, 0, EPOUT, EPIN, EPSIZE) };
   uint16_t const len = sizeof(desc);
 
   if ( bufsize < len ) return 0;

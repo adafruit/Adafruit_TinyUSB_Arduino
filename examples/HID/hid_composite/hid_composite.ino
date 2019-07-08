@@ -15,7 +15,21 @@
  * Press button pin will move
  * - mouse toward bottom right of monitor
  * - send 'a' key
+ *
+ * Depending on the board, the button pin
+ * and its active state (when pressed) are different
  */
+#if defined ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS
+  const int pin = 4; // Left Button
+  bool activeState = true;
+#elif defined ARDUINO_NRF52840_FEATHER
+  const int pin = 7; // UserSw
+  bool activeState = false;
+#else
+  const int pin = 12;
+  bool activeState = false;
+#endif
+
 
 // Report ID
 enum
@@ -31,9 +45,8 @@ uint8_t const desc_hid_report[] =
   TUD_HID_REPORT_DESC_MOUSE   ( HID_REPORT_ID(RID_MOUSE), )
 };
 
+// USB HID object
 Adafruit_USBD_HID usb_hid;
-
-const int pin = 7;
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -43,13 +56,14 @@ void setup()
 
   usb_hid.begin();
 
-  // Set up button
-  pinMode(pin, INPUT_PULLUP);
+  // Set up button, pullup opposite to active state
+  pinMode(pin, activeState ? INPUT_PULLDOWN : INPUT_PULLUP);
 
   Serial.begin(115200);
-  while ( !Serial ) delay(10);   // wait for native usb
-
   Serial.println("Adafruit TinyUSB HID Composite example");
+
+  // wait until device mounted
+  while( !USBDevice.mounted() ) delay(1);
 }
 
 void loop()
@@ -57,37 +71,34 @@ void loop()
   // poll gpio once each 10 ms
   delay(10);
 
-  // button is active low
-  uint32_t const btn = 1 - digitalRead(pin);
+  // Whether button is pressed
+  bool btn_pressed = (digitalRead(pin) == activeState);
 
   // Remote wakeup
-  if ( tud_suspended() && btn )
+  if ( USBDevice.suspended() && btn_pressed )
   {
     // Wake up host if we are in suspend mode
     // and REMOTE_WAKEUP feature is enabled by host
-    tud_remote_wakeup();
+    USBDevice.remoteWakeup();
   }
 
   /*------------- Mouse -------------*/
-  if ( usb_hid.ready() )
+  if ( usb_hid.ready() && btn_pressed )
   {
-    if ( btn )
-    {
-      int8_t const delta = 5;
-      usb_hid.mouseMove(RID_MOUSE, delta, delta); // right + down
+    int8_t const delta = 5;
+    usb_hid.mouseMove(RID_MOUSE, delta, delta); // right + down
 
-      // delay a bit before attempt to send keyboard report
-      delay(10);
-    }
+    // delay a bit before attempt to send keyboard report
+    delay(10);
   }
 
   /*------------- Keyboard -------------*/
   if ( usb_hid.ready() )
   {
-    // use to avoid send multiple consecutive zero report for keyboard
+    // use to prevent sending multiple consecutive zero report
     static bool has_key = false;
 
-    if ( btn )
+    if ( btn_pressed )
     {
       uint8_t keycode[6] = { 0 };
       keycode[0] = HID_KEY_A;

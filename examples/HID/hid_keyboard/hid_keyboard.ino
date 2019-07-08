@@ -50,6 +50,9 @@ void setup()
   {
     pinMode(pins[i], INPUT_PULLUP);
   }
+
+  // wait until device mounted
+  while( !USBDevice.mounted() ) delay(1);
 }
 
 
@@ -59,11 +62,11 @@ void loop()
   delay(2);
 
 //  // Remote wakeup
-//  if ( tud_suspended() && btn )
+//  if ( USBDevice.suspended() && btn )
 //  {
 //    // Wake up host if we are in suspend mode
 //    // and REMOTE_WAKEUP feature is enabled by host
-//    tud_remote_wakeup();
+//    USBDevice.remoteWakeup();
 //  }
 
   if ( !usb_hid.ready() ) return;

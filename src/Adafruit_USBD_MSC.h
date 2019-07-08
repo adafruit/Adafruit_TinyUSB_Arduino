@@ -76,7 +76,7 @@ class Adafruit_USBD_MSC : Adafruit_USBD_Interface
     }
 
     // from Adafruit_USBD_Interface
-    virtual uint16_t getDescriptor(uint8_t* buf, uint16_t bufsize);
+    virtual uint16_t getDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize);
 
   private:
     enum { MAX_LUN = 2 };

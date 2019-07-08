@@ -53,10 +53,8 @@ void setup()
 
   Serial.begin(115200);
 
-  // wait for native usb serial to connect
-  while(!Serial) delay(1);
-
-  Serial.println("Adafruit TinyUSB MIDI example");
+  // wait until device mounted
+  while( !USBDevice.mounted() ) delay(1);
 }
 
 void loop()
