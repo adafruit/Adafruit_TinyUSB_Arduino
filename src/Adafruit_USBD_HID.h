@@ -59,7 +59,7 @@ class Adafruit_USBD_HID : Adafruit_USBD_Interface
     static inline bool mouseButtonRelease(uint8_t report_id);
 
     // from Adafruit_USBD_Interface
-    virtual uint16_t getDescriptor(uint8_t* buf, uint16_t bufsize);
+    virtual uint16_t getDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize);
 
   private:
     uint8_t _interval_ms;
