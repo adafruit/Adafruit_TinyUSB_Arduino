@@ -2,18 +2,19 @@
 name: Bug report
 about: Create a report to help us improve
 title: "[Bug]"
-labels: Bug
+labels: ''
 assignees: ''
 
 ---
 
 **Describe the bug**
-A clear and concise description of what the bug is.
+A clear and concise description of what the bug is. Exact error message if it is compilation issue.
 
 **Set up (please complete the following information)**
-  - Your Board and BSP version
-  - Your OS (mac/windows/linux) and its version
-  - Serial debug log (enable IDE's Debug Mode Level to 1 or 2)  
+ - Your Board and BSP version
+ - TinyUSB library version 
+ - Your OS (mac/windows/linux) and its version
+ - Serial debug log if any
 
 **To Reproduce**
 Steps to reproduce the behavior:
