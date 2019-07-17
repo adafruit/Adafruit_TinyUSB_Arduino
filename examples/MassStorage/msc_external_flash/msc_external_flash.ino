@@ -69,15 +69,15 @@ void setup()
   
   usb_msc.begin();
 
+  // Init file system on the flash
+  fatfs.begin(&flash);
+
   Serial.begin(115200);
   while ( !Serial ) delay(10);   // wait for native usb
 
   Serial.println("Adafruit TinyUSB Mass Storage External Flash example");
   Serial.print("JEDEC ID: "); Serial.println(flash.getJEDECID(), HEX);
   Serial.print("Flash size: "); Serial.println(flash.size());
-
-  // Init file system on the flash
-  fatfs.begin(&flash);
 
   changed = true; // to print contents initially
 }
@@ -86,6 +86,8 @@ void loop()
 {
   if ( changed )
   {
+    changed = false;
+    
     if ( !root.open("/") )
     {
       Serial.println("open root failed");
@@ -114,8 +116,6 @@ void loop()
     root.close();
 
     Serial.println();
-
-    changed = false;
     delay(1000); // refresh every 0.5 second
   }
 }

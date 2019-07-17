@@ -7,6 +7,10 @@
 - [Adafruit_nRF52_Arduino](https://github.com/adafruit/Adafruit_nRF52_Arduino)
 - [Adafruit ArduinoCore-samd](https://github.com/adafruit/ArduinoCore-samd) **TinyUSB** must be selected in menu `Tools->USB Stack`
 
-In addition to CDC that provided by the platform core, this library provide platform-independent MSC, HID
+In addition to CDC that provided by the platform core, this library provide platform-independent for
+
+- Human Interface Device (HID): Generic (In & Out), Keyboard, Mouse, Gamepad etc ...
+- Mass Storage Class (MSC): with multiple LUNs
+- Musical Instrument Digital Interface (MIDI)
 
 More document to write ... 
