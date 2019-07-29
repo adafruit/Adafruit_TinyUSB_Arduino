@@ -1,1 +1,1 @@
-Check the example host application in `examples/HID/hid_generic_inout`
+Check the example host application in `../../HID/hid_generic_inout`
