@@ -42,7 +42,16 @@ uint8_t const desc_hid_report[] =
 
 Adafruit_USBD_HID usb_hid;
 
-const int pin = 7;
+#if defined ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS
+  const int pin = 4; // Left Button
+  bool activeState = true;
+#elif defined ARDUINO_NRF52840_FEATHER
+  const int pin = 7; // UserSw
+  bool activeState = false;
+#else
+  const int pin = 12;
+  bool activeState = false;
+#endif
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -67,7 +76,7 @@ void setup()
 
 
   // Set up button
-  pinMode(pin, INPUT_PULLUP);
+  pinMode(pin, activeState ? INPUT_PULLDOWN : INPUT_PULLUP);
 
   usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
   usb_hid.begin();
@@ -84,7 +93,7 @@ void loop()
   delay(10);
 
   // button is active low
-  uint32_t const btn = 1 - digitalRead(pin);
+  uint32_t const btn = (digitalRead(pin) == activeState);
 
   // Remote wakeup
   if ( USBDevice.suspended() && btn )
