@@ -30,18 +30,28 @@
 class Adafruit_USBD_WebUSB : public Stream, Adafruit_USBD_Interface
 {
   public:
+    typedef void (*linestate_callback_t)(bool connected);
     Adafruit_USBD_WebUSB(void);
 
     bool begin(void);
 
     bool setLandingPage(const void* url);
+    void setLineStateCallback(linestate_callback_t fp);
 
     // Stream interface to use with MIDI Library
     virtual int    read       ( void );
-    virtual size_t write      ( uint8_t b );
     virtual int    available  ( void );
     virtual int    peek       ( void );
     virtual void   flush      ( void );
+    virtual size_t write      ( uint8_t b );
+
+    virtual size_t write(const uint8_t *buffer, size_t size);
+    size_t write(const char *buffer, size_t size) {
+      return write((const uint8_t *)buffer, size);
+    }
+
+    bool connected(void);
+    operator bool();
 
     // from Adafruit_USBD_Interface
     virtual uint16_t getDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize);
@@ -49,6 +59,7 @@ class Adafruit_USBD_WebUSB : public Stream, Adafruit_USBD_Interface
   private:
     bool _connected;
     const uint8_t* _url;
+    linestate_callback_t _linestate_cb;
 
     // Make all tinyusb callback friend to access private data
     friend bool tud_vendor_control_request_cb(uint8_t rhport, tusb_control_request_t const * request);

@@ -20,11 +20,17 @@ Adafruit_USBD_WebUSB usb_web;
 // Landing Page: scheme (0: http, 1: https), url
 const tusb_desc_webusb_url_t landingPage = TUD_WEBUSB_URL_DESCRIPTOR(1 /*https*/, "adafruit.github.io/Adafruit_TinyUSB_Arduino/examples/webusb-serial");
 
+int led_pin = LED_BUILTIN;
+
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+  pinMode(led_pin, OUTPUT);
+  digitalWrite(led_pin, LOW);
+  
   usb_web.begin();
   usb_web.setLandingPage(&landingPage);
+  usb_web.setLineStateCallback(line_state_callback);
 
   Serial.begin(115200);
 
@@ -36,6 +42,11 @@ void setup()
 
 void loop()
 {
-  delay(1000);
-  digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
+//  delay(1000);
+//  digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
+}
+
+void line_state_callback(bool connected)
+{
+  digitalWrite(led_pin, connected);
 }

@@ -22,6 +22,7 @@
  * THE SOFTWARE.
  */
 
+#include "Arduino.h"
 #include "Adafruit_USBD_WebUSB.h"
 
 #if CFG_TUD_VENDOR
@@ -118,6 +119,7 @@ Adafruit_USBD_WebUSB::Adafruit_USBD_WebUSB(void)
 {
   _connected = false;
   _url = NULL;
+  _linestate_cb = NULL;
 }
 
 bool Adafruit_USBD_WebUSB::begin(void)
@@ -137,6 +139,11 @@ bool Adafruit_USBD_WebUSB::setLandingPage(const void* url)
   return true;
 }
 
+void Adafruit_USBD_WebUSB::setLineStateCallback(linestate_callback_t fp)
+{
+  _linestate_cb = fp;
+}
+
 uint16_t Adafruit_USBD_WebUSB::getDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize)
 {
   // usb core will automatically update endpoint number
@@ -153,24 +160,62 @@ uint16_t Adafruit_USBD_WebUSB::getDescriptor(uint8_t itfnum, uint8_t* buf, uint1
   return len;
 }
 
-int Adafruit_USBD_WebUSB::read (void)
+bool Adafruit_USBD_WebUSB::connected(void)
 {
-  return -1;
+  return tud_vendor_mounted() && _connected;
 }
 
-size_t Adafruit_USBD_WebUSB::write (uint8_t b)
+Adafruit_USBD_WebUSB::operator bool()
 {
-  return 0;
+  // Add an yield to run usb background in case sketch block wait as follows
+  // while( !webusb ) {}
+  if ( !connected() ) yield();
+
+  return connected();
 }
 
 int Adafruit_USBD_WebUSB::available (void)
 {
-  return 0;
+  uint32_t count = tud_vendor_available();
+
+  // Add an yield to run usb background in case sketch block wait as follows
+  // while( !webusb.available() ) {}
+  if (!count) yield();
+
+  return count;
+}
+
+int Adafruit_USBD_WebUSB::read (void)
+{
+  uint8_t ch;
+  return tud_vendor_read(&ch, 1) ? (int) ch : -1;
+}
+
+size_t Adafruit_USBD_WebUSB::write (uint8_t b)
+{
+  return this->write(&b, 1);
+}
+
+size_t Adafruit_USBD_WebUSB::write(const uint8_t *buffer, size_t size)
+{
+  size_t remain = size;
+  while ( remain && _connected )
+  {
+    size_t wrcount = tud_vendor_write(buffer, remain);
+    remain -= wrcount;
+    buffer += wrcount;
+
+    // Write FIFO is full, run usb background to flush
+    if ( remain ) yield();
+  }
+
+  return size - remain;
 }
 
 int Adafruit_USBD_WebUSB::peek (void)
 {
-  return -1;
+  uint8_t ch;
+  return tud_vendor_peek(0, &ch) ? (int) ch : -1;
 }
 
 void Adafruit_USBD_WebUSB::flush (void)
@@ -212,17 +257,13 @@ bool tud_vendor_control_request_cb(uint8_t rhport, tusb_control_request_t const 
       // connect and disconnect.
       _webusb_dev->_connected = (request->wValue != 0);
 
-      // Always lit LED if connected
-      if ( request->wValue )
-      {
-
-      }else
-      {
-
-      }
-
       // response with status OK
-      return tud_control_status(rhport, request);
+      tud_control_status(rhport, request);
+
+      // invoked callback if any
+      if (_webusb_dev->_linestate_cb) _webusb_dev->_linestate_cb(_webusb_dev->_connected);
+
+      return true;;
 
     default:
       // stall unknown request
