@@ -50,7 +50,7 @@ void setup()
   // wait until device mounted
   while( !USBDevice.mounted() ) delay(1);
 
-  Serial.println("Adafruit TinyUSB WebUSB example");
+  Serial.println("TinyUSB WebUSB example");
 }
 
 // function to echo to both Serial and WebUSB
@@ -75,4 +75,6 @@ void loop()
 void line_state_callback(bool connected)
 {
   digitalWrite(led_pin, connected);
+
+  if ( connected ) usb_web.println("TinyUSB WebUSB example");
 }
