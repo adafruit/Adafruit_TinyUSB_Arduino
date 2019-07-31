@@ -11,7 +11,20 @@
 
 #include "Adafruit_TinyUSB.h"
 
-/* This sketch demonstrates WebUSB
+/* This sketch demonstrates WebUSB as web serial with Chrome browser.
+ * After enumerated successfully, Chrome will pop-up notification
+ * with URL to landing page, click on it to test
+ *  - Click "Connect" and select device, When connected the on-board LED will litted up.
+ *  - Any charaters received from either webusb/Serial will be echo back to webusb and Serial
+ *  
+ * Note: 
+ * - The WebUSB landing page notification is currently disabled in Chrome 
+ * on Windows due to Chromium issue 656702 (https://crbug.com/656702). You have to 
+ * go to https://adafruit.github.io/Adafruit_TinyUSB_Arduino/examples/webusb-serial to test
+ * 
+ * - On Windows 7 and prior: You need to use Zadig tool to manually bind the 
+ * WebUSB interface with the WinUSB driver for Chrome to access. From windows 8 and 10, this
+ * is done automatically by firmware.
  */
 
 // USB WebUSB object
@@ -40,10 +53,23 @@ void setup()
   Serial.println("Adafruit TinyUSB WebUSB example");
 }
 
+// function to echo to both Serial and WebUSB
+void echo_all(char chr)
+{
+  Serial.write(chr);
+  // print extra newline for Serial
+  if ( chr == '\r' ) Serial.write('\n');
+  
+  usb_web.write(chr);
+}
+
 void loop()
 {
-//  delay(1000);
-//  digitalWrite(LED_BUILTIN, 1-digitalRead(LED_BUILTIN));
+  // from WebUSB to both Serial & webUSB
+  if (usb_web.available()) echo_all(usb_web.read());
+
+  // From Serial to both Serial & webUSB
+  if (Serial.available())   echo_all(Serial.read());  
 }
 
 void line_state_callback(bool connected)
