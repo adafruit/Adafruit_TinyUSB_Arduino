@@ -26,55 +26,64 @@
  */
 
 #include "Adafruit_TinyUSB.h"
+#include <Adafruit_NeoPixel.h>
+
+// Which pin on the Arduino is connected to the NeoPixels?
+// On a Trinket or Gemma we suggest changing this to 1
+// use on-board neopixel PIN_NEOPIXEL if existed
+#ifdef PIN_NEOPIXEL
+  #define PIN      PIN_NEOPIXEL
+#else
+  #define PIN      6
+#endif
+
+// How many NeoPixels are attached to the Arduino?
+#define NUMPIXELS  1
+
+// When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
+// Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
+// example for more information on possible values.
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 
 // USB WebUSB object
 Adafruit_USBD_WebUSB usb_web;
 
 // Landing Page: scheme (0: http, 1: https), url
-WEBUSB_URL_DEF(landingPage, 1 /*https*/, "adafruit.github.io/Adafruit_TinyUSB_Arduino/examples/webusb-serial");
-
-int led_pin = LED_BUILTIN;
+WEBUSB_URL_DEF(landingPage, 1 /*https*/, "adafruit.github.io/Adafruit_TinyUSB_Arduino/examples/webusb-rgb");
 
 // the setup function runs once when you press reset or power the board
 void setup()
 {
-  pinMode(led_pin, OUTPUT);
-  digitalWrite(led_pin, LOW);
-  
   usb_web.begin();
   usb_web.setLandingPage(&landingPage);
   usb_web.setLineStateCallback(line_state_callback);
 
   Serial.begin(115200);
 
+  // This initializes the NeoPixel with RED
+  pixels.begin();
+  pixels.setBrightness(50);
+  pixels.setPixelColor(0, 0xff0000);
+  pixels.show();
+
   // wait until device mounted
   while( !USBDevice.mounted() ) delay(1);
 
-  Serial.println("TinyUSB WebUSB Serial example");
-}
-
-// function to echo to both Serial and WebUSB
-void echo_all(char chr)
-{
-  Serial.write(chr);
-  // print extra newline for Serial
-  if ( chr == '\r' ) Serial.write('\n');
-  
-  usb_web.write(chr);
+  Serial.println("TinyUSB WebUSB RGB example");
 }
 
 void loop()
 {
-  // from WebUSB to both Serial & webUSB
-  if (usb_web.available()) echo_all(usb_web.read());
+  // Landing Page send 3 bytes of color as RGB
+  if (usb_web.available() < 3 ) return;
 
-  // From Serial to both Serial & webUSB
-  if (Serial.available())   echo_all(Serial.read());  
+  pixels.setPixelColor(0, usb_web.read(), usb_web.read(), usb_web.read());
+  pixels.show();
 }
 
 void line_state_callback(bool connected)
 {
-  digitalWrite(led_pin, connected);
-
-  if ( connected ) usb_web.println("TinyUSB WebUSB Serial example");
+  // connected = green, disconnected = red
+  pixels.setPixelColor(0, connected ? 0x00ff00 : 0xff0000);
+  pixels.show();
 }
