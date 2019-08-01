@@ -28,11 +28,11 @@ before_install:
     # Remove release code and clone git master of nRF52
     - BSP_VERSION=`eval ls $BSP_PATH/nrf52`
     - rm -r $BSP_PATH/nrf52/*
-    - git clone --quite https://github.com/adafruit/Adafruit_nRF52_Arduino.git $BSP_PATH/nrf52/$BSP_VERSION
+    - git clone --quiet https://github.com/adafruit/Adafruit_nRF52_Arduino.git $BSP_PATH/nrf52/$BSP_VERSION
     # Remove release code and clone git master of SAMD
     - BSP_VERSION=`eval ls $BSP_PATH/samd`
     - rm -r $BSP_PATH/samd/*
-    - git clone --quite https://github.com/adafruit/ArduinoCore-samd.git $BSP_PATH/samd/$BSP_VERSION
+    - git clone --quiet https://github.com/adafruit/ArduinoCore-samd.git $BSP_PATH/samd/$BSP_VERSION
 
 install:
     - arduino --install-library "Adafruit SPIFlash","MIDI Library","Adafruit seesaw Library"
