@@ -27,6 +27,14 @@
 
 #include "Adafruit_TinyUSB_Core.h"
 
+#define WEBUSB_URL_DEF(_name, _scheme, _url) \
+  struct TU_ATTR_PACKED {                    \
+    uint8_t bLength;                         \
+    uint8_t bDescriptorType;                 \
+    uint8_t bScheme;                         \
+    char    url[3 + sizeof(_url)];           \
+  } const _name = { 3 + sizeof(_url) - 1, 3, _scheme, _url }
+
 class Adafruit_USBD_WebUSB : public Stream, Adafruit_USBD_Interface
 {
   public:
