@@ -28,5 +28,6 @@
 #include "Adafruit_USBD_MSC.h"
 #include "Adafruit_USBD_HID.h"
 #include "Adafruit_USBD_MIDI.h"
+#include "Adafruit_USBD_WebUSB.h"
 
 #endif /* ADAFRUIT_TINYUSB_H_ */
