@@ -72,12 +72,31 @@ void setup()
   Serial.println("TinyUSB WebUSB RGB example");
 }
 
+// convert a hex character to number
+uint8_t char2num(char c)
+{
+  if (c >= 'a') return c - 'a' + 10;
+  if (c >= 'A') return c - 'A' + 10;
+  return c - '0';  
+}
+
 void loop()
 {
-  // Landing Page send 3 bytes of color as RGB
-  if (usb_web.available() < 3 ) return;
+  // Landing Page 7 characters as hex color '#RRGGBB'
+  if (usb_web.available() < 7) return;
 
-  pixels.setPixelColor(0, usb_web.read(), usb_web.read(), usb_web.read());
+  uint8_t input[7];
+  usb_web.readBytes(input, 7);
+
+  // Print to serial for debugging
+  Serial.write(input, 7);
+  Serial.println();
+
+  uint8_t red   = 16*char2num(input[1]) + char2num(input[2]);
+  uint8_t green = 16*char2num(input[3]) + char2num(input[4]);
+  uint8_t blue  = 16*char2num(input[5]) + char2num(input[6]);
+  
+  pixels.setPixelColor(0, red, green, blue);
   pixels.show();
 }
 
