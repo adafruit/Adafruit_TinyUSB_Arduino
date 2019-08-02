@@ -9,16 +9,16 @@
  any redistribution
 *********************************************************************/
 
-/* This sketch demonstrates WebUSB as web serial with Chrome browser.
- * After enumerated successfully, Chrome will pop-up notification
+/* This sketch demonstrates WebUSB as web serial with browser with WebUSB support (e.g Chrome).
+ * After enumerated successfully, Browser will pop-up notification
  * with URL to landing page, click on it to test
- *  - Click "Connect" and select device, When connected the on-board LED will litted up.
- *  - Any charaters received from either webusb/Serial will be echo back to webusb and Serial
+ *  - Click "Connect" and select device, When connected the neopixel LED will change color to Green.
+ *  - When received color from browser in format '#RRGGBB', device will change the color of neopixel accordingly
  *  
  * Note: 
  * - The WebUSB landing page notification is currently disabled in Chrome 
  * on Windows due to Chromium issue 656702 (https://crbug.com/656702). You have to 
- * go to https://adafruit.github.io/Adafruit_TinyUSB_Arduino/examples/webusb-serial to test
+ * go to landing page (below) to test
  * 
  * - On Windows 7 and prior: You need to use Zadig tool to manually bind the 
  * WebUSB interface with the WinUSB driver for Chrome to access. From windows 8 and 10, this
@@ -34,7 +34,7 @@
 #ifdef PIN_NEOPIXEL
   #define PIN      PIN_NEOPIXEL
 #else
-  #define PIN      6
+  #define PIN      8
 #endif
 
 // How many NeoPixels are attached to the Arduino?
