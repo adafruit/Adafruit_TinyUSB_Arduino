@@ -35,7 +35,7 @@ before_install:
     - git clone --quiet https://github.com/adafruit/ArduinoCore-samd.git $BSP_PATH/samd/$BSP_VERSION
 
 install:
-    - arduino --install-library "Adafruit SPIFlash","MIDI Library","Adafruit seesaw Library"
+    - arduino --install-library "Adafruit SPIFlash","MIDI Library","Adafruit seesaw Library","Adafruit NeoPixel"
     - git clone --quiet https://github.com/adafruit/SdFat.git $HOME/Arduino/libraries/SdFat
     - pip3 install --user adafruit-nrfutil
 
