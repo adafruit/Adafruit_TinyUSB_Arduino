@@ -38,7 +38,7 @@
 #endif
 
 // How many NeoPixels are attached to the Arduino?
-#define NUMPIXELS  1
+#define NUMPIXELS  10
 
 // When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
 // Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
@@ -63,7 +63,7 @@ void setup()
   // This initializes the NeoPixel with RED
   pixels.begin();
   pixels.setBrightness(50);
-  pixels.setPixelColor(0, 0xff0000);
+  pixels.fill(0xff0000);
   pixels.show();
 
   // wait until device mounted
@@ -95,14 +95,15 @@ void loop()
   uint8_t red   = 16*char2num(input[1]) + char2num(input[2]);
   uint8_t green = 16*char2num(input[3]) + char2num(input[4]);
   uint8_t blue  = 16*char2num(input[5]) + char2num(input[6]);
-  
-  pixels.setPixelColor(0, red, green, blue);
+
+  uint32_t color = (red << 16) | (green << 8) | blue;
+  pixels.fill(color);
   pixels.show();
 }
 
 void line_state_callback(bool connected)
 {
   // connected = green, disconnected = red
-  pixels.setPixelColor(0, connected ? 0x00ff00 : 0xff0000);
+  pixels.fill(connected ? 0x00ff00 : 0xff0000);
   pixels.show();
 }
