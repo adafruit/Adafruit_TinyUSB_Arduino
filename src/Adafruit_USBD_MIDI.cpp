@@ -33,9 +33,14 @@
 #define EPIN    0x80
 #define EPSIZE  64
 
-Adafruit_USBD_MIDI::Adafruit_USBD_MIDI(void)
+Adafruit_USBD_MIDI::Adafruit_USBD_MIDI(void) :
+  _n_cables(1)
 {
+}
 
+Adafruit_USBD_MIDI::Adafruit_USBD_MIDI(uint8_t n_cables) :
+  _n_cables(n_cables)
+{
 }
 
 bool Adafruit_USBD_MIDI::begin(void)
@@ -47,12 +52,49 @@ bool Adafruit_USBD_MIDI::begin(void)
 
 uint16_t Adafruit_USBD_MIDI::getDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize)
 {
-  // usb core will automatically update endpoint number
-  uint8_t desc[] = { TUD_MIDI_DESCRIPTOR(itfnum, 0, EPOUT, EPIN, EPSIZE) };
-  uint16_t const len = sizeof(desc);
+  uint16_t len = 0;
 
-  if ( bufsize < len ) return 0;
-  memcpy(buf, desc, len);
+  if (bufsize < TUD_MIDI_DESC_HEAD_LEN + TUD_MIDI_DESC_JACK_LEN * _n_cables + TUD_MIDI_DESC_EP_LEN(_n_cables) * 2)
+    return 0;
+
+  {
+    uint8_t desc[] = { TUD_MIDI_DESC_HEAD(itfnum, 0, _n_cables) };
+    memcpy(buf + len, desc, sizeof(desc));
+    len += sizeof(desc);
+  }
+
+  for (uint8_t i = 1; i <= _n_cables; i++) {
+    uint8_t jack[] = { TUD_MIDI_DESC_JACK(i) };
+    memcpy(buf + len, jack, sizeof(jack));
+    len += sizeof(jack);
+  }
+
+  // Endpoint OUT + jack mapping - usb core will automatically update endpoint number
+  {
+    uint8_t desc[] = { TUD_MIDI_DESC_EP(EPOUT, EPSIZE, _n_cables) };
+    memcpy(buf + len, desc, sizeof(desc));
+    len += sizeof(desc);
+  }
+
+  for (uint8_t i = 1; i <= _n_cables; i++) {
+    uint8_t jack[] = { TUD_MIDI_JACKID_IN_EMB(i) };
+    memcpy(buf + len, jack, sizeof(jack));
+    len += sizeof(jack);
+  }
+
+  // Endpoint IN + jack mapping - usb core will automatically update endpoint number
+  {
+    uint8_t desc[] = { TUD_MIDI_DESC_EP(EPIN, EPSIZE, _n_cables) };
+    memcpy(buf + len, desc, sizeof(desc));
+    len += sizeof(desc);
+  }
+
+  for (uint8_t i = 1; i <= _n_cables; i++) {
+    uint8_t jack[] = { TUD_MIDI_JACKID_OUT_EMB(i) };
+    memcpy(buf + len, jack, sizeof(jack));
+    len += sizeof(jack);
+  }
+
   return len;
 }
 
@@ -84,5 +126,4 @@ void Adafruit_USBD_MIDI::flush (void)
 }
 
 #endif
-
 
