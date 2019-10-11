@@ -24,7 +24,7 @@
 
 #include "Adafruit_USBD_MIDI.h"
 
-#if CFG_TUD_MIDI
+#if CFG_TUD_MIDI && defined(TUD_MIDI_DESC_HEAD_LEN)
 
 //--------------------------------------------------------------------+
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
