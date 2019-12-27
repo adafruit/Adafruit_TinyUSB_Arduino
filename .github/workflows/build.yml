@@ -26,4 +26,5 @@ jobs:
     
     - name: test platforms
       run: |
+        pip3 install --user adafruit-nrfutil
         python3 ci/build_platform.py cpb
