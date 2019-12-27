@@ -12,12 +12,13 @@ jobs:
     - name: Checkout  
       uses: actions/checkout@v1
       with:
-        submodules: true      
+        submodules: true
     
     - name: Checkout travis-ci-arduino
       uses: actions/checkout@v2
       with:
          repository: hathach/travis-ci-arduino
+         ref: build-platform
          path: ci
 
     - name: pre-install
