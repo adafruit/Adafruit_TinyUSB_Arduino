@@ -26,9 +26,11 @@ jobs:
 
     - name: test platforms
       run: python3 ci/build_platform.py m4
+     
+    - run: exit 1
 
-    - name: clang
-      run: python3 ci/run-clang-format.py -e "ci/*" -e "bin/*" -r . 
+    #- name: clang
+    #  run: python3 ci/run-clang-format.py -e "ci/*" -e "bin/*" -r . 
 
     #- name: doxygen
     #  env:
