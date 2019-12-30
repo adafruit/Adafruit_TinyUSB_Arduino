@@ -1,4 +1,4 @@
-/* 
+/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2019 hathach for Adafruit Industries
@@ -27,29 +27,32 @@
 
 #include "Adafruit_TinyUSB_Core.h"
 
-class Adafruit_USBD_MIDI : public Stream, Adafruit_USBD_Interface
-{
-  public:
-    Adafruit_USBD_MIDI(void);
-    Adafruit_USBD_MIDI(uint8_t n_cables);
+class Adafruit_USBD_MIDI : public Stream, Adafruit_USBD_Interface {
+public:
+  Adafruit_USBD_MIDI(void);
+  Adafruit_USBD_MIDI(uint8_t n_cables);
 
-    bool begin(void);
+  bool begin(void);
 
-    // for MIDI library
-    bool begin(uint32_t baud) { (void) baud; return begin(); }
+  // for MIDI library
+  bool begin(uint32_t baud) {
+    (void)baud;
+    return begin();
+  }
 
-    // Stream interface to use with MIDI Library
-    virtual int    read       ( void );
-    virtual size_t write      ( uint8_t b );
-    virtual int    available  ( void );
-    virtual int    peek       ( void );
-    virtual void   flush      ( void );
+  // Stream interface to use with MIDI Library
+  virtual int read(void);
+  virtual size_t write(uint8_t b);
+  virtual int available(void);
+  virtual int peek(void);
+  virtual void flush(void);
 
-    // from Adafruit_USBD_Interface
-    virtual uint16_t getDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize);
+  // from Adafruit_USBD_Interface
+  virtual uint16_t getDescriptor(uint8_t itfnum, uint8_t *buf,
+                                 uint16_t bufsize);
 
-  private:
-    uint8_t _n_cables;
+private:
+  uint8_t _n_cables;
 };
 
 #endif /* ADAFRUIT_USBD_MIDI_H_ */
