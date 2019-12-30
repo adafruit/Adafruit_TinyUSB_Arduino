@@ -1,6 +1,6 @@
 # Adafruit TinyUSB Library for Arduino
 
-[![Build Status](https://github.com/adafruit/Adafruit_TinyUSB_Arduino/workflows/Build/badge.svg)](https://travis-ci.com/adafruit/Adafruit_TinyUSB_Arduino) [![License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](https://opensource.org/licenses/MIT)
+[![Build Status](https://github.com/adafruit/Adafruit_TinyUSB_Arduino/workflows/Build/badge.svg)](https://github.com/adafruit/Adafruit_TinyUSB_Arduino/actions) [![License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](https://opensource.org/licenses/MIT)
 
 This library works with platform that includes [TinyUSB stack](https://github.com/hathach/tinyusb), typically you will see **Adafruit_TinyUSB_Core** inside core folder. Supported platform are:
 
