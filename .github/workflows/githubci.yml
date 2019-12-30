@@ -7,7 +7,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arduino-platform: ["metro_m4"]
+        arduino-platform: ["metro_m0_tinyusb", "metro_m4_tinyusb"]
 
     runs-on: ubuntu-latest
     
