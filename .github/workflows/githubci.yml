@@ -7,7 +7,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arduino-platform: ["metro_m0_tinyusb", "metro_m4_tinyusb"]
+        arduino-platform: ["metro_m0_tinyusb", "metro_m4_tinyusb", "cpb", "nrf52840"]
 
     runs-on: ubuntu-latest
     
@@ -30,9 +30,6 @@ jobs:
     - name: test platforms
       run: python3 ci/build_platform.py ${{ matrix.arduino-platform }}
       
-    - name: Failed for testing
-      run: exit 1
-
   clang_and_doxy:
     runs-on: ubuntu-latest
     needs: build
