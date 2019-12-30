@@ -1,4 +1,4 @@
-/* 
+/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2019 Ha Thach for Adafruit Industries
@@ -22,13 +22,11 @@
  * THE SOFTWARE.
  */
 
-#include "Arduino.h"
 #include "Adafruit_TinyUSB.h"
+#include "Arduino.h"
 
 //--------------------------------------------------------------------+
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
 //--------------------------------------------------------------------+
 
-
 //------------- IMPLEMENTATION -------------//
-

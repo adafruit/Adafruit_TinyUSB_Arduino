@@ -1,4 +1,4 @@
-/* 
+/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2019 hathach for Adafruit Industries
@@ -27,52 +27,55 @@
 
 #include "Adafruit_TinyUSB_Core.h"
 
-#define WEBUSB_URL_DEF(_name, _scheme, _url) \
-  struct TU_ATTR_PACKED {                    \
-    uint8_t bLength;                         \
-    uint8_t bDescriptorType;                 \
-    uint8_t bScheme;                         \
-    char    url[3 + sizeof(_url)];           \
-  } const _name = { 3 + sizeof(_url) - 1, 3, _scheme, _url }
+#define WEBUSB_URL_DEF(_name, _scheme, _url)                                   \
+  struct TU_ATTR_PACKED {                                                      \
+    uint8_t bLength;                                                           \
+    uint8_t bDescriptorType;                                                   \
+    uint8_t bScheme;                                                           \
+    char url[3 + sizeof(_url)];                                                \
+  } const _name = {3 + sizeof(_url) - 1, 3, _scheme, _url}
 
-class Adafruit_USBD_WebUSB : public Stream, Adafruit_USBD_Interface
-{
-  public:
-    typedef void (*linestate_callback_t)(bool connected);
-    Adafruit_USBD_WebUSB(void);
+class Adafruit_USBD_WebUSB : public Stream, Adafruit_USBD_Interface {
+public:
+  typedef void (*linestate_callback_t)(bool connected);
+  Adafruit_USBD_WebUSB(void);
 
-    bool begin(void);
+  bool begin(void);
 
-    bool setLandingPage(const void* url);
-    void setLineStateCallback(linestate_callback_t fp);
+  bool setLandingPage(const void *url);
+  void setLineStateCallback(linestate_callback_t fp);
 
-    // Stream interface to use with MIDI Library
-    virtual int    read       ( void );
-    virtual int    available  ( void );
-    virtual int    peek       ( void );
-    virtual void   flush      ( void );
-    virtual size_t write      ( uint8_t b );
+  // Stream interface to use with MIDI Library
+  virtual int read(void);
+  virtual int available(void);
+  virtual int peek(void);
+  virtual void flush(void);
+  virtual size_t write(uint8_t b);
 
-    virtual size_t write(const uint8_t *buffer, size_t size);
-    size_t write(const char *buffer, size_t size) {
-      return write((const uint8_t *)buffer, size);
-    }
+  virtual size_t write(const uint8_t *buffer, size_t size);
+  size_t write(const char *buffer, size_t size) {
+    return write((const uint8_t *)buffer, size);
+  }
 
-    bool connected(void);
-    operator bool();
+  bool connected(void);
+  operator bool();
 
-    // from Adafruit_USBD_Interface
-    virtual uint16_t getDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize);
+  // from Adafruit_USBD_Interface
+  virtual uint16_t getDescriptor(uint8_t itfnum, uint8_t *buf,
+                                 uint16_t bufsize);
 
-  private:
-    bool _connected;
-    const uint8_t* _url;
-    linestate_callback_t _linestate_cb;
+private:
+  bool _connected;
+  const uint8_t *_url;
+  linestate_callback_t _linestate_cb;
 
-    // Make all tinyusb callback friend to access private data
-    friend bool tud_vendor_control_request_cb(uint8_t rhport, tusb_control_request_t const * request);
-    friend bool tud_vendor_control_complete_cb(uint8_t rhport, tusb_control_request_t const * request);
+  // Make all tinyusb callback friend to access private data
+  friend bool
+  tud_vendor_control_request_cb(uint8_t rhport,
+                                tusb_control_request_t const *request);
+  friend bool
+  tud_vendor_control_complete_cb(uint8_t rhport,
+                                 tusb_control_request_t const *request);
 };
-
 
 #endif /* ADAFRUIT_USBD_WEBUSB_H_ */
