@@ -21,7 +21,7 @@ jobs:
     - name: Checkout adafruit/ci-arduino
       uses: actions/checkout@v2
       with:
-         repository: hathach/ci-arduino
+         repository: adafruit/ci-arduino
          path: ci
 
     - name: pre-install
