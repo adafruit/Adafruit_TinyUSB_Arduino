@@ -7,7 +7,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arduino-platform: ["cpb"]
+        arduino-platform: ["metro_m4"]
 
     runs-on: ubuntu-latest
     
