@@ -7,10 +7,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arduino-platform: ["cpb"]
+        arduino-platform: ["metro_m0_tinyusb", "metro_m4_tinyusb", "cpb", "nrf52840"]
 
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Setup Python
       uses: actions/setup-python@v1
