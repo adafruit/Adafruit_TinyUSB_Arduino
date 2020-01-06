@@ -10,7 +10,7 @@ jobs:
         arduino-platform: ["metro_m0_tinyusb", "metro_m4_tinyusb", "cpb", "nrf52840"]
 
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Setup Python
       uses: actions/setup-python@v1
@@ -29,7 +29,7 @@ jobs:
 
     - name: test platforms
       run: python3 ci/build_platform.py ${{ matrix.arduino-platform }}
-      
+
   clang_and_doxy:
     runs-on: ubuntu-latest
     needs: build
