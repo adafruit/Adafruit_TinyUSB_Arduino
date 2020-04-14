@@ -62,7 +62,7 @@ public:
   bool mouseMove(uint8_t report_id, int8_t x, int8_t y);
   bool mouseScroll(uint8_t report_id, int8_t scroll, int8_t pan);
   bool mouseButtonPress(uint8_t report_id, uint8_t buttons);
-  static inline bool mouseButtonRelease(uint8_t report_id);
+  bool mouseButtonRelease(uint8_t report_id);
 
   // from Adafruit_USBD_Interface
   virtual uint16_t getDescriptor(uint8_t itfnum, uint8_t *buf,

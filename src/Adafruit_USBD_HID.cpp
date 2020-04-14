@@ -27,7 +27,7 @@
 #define EPOUT 0x00
 #define EPIN 0x80
 
-uint8_t const _ascii2keycode[128][2] = {HID_ASCII_TO_KEYCODE};
+uint8_t const _ascii2keycode[128][2] = { HID_ASCII_TO_KEYCODE };
 
 static Adafruit_USBD_HID *_hid_dev = NULL;
 
