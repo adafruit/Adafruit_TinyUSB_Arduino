@@ -47,6 +47,10 @@ public:
   virtual int peek(void);
   virtual void flush(void);
 
+  // Raw MIDI USB packet interface.
+  bool send(const uint8_t packet[4]);
+  bool receive(uint8_t packet[4]);
+
   // from Adafruit_USBD_Interface
   virtual uint16_t getDescriptor(uint8_t itfnum, uint8_t *buf,
                                  uint16_t bufsize);

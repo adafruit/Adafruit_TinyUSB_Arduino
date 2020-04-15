@@ -114,4 +114,14 @@ void Adafruit_USBD_MIDI::flush(void) {
   // MIDI Library doen't use flush
 }
 
+bool Adafruit_USBD_MIDI::send(const uint8_t packet[4])
+{
+  return tud_midi_send(packet);
+}
+
+bool Adafruit_USBD_MIDI::receive(uint8_t packet[4])
+{
+  return tud_midi_receive(packet);
+}
+
 #endif
