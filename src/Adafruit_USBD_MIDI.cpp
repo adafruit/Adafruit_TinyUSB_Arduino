@@ -35,8 +35,9 @@
 
 Adafruit_USBD_MIDI::Adafruit_USBD_MIDI(void) : _n_cables(1) {}
 
-Adafruit_USBD_MIDI::Adafruit_USBD_MIDI(uint8_t n_cables)
-    : _n_cables(n_cables) {}
+void Adafruit_USBD_MIDI::setCables(uint8_t n_cables) {
+  _n_cables = n_cables;
+}
 
 bool Adafruit_USBD_MIDI::begin(void) {
   if (!USBDevice.addInterface(*this))
@@ -112,6 +113,16 @@ int Adafruit_USBD_MIDI::peek(void) {
 
 void Adafruit_USBD_MIDI::flush(void) {
   // MIDI Library doen't use flush
+}
+
+bool Adafruit_USBD_MIDI::send(const uint8_t packet[4])
+{
+  return tud_midi_send(packet);
+}
+
+bool Adafruit_USBD_MIDI::receive(uint8_t packet[4])
+{
+  return tud_midi_receive(packet);
 }
 
 #endif
