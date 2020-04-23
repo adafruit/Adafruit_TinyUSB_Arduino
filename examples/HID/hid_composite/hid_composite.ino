@@ -44,7 +44,7 @@ uint8_t const desc_hid_report[] =
 {
   TUD_HID_REPORT_DESC_KEYBOARD( HID_REPORT_ID(RID_KEYBOARD) ),
   TUD_HID_REPORT_DESC_MOUSE   ( HID_REPORT_ID(RID_MOUSE) ),
-  //TUD_HID_REPORT_DESC_CONSUMER( HID_REPORT_ID(RID_CONSUMER_CONTROL), )
+  TUD_HID_REPORT_DESC_CONSUMER( HID_REPORT_ID(RID_CONSUMER_CONTROL) )
 };
 
 // USB HID object
@@ -97,7 +97,7 @@ void loop()
   /*------------- Keyboard -------------*/
   if ( usb_hid.ready() )
   {
-    // use to prevent sending multiple consecutive zero report
+    // use to send key release report
     static bool has_key = false;
 
     if ( btn_pressed )
@@ -113,6 +113,32 @@ void loop()
       // send empty key report if previously has key pressed
       if (has_key) usb_hid.keyboardRelease(RID_KEYBOARD);
       has_key = false;
+    }
+
+    // delay a bit before attempt to send consumer report
+    delay(10);
+  }
+
+  /*------------- Consumer Control -------------*/
+  if ( usb_hid.ready() )
+  {
+    // Consumer Control is used to control Media playback, Volume, Brightness etc ...
+    // Consumer report is 2-byte containing the control code of the key
+    // For list of control check out https://github.com/hathach/tinyusb/blob/master/src/class/hid/hid.h#L544
+
+    // use to send consumer release report
+    static bool has_consumer_key = false;
+
+    if ( btn_pressed )
+    {
+      // send volume down (0x00EA)
+      usb_hid.sendReport16(RID_CONSUMER_CONTROL, HID_USAGE_CONSUMER_VOLUME_DECREMENT);
+      has_consumer_key = true;
+    }else
+    {
+      // release the consume key by sending zero (0x0000)
+      if (has_consumer_key) usb_hid.sendReport16(RID_CONSUMER_CONTROL, 0);
+      has_consumer_key = false;
     }
   }
 }

@@ -51,6 +51,11 @@ public:
   bool ready(void);
   bool sendReport(uint8_t report_id, void const *report, uint8_t len);
 
+  // Report helpers
+  bool sendReport8 (uint8_t report_id, uint8_t  num);
+  bool sendReport16(uint8_t report_id, uint16_t num);
+  bool sendReport32(uint8_t report_id, uint32_t num);
+
   //------------- Keyboard API -------------//
   bool keyboardReport(uint8_t report_id, uint8_t modifier, uint8_t keycode[6]);
   bool keyboardPress(uint8_t report_id, char ch);

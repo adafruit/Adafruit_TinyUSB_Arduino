@@ -1,5 +1,42 @@
 # Adafruit TinyUSB Arduino Library Changelog
 
+## 0.9.0 - 2020.04.23
+
+- Fixed mouseButtonRelease() error
+- Supported multiple cables for USB MIDI (requires BSP nRF52 0.20.0 and SAMD 1.5.12 )
+- Added consumer control support to HID/hid_composite example
+- Added Adafruit_USBD_HID send report helper: sendReport8(), sendReport16(), sendReport32()
+
+**Minor Breaking Changes**
+- Removed trailing comma in hid report descriptor, this is required to use with BSP nRF52 0.20.0 and SAMD 1.5.12 e.g
+
+from 
+
+```
+uint8_t const desc_hid_report[] =
+{
+  TUD_HID_REPORT_DESC_KEYBOARD( HID_REPORT_ID(RID_KEYBOARD), ),
+  TUD_HID_REPORT_DESC_MOUSE   ( HID_REPORT_ID(RID_MOUSE   ), ),
+};
+```
+to 
+
+```
+uint8_t const desc_hid_report[] =
+{
+  TUD_HID_REPORT_DESC_KEYBOARD( HID_REPORT_ID(RID_KEYBOARD) /*, no more trailing comma */ ),
+  TUD_HID_REPORT_DESC_MOUSE   ( HID_REPORT_ID(RID_MOUSE   )  /*, no more trailing comma */ ),
+};
+```
+
+## 0.8.2 - 2020.04.06
+
+- Removed package-lock.json in hid generic inout example due to security warning from github
+
+## 0.8.1 - 2020.01.08
+
+- More CI migrating work, no function changes
+
 ## 0.8.0 - 2019.12.30
 
 - Correct USB BCD version to 2.1 for webUSB
