@@ -117,18 +117,15 @@ bool Adafruit_USBD_HID::sendReport(uint8_t report_id, void const *report,
   return tud_hid_report(report_id, report, len);
 }
 
-bool Adafruit_USBD_HID::sendReport8 (uint8_t report_id, uint8_t  num)
-{
+bool Adafruit_USBD_HID::sendReport8(uint8_t report_id, uint8_t num) {
   return tud_hid_report(report_id, &num, sizeof(num));
 }
 
-bool Adafruit_USBD_HID::sendReport16(uint8_t report_id, uint16_t num)
-{
+bool Adafruit_USBD_HID::sendReport16(uint8_t report_id, uint16_t num) {
   return tud_hid_report(report_id, &num, sizeof(num));
 }
 
-bool Adafruit_USBD_HID::sendReport32(uint8_t report_id, uint32_t num)
-{
+bool Adafruit_USBD_HID::sendReport32(uint8_t report_id, uint32_t num) {
   return tud_hid_report(report_id, &num, sizeof(num));
 }
 
