@@ -78,7 +78,7 @@ uint16_t Adafruit_USBD_HID::getDescriptor(uint8_t itfnum, uint8_t *buf,
   if (_out_endpoint) {
     // usb core will automatically update endpoint number
     uint8_t desc[] = {
-        TUD_HID_INOUT_DESCRIPTOR(itfnum, 0, _protocol, _desc_report_len, EPOUT,
+        TUD_HID_INOUT_DESCRIPTOR(itfnum, 4, _protocol, _desc_report_len, EPOUT,
                                  EPIN, CFG_TUD_HID_BUFSIZE, _interval_ms)};
     uint16_t const len = sizeof(desc);
 
