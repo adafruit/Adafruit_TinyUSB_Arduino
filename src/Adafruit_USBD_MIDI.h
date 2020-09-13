@@ -46,6 +46,8 @@ public:
   virtual int peek(void);
   virtual void flush(void);
 
+  using Stream::write;
+
   // Raw MIDI USB packet interface.
   bool send(const uint8_t packet[4]);
   bool receive(uint8_t packet[4]);
