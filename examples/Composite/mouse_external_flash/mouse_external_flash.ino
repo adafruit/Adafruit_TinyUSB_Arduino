@@ -67,7 +67,7 @@ void setup()
   usb_msc.setReadWriteCallback(msc_read_cb, msc_write_cb, msc_flush_cb);
 
   // Set disk size, block size should be 512 regardless of spi flash page size
-  usb_msc.setCapacity(flash.pageSize()*flash.numPages()/512, 512);
+  usb_msc.setCapacity(flash.size()/512, 512);
 
   // MSC is ready for read/write
   usb_msc.setUnitReady(true);
@@ -143,3 +143,4 @@ void msc_flush_cb (void)
 {
   flash.syncBlocks();
 }
+

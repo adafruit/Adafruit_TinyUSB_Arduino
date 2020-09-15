@@ -86,7 +86,7 @@ void setup()
   flash.begin();
   fatfs.begin(&flash);
 
-  usb_msc.setCapacity(0, flash.pageSize()*flash.numPages()/512, 512);
+  usb_msc.setCapacity(0, flash.size()/512, 512);
   usb_msc.setReadWriteCallback(0, external_flash_read_cb, external_flash_write_cb, external_flash_flush_cb);
   usb_msc.setUnitReady(0, true);
 
