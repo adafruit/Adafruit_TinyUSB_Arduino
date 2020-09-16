@@ -43,7 +43,7 @@ void setup()
   
   usb_web.setLandingPage(&landingPage);
   usb_web.setLineStateCallback(line_state_callback);
-  usb_web.setStringDescriptor("TinyUSB WebUSB");
+  //usb_web.setStringDescriptor("TinyUSB WebUSB");
   usb_web.begin();
 
   Serial.begin(115200);

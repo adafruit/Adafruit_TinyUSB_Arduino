@@ -54,7 +54,7 @@ WEBUSB_URL_DEF(landingPage, 1 /*https*/, "adafruit.github.io/Adafruit_TinyUSB_Ar
 // the setup function runs once when you press reset or power the board
 void setup()
 {
-  usb_web.setStringDescriptor("TinyUSB WebUSB");
+  //usb_web.setStringDescriptor("TinyUSB WebUSB");
   usb_web.setLandingPage(&landingPage);
   usb_web.setLineStateCallback(line_state_callback);
   usb_web.begin();

@@ -55,7 +55,7 @@ void setup()
 {
   usb_hid.setPollInterval(2);
   usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
-  usb_hid.setStringDescriptor("TinyUSB HID Composite");
+  //usb_hid.setStringDescriptor("TinyUSB HID Composite");
 
   usb_hid.begin();
 
