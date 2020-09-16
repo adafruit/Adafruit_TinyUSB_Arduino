@@ -75,31 +75,27 @@ uint16_t Adafruit_USBD_HID::getDescriptor(uint8_t itfnum, uint8_t *buf,
   if (!_desc_report_len)
     return 0;
 
+  // usb core will automatically update endpoint number
+  uint8_t const desc_inout[] = { TUD_HID_INOUT_DESCRIPTOR(itfnum, 0, _protocol, _desc_report_len, EPIN, EPOUT, CFG_TUD_HID_BUFSIZE, _interval_ms)};
+  uint8_t const desc_in_only[] = { TUD_HID_DESCRIPTOR(itfnum, 0, _protocol, _desc_report_len, EPIN, CFG_TUD_HID_BUFSIZE, _interval_ms) };
+
+  uint8_t const* desc;
+  uint16_t len;
+
   if (_out_endpoint) {
-    // usb core will automatically update endpoint number
-    uint8_t desc[] = {
-        TUD_HID_INOUT_DESCRIPTOR(itfnum, 0, _protocol, _desc_report_len, EPOUT,
-                                 EPIN, CFG_TUD_HID_BUFSIZE, _interval_ms)};
-    uint16_t const len = sizeof(desc);
-
-    if (bufsize < len)
-      return 0;
-    memcpy(buf, desc, len);
-
-    return len;
+    desc = desc_inout;
+    len = sizeof(desc_inout);
   } else {
-    // usb core will automatically update endpoint number
-    uint8_t desc[] = {TUD_HID_DESCRIPTOR(itfnum, 0, _protocol, _desc_report_len,
-                                         EPIN, CFG_TUD_HID_BUFSIZE,
-                                         _interval_ms)};
-    uint16_t const len = sizeof(desc);
-
-    if (bufsize < len)
-      return 0;
-    memcpy(buf, desc, len);
-
-    return len;
+    desc = desc_in_only;
+    len = sizeof(desc_in_only);
   }
+
+  if (bufsize < len) {
+    return 0;
+  }
+
+  memcpy(buf, desc, len);
+  return len;
 }
 
 bool Adafruit_USBD_HID::begin(void) {
