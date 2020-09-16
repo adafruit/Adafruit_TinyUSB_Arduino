@@ -40,6 +40,8 @@ void setup()
 {
   pinMode(LED_BUILTIN, OUTPUT);
   
+  //usb_midi.setStringDescriptor("TinyUSB MIDI");
+
   // Initialize MIDI, and listen to all MIDI channels
   // This will also call usb_midi's begin()
   MIDI.begin(MIDI_CHANNEL_OMNI);

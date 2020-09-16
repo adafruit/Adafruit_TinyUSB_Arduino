@@ -27,7 +27,7 @@
 
 #include "Adafruit_TinyUSB_Core.h"
 
-class Adafruit_USBD_MSC : Adafruit_USBD_Interface {
+class Adafruit_USBD_MSC : public Adafruit_USBD_Interface {
 public:
   typedef int32_t (*read_callback_t)(uint32_t lba, void *buffer,
                                      uint32_t bufsize);

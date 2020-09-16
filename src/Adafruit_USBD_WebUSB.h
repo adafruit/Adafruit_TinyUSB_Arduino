@@ -35,7 +35,7 @@
     char url[3 + sizeof(_url)];                                                \
   } const _name = {3 + sizeof(_url) - 1, 3, _scheme, _url}
 
-class Adafruit_USBD_WebUSB : public Stream, Adafruit_USBD_Interface {
+class Adafruit_USBD_WebUSB : public Stream, public Adafruit_USBD_Interface {
 public:
   typedef void (*linestate_callback_t)(bool connected);
   Adafruit_USBD_WebUSB(void);

@@ -27,7 +27,7 @@
 
 #include "Adafruit_TinyUSB_Core.h"
 
-class Adafruit_USBD_HID : Adafruit_USBD_Interface {
+class Adafruit_USBD_HID : public Adafruit_USBD_Interface {
 public:
   typedef uint16_t (*get_report_callback_t)(uint8_t report_id,
                                             hid_report_type_t report_type,

@@ -27,7 +27,7 @@
 
 #include "Adafruit_TinyUSB_Core.h"
 
-class Adafruit_USBD_MIDI : public Stream, Adafruit_USBD_Interface {
+class Adafruit_USBD_MIDI : public Stream, public Adafruit_USBD_Interface {
 public:
   Adafruit_USBD_MIDI(void);
 
