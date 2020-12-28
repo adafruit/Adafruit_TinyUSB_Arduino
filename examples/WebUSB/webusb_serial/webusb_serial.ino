@@ -31,7 +31,7 @@
 Adafruit_USBD_WebUSB usb_web;
 
 // Landing Page: scheme (0: http, 1: https), url
-WEBUSB_URL_DEF(landingPage, 1 /*https*/, "adafruit.github.io/Adafruit_TinyUSB_Arduino/examples/webusb-serial");
+WEBUSB_URL_DEF(landingPage, 1 /*https*/, "adafruit.github.io/Adafruit_TinyUSB_Arduino/examples/webusb-serial/index.html");
 
 int led_pin = LED_BUILTIN;
 

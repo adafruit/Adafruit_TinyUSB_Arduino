@@ -49,7 +49,7 @@ Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ80
 Adafruit_USBD_WebUSB usb_web;
 
 // Landing Page: scheme (0: http, 1: https), url
-WEBUSB_URL_DEF(landingPage, 1 /*https*/, "adafruit.github.io/Adafruit_TinyUSB_Arduino/examples/webusb-rgb");
+WEBUSB_URL_DEF(landingPage, 1 /*https*/, "adafruit.github.io/Adafruit_TinyUSB_Arduino/examples/webusb-rgb/index.html");
 
 // the setup function runs once when you press reset or power the board
 void setup()
