@@ -68,7 +68,9 @@ void loop()
   gp.x       = 0;
   gp.y       = 0;
   gp.z       = 0;
-  gp.r_z     = 0;
+  gp.rx      = 0;
+  gp.ry      = 0;
+  gp.rz      = 0;
   gp.hat     = 0;
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
@@ -143,16 +145,16 @@ void loop()
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
 
-  // Joystick 1 LEFT
-  Serial.println("Joystick 1 LEFT");
-  gp.x = -127;
-  gp.y = 0;
-  usb_hid.sendReport(0, &gp, sizeof(gp));
-  delay(2000);
-
   // Joystick 1 RIGHT
   Serial.println("Joystick 1 RIGHT");
   gp.x = 127;
+  gp.y = 0;
+  usb_hid.sendReport(0, &gp, sizeof(gp));
+  delay(2000);
+  
+  // Joystick 1 LEFT
+  Serial.println("Joystick 1 LEFT");
+  gp.x = -127;
   gp.y = 0;
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
@@ -167,36 +169,74 @@ void loop()
 
   // Joystick 2 UP
   Serial.println("Joystick 2 UP");
-  gp.z   = 0;
-  gp.r_z = 127;
+  gp.z  = 0;
+  gp.rz = 127;
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
   
   // Joystick 2 DOWN
   Serial.println("Joystick 2 DOWN");
-  gp.z   = 0;
-  gp.r_z = -127;
-  usb_hid.sendReport(0, &gp, sizeof(gp));
-  delay(2000);
-
-  // Joystick 2 LEFT
-  Serial.println("Joystick 2 LEFT");
-  gp.z   = -127;
-  gp.r_z = 0;
+  gp.z  = 0;
+  gp.rz = -127;
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
 
   // Joystick 2 RIGHT
   Serial.println("Joystick 2 RIGHT");
-  gp.z   = 127;
-  gp.r_z = 0;
+  gp.z  = 127;
+  gp.rz = 0;
+  usb_hid.sendReport(0, &gp, sizeof(gp));
+  delay(2000);
+  
+  // Joystick 2 LEFT
+  Serial.println("Joystick 2 LEFT");
+  gp.z  = -127;
+  gp.rz = 0;
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
 
   // Joystick 2 CENTER
   Serial.println("Joystick 2 CENTER");
-  gp.z   = 0;
-  gp.r_z = 0;
+  gp.z  = 0;
+  gp.rz = 0;
+  usb_hid.sendReport(0, &gp, sizeof(gp));
+  delay(2000);
+
+
+  // Analog Trigger 1 UP
+  Serial.println("Analog Trigger 1 UP");
+  gp.rx = 127;
+  usb_hid.sendReport(0, &gp, sizeof(gp));
+  delay(2000);
+  
+  // Analog Trigger 1 DOWN
+  Serial.println("Analog Trigger 1 DOWN");
+  gp.rx = -127;
+  usb_hid.sendReport(0, &gp, sizeof(gp));
+  delay(2000);
+
+  // Analog Trigger 1 CENTER
+  Serial.println("Analog Trigger 1 CENTER");
+  gp.rx = 0;
+  usb_hid.sendReport(0, &gp, sizeof(gp));
+  delay(2000);
+
+
+  // Analog Trigger 2 UP
+  Serial.println("Analog Trigger 2 UP");
+  gp.ry = 127;
+  usb_hid.sendReport(0, &gp, sizeof(gp));
+  delay(2000);
+  
+  // Analog Trigger 2 DOWN
+  Serial.println("Analog Trigger 2 DOWN");
+  gp.ry = -127;
+  usb_hid.sendReport(0, &gp, sizeof(gp));
+  delay(2000);
+
+  // Analog Trigger 2 CENTER
+  Serial.println("Analog Trigger 2 CENTER");
+  gp.ry = 0;
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
 
@@ -217,7 +257,9 @@ void loop()
   gp.x       = random(-127, 128);
   gp.y       = random(-127, 128);
   gp.z       = random(-127, 128);
-  gp.r_z     = random(-127, 128);
+  gp.rx      = random(-127, 128);
+  gp.ry      = random(-127, 128);
+  gp.rz      = random(-127, 128);
   gp.hat     = random(0,      9);
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
