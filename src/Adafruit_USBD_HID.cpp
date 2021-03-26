@@ -177,7 +177,7 @@ bool Adafruit_USBD_HID::keyboardReport(uint8_t report_id, uint8_t modifier,
 bool Adafruit_USBD_HID::keyboardPress(uint8_t report_id, char ch) {
   uint8_t keycode[6] = {0};
   uint8_t modifier = 0;
-  uint8_t uch = (uint8_t)ch; // ensure no negative values used as index into array
+  uint8_t uch = (uint8_t)ch;
 
   if (_ascii2keycode[uch][0])
     modifier = KEYBOARD_MODIFIER_LEFTSHIFT;
