@@ -4,20 +4,27 @@ on: [pull_request, push, repository_dispatch]
 
 jobs:
   build:
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        arduino-platform: ["metro_m0_tinyusb", "metro_m4_tinyusb", "cpb", "nrf52840"]
-
-    runs-on: ubuntu-latest
+        arduino-platform:
+           # Alphabetical order
+           - 'cpb'
+           - 'feather_m4_can_tinyusb'
+           - 'metro_m0_tinyusb'
+           - 'metro_m4_tinyusb'
+           - 'nrf52840'
 
     steps:
     - name: Setup Python
       uses: actions/setup-python@v1
       with:
         python-version: '3.x'
+
     - name: Checkout code
-      uses: actions/checkout@v2  
+      uses: actions/checkout@v2
+
     - name: Checkout adafruit/ci-arduino
       uses: actions/checkout@v2
       with:
