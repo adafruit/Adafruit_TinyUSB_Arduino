@@ -25,7 +25,8 @@
 #ifndef ADAFRUIT_USBD_MIDI_H_
 #define ADAFRUIT_USBD_MIDI_H_
 
-#include "Adafruit_TinyUSB_Core.h"
+#include "Stream.h"
+#include "Adafruit_USBD_Device.h"
 
 class Adafruit_USBD_MIDI : public Stream, public Adafruit_USBD_Interface {
 public:

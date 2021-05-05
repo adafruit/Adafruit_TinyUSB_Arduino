@@ -25,7 +25,8 @@
 #ifndef ADAFRUIT_USBD_WEBUSB_H_
 #define ADAFRUIT_USBD_WEBUSB_H_
 
-#include "Adafruit_TinyUSB_Core.h"
+#include "Stream.h"
+#include "Adafruit_USBD_Device.h"
 
 #define WEBUSB_URL_DEF(_name, _scheme, _url)                                   \
   struct TU_ATTR_PACKED {                                                      \

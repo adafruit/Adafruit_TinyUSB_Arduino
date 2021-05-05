@@ -25,7 +25,7 @@
 #ifndef ADAFRUIT_USBD_HID_H_
 #define ADAFRUIT_USBD_HID_H_
 
-#include "Adafruit_TinyUSB_Core.h"
+#include "Adafruit_USBD_Device.h"
 
 class Adafruit_USBD_HID : public Adafruit_USBD_Interface {
 public:
