@@ -97,12 +97,16 @@ uint16_t Adafruit_USBD_MIDI::getDescriptor(uint8_t itfnum, uint8_t *buf,
 
 int Adafruit_USBD_MIDI::read(void) {
   uint8_t ch;
-  return tud_midi_read(&ch, 1) ? (int)ch : (-1);
+  return tud_midi_stream_read(&ch, 1) ? (int)ch : (-1);
 }
 
-size_t Adafruit_USBD_MIDI::write(uint8_t b) { return tud_midi_write(0, &b, 1); }
+size_t Adafruit_USBD_MIDI::write (uint8_t b) {
+  return tud_midi_stream_write(0, &b, 1);
+}
 
-int Adafruit_USBD_MIDI::available(void) { return tud_midi_available(); }
+int Adafruit_USBD_MIDI::available (void) {
+  return tud_midi_available();
+}
 
 int Adafruit_USBD_MIDI::peek(void) {
   // MIDI Library doen't use peek
@@ -113,12 +117,12 @@ void Adafruit_USBD_MIDI::flush(void) {
   // MIDI Library doen't use flush
 }
 
-bool Adafruit_USBD_MIDI::send(const uint8_t packet[4]) {
-  return tud_midi_send(packet);
+bool Adafruit_USBD_MIDI::writePacket(const uint8_t packet[4]) {
+  return tud_midi_packet_write(packet);
 }
 
-bool Adafruit_USBD_MIDI::receive(uint8_t packet[4]) {
-  return tud_midi_receive(packet);
+bool Adafruit_USBD_MIDI::readPacket(uint8_t packet[4]) {
+  return tud_midi_packet_read(packet);
 }
 
 #endif

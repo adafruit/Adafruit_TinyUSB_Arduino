@@ -209,58 +209,77 @@ size_t Adafruit_USBD_WebUSB::write(const uint8_t *buffer, size_t size) {
 
 int Adafruit_USBD_WebUSB::peek(void) {
   uint8_t ch;
-  return tud_vendor_peek(0, &ch) ? (int)ch : -1;
+  return tud_vendor_peek(&ch) ? (int)ch : -1;
 }
 
 void Adafruit_USBD_WebUSB::flush(void) {}
 
 extern "C" {
 
-// Invoked when received VENDOR control request
-bool tud_vendor_control_request_cb(uint8_t rhport,
-                                   tusb_control_request_t const *request) {
+// Invoked when a control transfer occurred on an interface of this class
+// Driver response accordingly to the request and the transfer stage (setup/data/ack)
+// return false to stall control endpoint (e.g unsupported request)
+bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const * request)
+{
   if (!_webusb_dev)
     return false;
 
-  switch (request->bRequest) {
-  case VENDOR_REQUEST_WEBUSB:
-    // match vendor request in BOS descriptor
-    // Get landing page url
-    if (!_webusb_dev->_url)
+  // nothing to with DATA & ACK stage
+  if (stage != CONTROL_STAGE_SETUP) return true;
+
+  switch ( request->bmRequestType_bit.type )
+  {
+    case TUSB_REQ_TYPE_VENDOR:
+      switch ( request->bRequest )
+      {
+        case VENDOR_REQUEST_WEBUSB:
+          // match vendor request in BOS descriptor
+          // Get landing page url
+          if ( !_webusb_dev->_url )
+            return false;
+          return tud_control_xfer(rhport, request, (void*) _webusb_dev->_url,
+                                  _webusb_dev->_url[0]);
+
+        case VENDOR_REQUEST_MICROSOFT:
+          if ( request->wIndex == 7 )
+          {
+            // Get Microsoft OS 2.0 compatible descriptor
+            uint16_t total_len;
+            memcpy(&total_len, desc_ms_os_20 + 8, 2);
+
+            return tud_control_xfer(rhport, request, (void*) desc_ms_os_20,
+                                    total_len);
+          }
+          else
+          {
+            return false;
+          }
+
+        default: break;
+      }
+    break;
+
+    case TUSB_REQ_TYPE_CLASS:
+      if (request->bRequest == 0x22)
+      {
+        // Webserial simulate the CDC_REQUEST_SET_CONTROL_LINE_STATE (0x22) to
+        // connect and disconnect.
+        _webusb_dev->_connected = (request->wValue != 0);
+
+        // response with status OK
+        tud_control_status(rhport, request);
+
+        // invoked callback if any (TODO should be done at ACK stage)
+        if ( _webusb_dev->_linestate_cb )
+          _webusb_dev->_linestate_cb(_webusb_dev->_connected);
+
+        return true;
+      }
+    break;
+
+    default:
+      // stall unknown request
       return false;
-    return tud_control_xfer(rhport, request, (void *)_webusb_dev->_url,
-                            _webusb_dev->_url[0]);
-
-  case VENDOR_REQUEST_MICROSOFT:
-    if (request->wIndex == 7) {
-      // Get Microsoft OS 2.0 compatible descriptor
-      uint16_t total_len;
-      memcpy(&total_len, desc_ms_os_20 + 8, 2);
-
-      return tud_control_xfer(rhport, request, (void *)desc_ms_os_20,
-                              total_len);
-    } else {
-      return false;
-    }
-
-  case 0x22:
-    // Webserial simulate the CDC_REQUEST_SET_CONTROL_LINE_STATE (0x22) to
-    // connect and disconnect.
-    _webusb_dev->_connected = (request->wValue != 0);
-
-    // response with status OK
-    tud_control_status(rhport, request);
-
-    // invoked callback if any
-    if (_webusb_dev->_linestate_cb)
-      _webusb_dev->_linestate_cb(_webusb_dev->_connected);
-
-    return true;
-    ;
-
-  default:
-    // stall unknown request
-    return false;
   }
 
   return true;

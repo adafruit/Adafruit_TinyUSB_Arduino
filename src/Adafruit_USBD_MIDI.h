@@ -49,8 +49,8 @@ public:
   using Stream::write;
 
   // Raw MIDI USB packet interface.
-  bool send(const uint8_t packet[4]);
-  bool receive(uint8_t packet[4]);
+  bool writePacket(const uint8_t packet[4]);
+  bool readPacket(uint8_t packet[4]);
 
   // from Adafruit_USBD_Interface
   virtual uint16_t getDescriptor(uint8_t itfnum, uint8_t *buf,

@@ -135,7 +135,9 @@ extern "C" {
 // Invoked when received GET HID REPORT DESCRIPTOR
 // Application return pointer to descriptor, whose contents must exist long
 // enough for transfer to complete
-uint8_t const *tud_hid_descriptor_report_cb(void) {
+uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf) {
+  (void) itf;
+
   if (!_hid_dev)
     return NULL;
 
@@ -145,8 +147,10 @@ uint8_t const *tud_hid_descriptor_report_cb(void) {
 // Invoked when received GET_REPORT control request
 // Application must fill buffer report's content and return its length.
 // Return zero will cause the stack to STALL request
-uint16_t tud_hid_get_report_cb(uint8_t report_id, hid_report_type_t report_type,
+uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type,
                                uint8_t *buffer, uint16_t reqlen) {
+  (void) itf;
+
   if (!(_hid_dev && _hid_dev->_get_report_cb))
     return 0;
 
@@ -155,8 +159,10 @@ uint16_t tud_hid_get_report_cb(uint8_t report_id, hid_report_type_t report_type,
 
 // Invoked when received SET_REPORT control request or
 // received data on OUT endpoint ( Report ID = 0, Type = 0 )
-void tud_hid_set_report_cb(uint8_t report_id, hid_report_type_t report_type,
+void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type,
                            uint8_t const *buffer, uint16_t bufsize) {
+  (void) itf;
+
   if (!(_hid_dev && _hid_dev->_set_report_cb))
     return;
 

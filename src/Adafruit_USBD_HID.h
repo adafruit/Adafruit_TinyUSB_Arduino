@@ -85,13 +85,13 @@ private:
   get_report_callback_t _get_report_cb;
   set_report_callback_t _set_report_cb;
 
-  friend uint16_t tud_hid_get_report_cb(uint8_t report_id,
+  friend uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id,
                                         hid_report_type_t report_type,
                                         uint8_t *buffer, uint16_t reqlen);
-  friend void tud_hid_set_report_cb(uint8_t report_id,
+  friend void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id,
                                     hid_report_type_t report_type,
                                     uint8_t const *buffer, uint16_t bufsize);
-  friend uint8_t const *tud_hid_descriptor_report_cb(void);
+  friend uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf);
 };
 
 #endif /* ADAFRUIT_USBD_HID_H_ */
