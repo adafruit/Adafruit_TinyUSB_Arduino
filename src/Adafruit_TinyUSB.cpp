@@ -22,9 +22,9 @@
  * THE SOFTWARE.
  */
 
-#include "Adafruit_TinyUSB.h"
-
 #ifdef USE_TINYUSB
+
+#include "Adafruit_TinyUSB.h"
 
 //--------------------------------------------------------------------+
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION

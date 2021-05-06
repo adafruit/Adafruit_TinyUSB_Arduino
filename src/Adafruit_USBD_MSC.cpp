@@ -22,6 +22,8 @@
  * THE SOFTWARE.
  */
 
+#ifdef USE_TINYUSB
+
 #include "Adafruit_USBD_MSC.h"
 
 #define EPOUT 0x00
@@ -216,3 +218,5 @@ void tud_msc_write10_complete_cb(uint8_t lun) {
 }
 
 } // extern "C"
+
+#endif // USE_TINYUSB

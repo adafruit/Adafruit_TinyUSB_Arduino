@@ -22,6 +22,8 @@
  * THE SOFTWARE.
  */
 
+#ifdef USE_TINYUSB
+
 #include "Adafruit_USBD_MIDI.h"
 
 #if CFG_TUD_MIDI
@@ -125,4 +127,5 @@ bool Adafruit_USBD_MIDI::readPacket(uint8_t packet[4]) {
   return tud_midi_packet_read(packet);
 }
 
-#endif
+#endif // MIDI
+#endif // USE_TINYUSB

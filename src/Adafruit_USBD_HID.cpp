@@ -22,6 +22,8 @@
  * THE SOFTWARE.
  */
 
+#ifdef USE_TINYUSB
+
 #include "Adafruit_USBD_HID.h"
 
 #define EPOUT 0x00
@@ -225,3 +227,5 @@ bool Adafruit_USBD_HID::mouseButtonPress(uint8_t report_id, uint8_t buttons) {
 bool Adafruit_USBD_HID::mouseButtonRelease(uint8_t report_id) {
   return tud_hid_mouse_report(report_id, 0, 0, 0, 0, 0);
 }
+
+#endif

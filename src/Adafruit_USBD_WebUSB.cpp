@@ -22,6 +22,8 @@
  * THE SOFTWARE.
  */
 
+#ifdef USE_TINYUSB
+
 #include "Adafruit_USBD_WebUSB.h"
 #include "Arduino.h"
 
@@ -296,4 +298,5 @@ bool tud_vendor_control_complete_cb(uint8_t rhport,
 }
 }
 
-#endif
+#endif // VENDOR
+#endif // USE_TINYUSB
