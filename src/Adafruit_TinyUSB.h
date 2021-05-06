@@ -31,7 +31,6 @@
 
 #ifdef USE_TINYUSB
 
-#include "tusb.h"
 #include "Adafruit_USBD_Device.h"
 #include "Adafruit_USBD_CDC.h"
 #include "Adafruit_USBD_HID.h"
