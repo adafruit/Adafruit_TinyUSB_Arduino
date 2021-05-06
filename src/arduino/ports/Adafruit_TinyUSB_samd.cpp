@@ -25,9 +25,7 @@
 #if defined ARDUINO_ARCH_SAMD & defined USE_TINYUSB
 
 #include "Arduino.h"
-#include "tusb.h"
-#include "Adafruit_USBD_Device.h"
-#include "Adafruit_USBD_CDC.h"
+#include "arduino/Adafruit_USBD_Device.h"
 
 #include <Reset.h> // Needed for auto-reset with 1200bps port touch
 
@@ -74,7 +72,7 @@ extern "C" int serial1_printf(const char *__restrict format, ...)
 // Core Init & Touch1200
 //--------------------------------------------------------------------+
 
-void Adafruit_TinyUSB_touch1200(void)
+void TinyUSB_Port_EnterDFU(void)
 {
   initiateReset(250);
 }
@@ -89,7 +87,7 @@ extern "C" void yield(void)
 //--------------------------------------------------------------------+
 // Adafruit_USBD_Device platform dependent
 //--------------------------------------------------------------------+
-void Adafruit_USBD_Device::portInitHardware(uint8_t rhport)
+void TinyUSB_Port_InitDeviceController(uint8_t rhport)
 {
 	/* Enable USB clock */
 #if defined(__SAMD51__)

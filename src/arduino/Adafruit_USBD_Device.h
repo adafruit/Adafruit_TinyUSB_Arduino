@@ -28,13 +28,6 @@
 #include "tusb.h"
 #include "Adafruit_USBD_Interface.h"
 
-extern "C"
-{
-uint8_t const * tud_descriptor_device_cb(void);
-uint8_t const * tud_descriptor_configuration_cb(uint8_t index);
-uint16_t const* tud_descriptor_string_cb(uint8_t index, uint16_t langid);
-}
-
 class Adafruit_USBD_Device
 {
   private:
@@ -88,7 +81,8 @@ class Adafruit_USBD_Device
     uint8_t getSerialDescriptor(uint16_t* serial_str);
 
   private:
-    void portInitHardware(uint8_t rhport);
+    void port_InitHardware(uint8_t rhport);
+    void port_Touch1200(void);
 
   private:
     uint16_t const* descriptor_string_cb(uint8_t index, uint16_t langid);

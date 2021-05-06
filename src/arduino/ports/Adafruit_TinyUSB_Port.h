@@ -22,29 +22,19 @@
  * THE SOFTWARE.
  */
 
-#ifndef ADAFRUIT_TINYUSB_H_
-#define ADAFRUIT_TINYUSB_H_
+#ifndef ADAFRUIT_TINYUSB_PORT_H_
+#define ADAFRUIT_TINYUSB_PORT_H_
 
-//#ifndef USE_TINYUSB
-//#error TinyUSB is not selected, please select it in Tools->Menu->USB Stack
-//#endif
+//--------------------------------------------------------------------+
+// Porting API
+//--------------------------------------------------------------------+
 
-#ifdef USE_TINYUSB
+// To enter/reboot to bootloader
+// usually when host disconnects cdc at baud 1200 (touch 1200)
+void TinyUSB_Port_EnterDFU(void);
 
-#include "arduino/Adafruit_USBD_Device.h"
-
-// CDC can be part of the core
-#include "Adafruit_USBD_CDC.h"
-
-#include "arduino/Adafruit_USBD_HID.h"
-#include "arduino/Adafruit_USBD_MIDI.h"
-#include "arduino/Adafruit_USBD_MSC.h"
-#include "arduino/Adafruit_USBD_WebUSB.h"
-
-// Initialize device hardware, stack, also Serial as CDC
-// Wrapper for USBDevice.begin(rhport)
-void TinyUSB_Device_Init(uint8_t rhport);
+// Init device hardware.
+// Called by USBDevice.begin()
+void TinyUSB_Port_InitDeviceController(uint8_t rhport);
 
 #endif
-
-#endif /* ADAFRUIT_TINYUSB_H_ */

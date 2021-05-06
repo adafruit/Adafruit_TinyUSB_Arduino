@@ -30,7 +30,7 @@
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
 //--------------------------------------------------------------------+
 
-void Adafruit_TinyUSB_Device_init(uint8_t rhport)
+void TinyUSB_Device_init(uint8_t rhport)
 {
   USBDevice.begin(rhport);
 }

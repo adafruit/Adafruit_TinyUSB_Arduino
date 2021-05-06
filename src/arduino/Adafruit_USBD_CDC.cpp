@@ -28,7 +28,7 @@
 #include "tusb.h"
 #include "Adafruit_USBD_CDC.h"
 
-void Adafruit_TinyUSB_touch1200(void);
+#include "arduino/ports/Adafruit_TinyUSB_Port.h"
 
 #define EPOUT   0x00
 #define EPIN    0x80
@@ -178,16 +178,19 @@ extern "C"
 // Use to reset to DFU when disconnect with 1200 bps
 void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts)
 {
-  (void) itf;  // interface ID, not used
   (void) rts;
 
   // DTR = false is counted as disconnected
   if ( !dtr )
   {
-    cdc_line_coding_t coding;
-    tud_cdc_get_line_coding(&coding);
+    // touch1200 only with first CDC instance (Serial)
+    if ( itf == 0 )
+    {
+      cdc_line_coding_t coding;
+      tud_cdc_get_line_coding(&coding);
 
-    if ( coding.bit_rate == 1200 ) Adafruit_TinyUSB_touch1200();
+      if ( coding.bit_rate == 1200 ) TinyUSB_Port_EnterDFU();
+    }
   }
 }
 

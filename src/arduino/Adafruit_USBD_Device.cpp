@@ -26,6 +26,7 @@
 
 #include "Adafruit_USBD_Device.h"
 #include "Adafruit_USBD_CDC.h"
+#include "arduino/ports/Adafruit_TinyUSB_Port.h"
 
 #ifndef USB_MANUFACTURER
   #define USB_MANUFACTURER "Unknown"
@@ -213,7 +214,7 @@ bool Adafruit_USBD_Device::begin(uint8_t rhport)
   USBDevice.addInterface(Serial);
   USBDevice.setID(USB_VID, USB_PID);
 
-  portInitHardware(rhport);
+  TinyUSB_Port_InitDeviceController(rhport);
 
   return tusb_init();
 }
