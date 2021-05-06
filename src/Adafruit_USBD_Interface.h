@@ -1,7 +1,7 @@
-/*
+/* 
  * The MIT License (MIT)
  *
- * Copyright (c) 2019 Ha Thach for Adafruit Industries
+ * Copyright (c) 2021 Ha Thach (tinyusb.org) for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,17 +22,24 @@
  * THE SOFTWARE.
  */
 
-#include "Adafruit_TinyUSB.h"
+#ifndef ADAFRUIT_USBD_INTERFACE_H_
+#define ADAFRUIT_USBD_INTERFACE_H_
 
-#ifdef USE_TINYUSB
+#ifdef __cplusplus
 
-//--------------------------------------------------------------------+
-// MACRO TYPEDEF CONSTANT ENUM DECLARATION
-//--------------------------------------------------------------------+
-
-void Adafruit_TinyUSB_Device_init(uint8_t rhport)
+class Adafruit_USBD_Interface
 {
-  USBDevice.begin(rhport);
-}
+  protected:
+    const char* _desc_str;
+
+  public:
+    Adafruit_USBD_Interface(void) { _desc_str = NULL; }
+
+    virtual uint16_t getDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize) = 0;
+    void setStringDescriptor(const char* str) { _desc_str = str; }
+    const char* getStringDescriptor(void) { return _desc_str; }
+};
+
+#endif
 
 #endif

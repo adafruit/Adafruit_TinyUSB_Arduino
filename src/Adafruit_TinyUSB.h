@@ -25,9 +25,26 @@
 #ifndef ADAFRUIT_TINYUSB_H_
 #define ADAFRUIT_TINYUSB_H_
 
+//#ifndef USE_TINYUSB
+//#error TinyUSB is not selected, please select it in Tools->Menu->USB Stack
+//#endif
+
+#ifdef USE_TINYUSB
+
+#include "tusb.h"
+#include "Adafruit_USBD_Device.h"
+#include "Adafruit_USBD_CDC.h"
 #include "Adafruit_USBD_HID.h"
 #include "Adafruit_USBD_MIDI.h"
 #include "Adafruit_USBD_MSC.h"
 #include "Adafruit_USBD_WebUSB.h"
+
+// Called by main.cpp to initialize usb device typically with CDC device for Serial
+void Adafruit_TinyUSB_Device_init(uint8_t rhport);
+
+// Invoked when host disconnects cdc at baud 1200, usually touch feature to go into DFU mode
+void Adafruit_TinyUSB_touch1200(void);
+
+#endif
 
 #endif /* ADAFRUIT_TINYUSB_H_ */
