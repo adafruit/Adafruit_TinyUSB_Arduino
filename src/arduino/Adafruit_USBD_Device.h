@@ -33,8 +33,10 @@ class Adafruit_USBD_Device
   private:
     enum { STRING_DESCRIPTOR_MAX = 8 };
 
+    // Device descriptor
     uint8_t _desc_device[18] __attribute__ ((aligned(4)));
 
+    // Configuration descriptor
     uint8_t* _desc_cfg;
     uint8_t  _desc_cfg_buffer[256];
     uint16_t _desc_cfg_len;
@@ -45,8 +47,10 @@ class Adafruit_USBD_Device
     uint8_t  _epin_count;
     uint8_t  _epout_count;
 
+    // String descriptor
     const char* _desc_str_arr[STRING_DESCRIPTOR_MAX];
     uint8_t     _desc_str_count;
+    uint16_t    _desc_str[32+1]; // up to 32 unicode characters with headers
 
   public:
     Adafruit_USBD_Device(void);
@@ -60,10 +64,13 @@ class Adafruit_USBD_Device
     bool addInterface(Adafruit_USBD_Interface& itf);
     void setDescriptorBuffer(uint8_t* buf, uint32_t buflen);
 
+    // String descriptor
     void setLanguageDescriptor(uint16_t language_id);
     void setManufacturerDescriptor(const char *s);
     void setProductDescriptor(const char *s);
+    uint8_t getSerialDescriptor(uint16_t* serial_utf16);
 
+    // Control
     bool begin(uint8_t rhport=0);
     void task(void);
 
@@ -77,12 +84,6 @@ class Adafruit_USBD_Device
     bool detach       (void);
     bool attach       (void);
 
-    //------------- Platform Dependent APIs -------------//
-    uint8_t getSerialDescriptor(uint16_t* serial_str);
-
-  private:
-    void port_InitHardware(uint8_t rhport);
-    void port_Touch1200(void);
 
   private:
     uint16_t const* descriptor_string_cb(uint8_t index, uint16_t langid);

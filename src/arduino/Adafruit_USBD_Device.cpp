@@ -208,6 +208,29 @@ void Adafruit_USBD_Device::setProductDescriptor(const char *s)
   _desc_str_arr[STRID_PRODUCT] = s;
 }
 
+uint8_t Adafruit_USBD_Device::getSerialDescriptor(uint16_t* serial_utf16)
+{
+  uint8_t serial_id[16] __attribute__((aligned(4)));
+  uint8_t const serial_len = TinyUSB_Port_GetSerialNumber(serial_id);
+
+  for ( uint8_t i = 0; i < serial_len; i++ )
+  {
+    for ( uint8_t j = 0; j < 2; j++ )
+    {
+      const char nibble_to_hex[16] =
+      {
+        '0', '1', '2', '3', '4', '5', '6', '7',
+        '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
+      };
+
+      uint8_t nibble = (serial_id[i] >> (j * 4)) & 0xf;
+      serial_utf16[1 + i * 2 + (1 - j)] = nibble_to_hex[nibble]; // UTF-16-LE
+    }
+  }
+
+  return 2*serial_len;
+}
+
 bool Adafruit_USBD_Device::begin(uint8_t rhport)
 {
   Serial.setStringDescriptor("TinyUSB Serial");
@@ -259,20 +282,17 @@ uint16_t const* Adafruit_USBD_Device::descriptor_string_cb(uint8_t index, uint16
 {
   (void) langid;
 
-  // up to 32 unicode characters (header make it 33)
-  static uint16_t _desc_str[33];
   uint8_t chr_count;
 
   switch (index)
   {
-    case 0:
+    case STRID_LANGUAGE:
       _desc_str[1] = ((uint16_t) ((uint32_t) _desc_str_arr[STRID_LANGUAGE]));
       chr_count = 1;
     break;
 
-    case 3:
-      // serial Number
-      chr_count = this->getSerialDescriptor(_desc_str+1);
+    case STRID_SERIAL:
+      chr_count = getSerialDescriptor(_desc_str);
     break;
 
     default:

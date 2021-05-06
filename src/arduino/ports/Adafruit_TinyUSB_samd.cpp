@@ -35,18 +35,28 @@
 extern "C"
 {
 
-#if defined(__SAMD51__)
+#if CFG_TUSB_MCU == OPT_MCU_SAMD51 || CFG_TUSB_MCU == OPT_MCU_SAME5X
 
+// SAMD51
 void USB_0_Handler (void) { tud_int_handler(0); }
 void USB_1_Handler (void) { tud_int_handler(0); }
 void USB_2_Handler (void) { tud_int_handler(0); }
 void USB_3_Handler (void) { tud_int_handler(0); }
 
-#else
+#elif CFG_TUSB_MCU == OPT_MCU_SAMD21
 
+// SAMD21
 void USB_Handler(void) { tud_int_handler(0); }
 
 #endif
+
+// run TinyUSB background task when yield()
+void yield(void)
+{
+  tud_task();
+  tud_cdc_write_flush();
+}
+
 } // extern C
 
 
@@ -69,23 +79,7 @@ extern "C" int serial1_printf(const char *__restrict format, ...)
 #endif
 
 //--------------------------------------------------------------------+
-// Core Init & Touch1200
-//--------------------------------------------------------------------+
-
-void TinyUSB_Port_EnterDFU(void)
-{
-  initiateReset(250);
-}
-
-// run TinyUSB background task when yield()
-extern "C" void yield(void)
-{
-  tud_task();
-  tud_cdc_write_flush();
-}
-
-//--------------------------------------------------------------------+
-// Adafruit_USBD_Device platform dependent
+// Porting API
 //--------------------------------------------------------------------+
 void TinyUSB_Port_InitDeviceController(uint8_t rhport)
 {
@@ -131,10 +125,13 @@ void TinyUSB_Port_InitDeviceController(uint8_t rhport)
 #endif
 }
 
-uint8_t Adafruit_USBD_Device::getSerialDescriptor(uint16_t* serial_str)
+void TinyUSB_Port_EnterDFU(void)
 {
-  enum { SERIAL_BYTE_LEN = 16 };
+  initiateReset(250);
+}
 
+uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16])
+{
 #ifdef __SAMD51__
   uint32_t* id_addresses[4] = {(uint32_t *) 0x008061FC, (uint32_t *) 0x00806010,
                                (uint32_t *) 0x00806014, (uint32_t *) 0x00806018};
@@ -143,25 +140,14 @@ uint8_t Adafruit_USBD_Device::getSerialDescriptor(uint16_t* serial_str)
                                (uint32_t *) 0x0080A044, (uint32_t *) 0x0080A048};
 #endif
 
-  uint8_t raw_id[SERIAL_BYTE_LEN];
+  uint32_t* serial_32 = (uint32_t*) serial_id;
 
-  for (int i=0; i<4; i++) {
-      for (int k=0; k<4; k++) {
-          raw_id[4 * i + (3 - k)] = (*(id_addresses[i]) >> k * 8) & 0xff;
-      }
+  for (int i=0; i<4; i++)
+  {
+    *serial_32++ = __builtin_bswap32(*id_addresses[i]);
   }
 
-  const char nibble_to_hex[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
-
-  for (unsigned int i = 0; i < sizeof(raw_id); i++) {
-    for (int j = 0; j < 2; j++) {
-      uint8_t nibble = (raw_id[i] >> (j * 4)) & 0xf;
-      // Strings are UTF-16-LE encoded.
-      serial_str[i * 2 + (1 - j)] = nibble_to_hex[nibble];
-    }
-  }
-
-  return sizeof(raw_id)*2;
+  return 16;
 }
 
 #endif // USE_TINYUSB

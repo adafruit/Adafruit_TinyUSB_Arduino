@@ -37,4 +37,9 @@ void TinyUSB_Port_EnterDFU(void);
 // Called by USBDevice.begin()
 void TinyUSB_Port_InitDeviceController(uint8_t rhport);
 
+// Get unique serial number, needed for Serial String Descriptor
+// Fill serial_id (raw bytes) and return its length (limit to 16 bytes)
+// Note: Serial descriptor can be overwritten by user API
+uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]);
+
 #endif
