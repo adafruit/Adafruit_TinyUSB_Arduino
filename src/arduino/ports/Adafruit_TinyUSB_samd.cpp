@@ -83,6 +83,8 @@ extern "C" int serial1_printf(const char *__restrict format, ...)
 //--------------------------------------------------------------------+
 void TinyUSB_Port_InitDeviceController(uint8_t rhport)
 {
+  (void) rhport;
+
 	/* Enable USB clock */
 #if defined(__SAMD51__)
 	MCLK->APBBMASK.reg |= MCLK_APBBMASK_USB;
