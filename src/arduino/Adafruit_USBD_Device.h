@@ -34,7 +34,7 @@ class Adafruit_USBD_Device
     enum { STRING_DESCRIPTOR_MAX = 8 };
 
     // Device descriptor
-    uint8_t _desc_device[18] __attribute__ ((aligned(4)));
+    tusb_desc_device_t _desc_device __attribute__ ((aligned(4)));
 
     // Configuration descriptor
     uint8_t* _desc_cfg;

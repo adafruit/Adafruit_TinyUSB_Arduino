@@ -66,15 +66,10 @@ void Adafruit_USBD_Device::clearConfiguration(void)
     .bLength            = sizeof(tusb_desc_device_t),
     .bDescriptorType    = TUSB_DESC_DEVICE,
     .bcdUSB             = 0x0200,
-
-    // Use Interface Association Descriptor (IAD) for CDC
-    // As required by USB Specs IAD's subclass must be common class (2) and protocol must be IAD (1)
-    .bDeviceClass       = TUSB_CLASS_MISC,
-    .bDeviceSubClass    = MISC_SUBCLASS_COMMON,
-    .bDeviceProtocol    = MISC_PROTOCOL_IAD,
-
+    .bDeviceClass       = 0,
+    .bDeviceSubClass    = 0,
+    .bDeviceProtocol    = 0,
     .bMaxPacketSize0    = CFG_TUD_ENDPOINT0_SIZE,
-
     .idVendor           = 0,
     .idProduct          = 0,
     .bcdDevice          = 0x0100,
@@ -84,7 +79,7 @@ void Adafruit_USBD_Device::clearConfiguration(void)
     .bNumConfigurations = 0x01
   };
 
-  memcpy(_desc_device, &desc_dev, sizeof(tusb_desc_device_t));
+  _desc_device = desc_dev;
 
   uint8_t const dev_cfg [sizeof(tusb_desc_configuration_t)] =
   {
@@ -124,7 +119,7 @@ bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface& itf)
   if ( !len ) return false;
 
   // Parse interface descriptor to update
-  // - Interface Number & string descrioptor
+  // - Interface Number & string descriptor
   // - Endpoint address
   while (desc < desc_end)
   {
@@ -175,18 +170,18 @@ void Adafruit_USBD_Device::setConfigurationBuffer(uint8_t* buf, uint32_t buflen)
 
 void Adafruit_USBD_Device::setID(uint16_t vid, uint16_t pid)
 {
-  ((tusb_desc_device_t*)_desc_device)->idVendor  = vid;
-  ((tusb_desc_device_t*)_desc_device)->idProduct = pid;
+  _desc_device.idVendor  = vid;
+  _desc_device.idProduct = pid;
 }
 
 void Adafruit_USBD_Device::setVersion(uint16_t bcd)
 {
-  ((tusb_desc_device_t*)_desc_device)->bcdUSB = bcd;
+  _desc_device.bcdUSB = bcd;
 }
 
 void Adafruit_USBD_Device::setDeviceVersion(uint16_t bcd)
 {
-  ((tusb_desc_device_t*)_desc_device)->bcdDevice = bcd;
+  _desc_device.bcdDevice = bcd;
 }
 
 void Adafruit_USBD_Device::setLanguageDescriptor (uint16_t language_id)
@@ -233,6 +228,12 @@ bool Adafruit_USBD_Device::begin(uint8_t rhport)
   setID(USB_VID, USB_PID);
 
   // Serial is always added by default
+  // Use Interface Association Descriptor (IAD) for CDC
+  // As required by USB Specs IAD's subclass must be common class (2) and protocol must be IAD (1)
+  _desc_device.bDeviceClass    = TUSB_CLASS_MISC;
+  _desc_device.bDeviceSubClass = MISC_SUBCLASS_COMMON;
+  _desc_device.bDeviceProtocol = MISC_PROTOCOL_IAD;
+
   Serial.begin(115200);
 
   TinyUSB_Port_InitDeviceController(rhport);
@@ -317,7 +318,7 @@ extern "C"
 // Application return pointer to descriptor
 uint8_t const * tud_descriptor_device_cb(void)
 {
-  return USBDevice._desc_device;
+  return (uint8_t const * ) &USBDevice._desc_device;
 }
 
 // Invoked when received GET CONFIGURATION DESCRIPTOR
