@@ -70,8 +70,8 @@ void Adafruit_USBD_Device::clearConfiguration(void)
     .bDeviceSubClass    = 0,
     .bDeviceProtocol    = 0,
     .bMaxPacketSize0    = CFG_TUD_ENDPOINT0_SIZE,
-    .idVendor           = 0,
-    .idProduct          = 0,
+    .idVendor           = USB_VID,
+    .idProduct          = USB_PID,
     .bcdDevice          = 0x0100,
     .iManufacturer      = STRID_MANUFACTURER,
     .iProduct           = STRID_PRODUCT,
@@ -225,7 +225,6 @@ uint8_t Adafruit_USBD_Device::getSerialDescriptor(uint16_t* serial_utf16)
 bool Adafruit_USBD_Device::begin(uint8_t rhport)
 {
   clearConfiguration();
-  setID(USB_VID, USB_PID);
 
   // Serial is always added by default
   // Use Interface Association Descriptor (IAD) for CDC

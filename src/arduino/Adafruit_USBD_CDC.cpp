@@ -77,7 +77,7 @@ void Adafruit_USBD_CDC::begin (uint32_t baud, uint8_t config)
 
 void Adafruit_USBD_CDC::end(void)
 {
-  // nothing to do
+  USBDevice.clearConfiguration();
 }
 
 uint32_t Adafruit_USBD_CDC::baud(void)
