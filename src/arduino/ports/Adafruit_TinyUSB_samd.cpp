@@ -22,7 +22,9 @@
  * THE SOFTWARE.
  */
 
-#if defined ARDUINO_ARCH_SAMD & defined USE_TINYUSB
+#include "tusb_option.h"
+
+#if defined ARDUINO_ARCH_SAMD & TUSB_OPT_DEVICE_ENABLED
 
 #include "Arduino.h"
 #include "arduino/Adafruit_USBD_Device.h"

@@ -22,7 +22,9 @@
  * THE SOFTWARE.
  */
 
-#if defined ARDUINO_NRF52_ADAFRUIT && defined USE_TINYUSB
+#include "tusb_option.h"
+
+#if defined ARDUINO_NRF52_ADAFRUIT && TUSB_OPT_DEVICE_ENABLED
 
 #include "nrfx.h"
 #include "nrfx_power.h"
