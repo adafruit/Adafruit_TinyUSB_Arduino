@@ -22,7 +22,9 @@
  * THE SOFTWARE.
  */
 
-#ifdef USE_TINYUSB
+#include "tusb_option.h"
+
+#if TUSB_OPT_DEVICE_ENABLED
 
 #include "Adafruit_TinyUSB.h"
 

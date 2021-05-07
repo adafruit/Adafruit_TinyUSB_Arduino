@@ -92,7 +92,6 @@ class Adafruit_USBD_Device
     bool detach       (void);
     bool attach       (void);
 
-
     //------------- status -------------//
     bool mounted      (void);
     bool suspended    (void);

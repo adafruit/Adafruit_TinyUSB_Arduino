@@ -22,11 +22,11 @@
  * THE SOFTWARE.
  */
 
-#ifdef USE_TINYUSB
+#include "tusb_option.h"
+
+#if TUSB_OPT_DEVICE_ENABLED && CFG_TUD_MIDI
 
 #include "Adafruit_USBD_MIDI.h"
-
-#if CFG_TUD_MIDI
 
 //--------------------------------------------------------------------+
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
@@ -127,5 +127,4 @@ bool Adafruit_USBD_MIDI::readPacket(uint8_t packet[4]) {
   return tud_midi_packet_read(packet);
 }
 
-#endif // MIDI
-#endif // USE_TINYUSB
+#endif // TUSB_OPT_DEVICE_ENABLED

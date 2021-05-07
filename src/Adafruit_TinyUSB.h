@@ -25,11 +25,13 @@
 #ifndef ADAFRUIT_TINYUSB_H_
 #define ADAFRUIT_TINYUSB_H_
 
+#include "tusb_option.h"
+
 //#ifndef USE_TINYUSB
 //#error TinyUSB is not selected, please select it in Tools->Menu->USB Stack
 //#endif
 
-#ifdef USE_TINYUSB
+#if TUSB_OPT_DEVICE_ENABLED
 
 #include "arduino/Adafruit_USBD_Device.h"
 

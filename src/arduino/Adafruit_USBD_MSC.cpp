@@ -22,7 +22,9 @@
  * THE SOFTWARE.
  */
 
-#ifdef USE_TINYUSB
+#include "tusb_option.h"
+
+#if TUSB_OPT_DEVICE_ENABLED && CFG_TUD_MSC
 
 #include "Adafruit_USBD_MSC.h"
 
@@ -219,4 +221,4 @@ void tud_msc_write10_complete_cb(uint8_t lun) {
 
 } // extern "C"
 
-#endif // USE_TINYUSB
+#endif // TUSB_OPT_DEVICE_ENABLED

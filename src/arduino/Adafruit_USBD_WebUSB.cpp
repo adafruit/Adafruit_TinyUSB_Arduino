@@ -22,12 +22,12 @@
  * THE SOFTWARE.
  */
 
-#ifdef USE_TINYUSB
+#include "tusb_option.h"
+
+#if TUSB_OPT_DEVICE_ENABLED && CFG_TUD_VENDOR
 
 #include "Adafruit_USBD_WebUSB.h"
 #include "Arduino.h"
-
-#if CFG_TUD_VENDOR
 
 //--------------------------------------------------------------------+
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
@@ -297,5 +297,4 @@ bool tud_vendor_control_complete_cb(uint8_t rhport, tusb_control_request_t const
 }
 }
 
-#endif // VENDOR
-#endif // USE_TINYUSB
+#endif // TUSB_OPT_DEVICE_ENABLED

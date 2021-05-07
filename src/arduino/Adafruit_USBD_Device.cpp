@@ -22,7 +22,9 @@
  * THE SOFTWARE.
  */
 
-#ifdef USE_TINYUSB
+#include "tusb_option.h"
+
+#if TUSB_OPT_DEVICE_ENABLED
 
 #include "Adafruit_USBD_Device.h"
 #include "Adafruit_USBD_CDC.h"
@@ -483,4 +485,4 @@ static int strcpy_utf16(const char *s, uint16_t *buf, int bufsize)
   return buflen;
 }
 
-#endif // USE_TINYUSB
+#endif // TUSB_OPT_DEVICE_ENABLED

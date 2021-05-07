@@ -22,7 +22,9 @@
  * THE SOFTWARE.
  */
 
-#ifdef USE_TINYUSB
+#include "tusb_option.h"
+
+#if TUSB_OPT_DEVICE_ENABLED && CFG_TUD_CDC
 
 #include "Arduino.h"
 #include "Adafruit_USBD_Device.h"
@@ -206,4 +208,4 @@ void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts)
 
 }
 
-#endif // USE_TINYUSB
+#endif // TUSB_OPT_DEVICE_ENABLED
