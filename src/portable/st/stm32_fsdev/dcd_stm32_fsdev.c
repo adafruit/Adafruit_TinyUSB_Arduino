@@ -102,7 +102,6 @@
  */
 
 #include "tusb_option.h"
-#include "common/tusb_fifo.h"
 
 #if defined(STM32F102x6) || defined(STM32F102xB) || \
     defined(STM32F103x6) || defined(STM32F103xB) || \
@@ -121,6 +120,7 @@
 // Some definitions are copied to our private include file.
 #undef USE_HAL_DRIVER
 
+#include "common/tusb_fifo.h"
 #include "device/dcd.h"
 #include "portable/st/stm32_fsdev/dcd_stm32_fsdev_pvt_st.h"
 
@@ -696,7 +696,7 @@ static void dcd_pma_free(uint8_t ep_addr)
   // Presently, this should never be called for EP0 IN/OUT
   TU_ASSERT(open_ep_count > 2, /**/);
   TU_ASSERT(xfer_ctl_ptr(epnum,dir)->max_packet_size != 0, /**/);
-  open_ep_count--;
+  open_ep_count--;#include "common/tusb_fifo.h"
 
   // If count is 2, only EP0 should be open, so allocations can be mostly reset.
 
@@ -824,7 +824,7 @@ static void dcd_transmit_packet(xfer_ctl_t * xfer, uint16_t ep_ix)
   {
     dcd_write_packet_memory_ff(xfer->ff, oldAddr, len);
   }
-  else
+  else#include "common/tusb_fifo.h"
 #endif
   {
     dcd_write_packet_memory(oldAddr, &(xfer->buffer[xfer->queued_len]), len);

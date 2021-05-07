@@ -27,9 +27,10 @@
  */
 
 #include "tusb_option.h"
-#include "common/tusb_fifo.h"
 
 #if (((CFG_TUSB_MCU == OPT_MCU_ESP32S2) ||  (CFG_TUSB_MCU == OPT_MCU_ESP32S3)) && TUSB_OPT_DEVICE_ENABLED)
+
+#include "common/tusb_fifo.h"
 
 // Espressif
 #include "driver/periph_ctrl.h"

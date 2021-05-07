@@ -28,7 +28,6 @@
  */
 
 #include "tusb_option.h"
-#include "common/tusb_fifo.h"
 
 // Since TinyUSB doesn't use SOF for now, and this interrupt too often (1ms interval)
 // We disable SOF for now until needed later on
@@ -54,6 +53,8 @@
        CFG_TUSB_MCU == OPT_MCU_STM32H7                               || \
       (CFG_TUSB_MCU == OPT_MCU_STM32L4 && defined(STM32L4_SYNOPSYS))    \
     )
+
+#include "common/tusb_fifo.h"
 
 // EP_MAX       : Max number of bi-directional endpoints including EP0
 // EP_FIFO_SIZE : Size of dedicated USB SRAM

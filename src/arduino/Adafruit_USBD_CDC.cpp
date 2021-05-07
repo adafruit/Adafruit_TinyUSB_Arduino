@@ -29,7 +29,7 @@
 #include "Arduino.h"
 #include "Adafruit_USBD_Device.h"
 #include "Adafruit_USBD_CDC.h"
-#include "arduino/ports/Adafruit_TinyUSB_Port.h"
+#include "ports/Adafruit_TinyUSB_PortAPI.h"
 
 // TODO Multiple instances supports
 //	static uint8_t _itf_count;

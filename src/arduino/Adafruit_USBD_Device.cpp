@@ -28,7 +28,7 @@
 
 #include "Adafruit_USBD_Device.h"
 #include "Adafruit_USBD_CDC.h"
-#include "arduino/ports/Adafruit_TinyUSB_Port.h"
+#include "ports/Adafruit_TinyUSB_PortAPI.h"
 
 #ifndef USB_MANUFACTURER
   #define USB_MANUFACTURER "Unknown"

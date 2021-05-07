@@ -22,8 +22,8 @@
  * THE SOFTWARE.
  */
 
-#ifndef ADAFRUIT_TINYUSB_PORT_H_
-#define ADAFRUIT_TINYUSB_PORT_H_
+#ifndef ADAFRUIT_TINYUSB_PORTAPI_H_
+#define ADAFRUIT_TINYUSB_PORTAPI_H_
 
 //--------------------------------------------------------------------+
 // Porting API
