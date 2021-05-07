@@ -146,7 +146,7 @@ void Adafruit_USBD_WebUSB::setLineStateCallback(linestate_callback_t fp) {
   _linestate_cb = fp;
 }
 
-uint16_t Adafruit_USBD_WebUSB::getDescriptor(uint8_t itfnum, uint8_t *buf,
+uint16_t Adafruit_USBD_WebUSB::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
                                              uint16_t bufsize) {
   // usb core will automatically update endpoint number
   uint8_t desc[] = {TUD_VENDOR_DESCRIPTOR(itfnum, 0, EPOUT, EPIN, 64)};
@@ -288,8 +288,7 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_requ
 }
 
 // Invoked when DATA Stage of VENDOR's request is complete
-bool tud_vendor_control_complete_cb(uint8_t rhport,
-                                    tusb_control_request_t const *request) {
+bool tud_vendor_control_complete_cb(uint8_t rhport, tusb_control_request_t const *request) {
   (void)rhport;
   (void)request;
 

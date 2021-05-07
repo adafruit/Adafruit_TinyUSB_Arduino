@@ -72,8 +72,7 @@ public:
   void setReadyCallback(ready_callback_t cb) { setReadyCallback(0, cb); }
 
   // from Adafruit_USBD_Interface
-  virtual uint16_t getDescriptor(uint8_t itfnum, uint8_t *buf,
-                                 uint16_t bufsize);
+  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf, uint16_t bufsize);
 
 private:
   enum { MAX_LUN = 2 };

@@ -54,8 +54,7 @@ public:
   bool readPacket(uint8_t packet[4]);
 
   // from Adafruit_USBD_Interface
-  virtual uint16_t getDescriptor(uint8_t itfnum, uint8_t *buf,
-                                 uint16_t bufsize);
+  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf, uint16_t bufsize);
 
   void setCables(uint8_t n_cables);
 

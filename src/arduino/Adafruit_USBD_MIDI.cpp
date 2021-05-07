@@ -46,7 +46,7 @@ bool Adafruit_USBD_MIDI::begin(void) {
   return true;
 }
 
-uint16_t Adafruit_USBD_MIDI::getDescriptor(uint8_t itfnum, uint8_t *buf,
+uint16_t Adafruit_USBD_MIDI::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
                                            uint16_t bufsize) {
   uint16_t len = 0;
 

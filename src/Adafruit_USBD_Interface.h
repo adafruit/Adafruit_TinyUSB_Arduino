@@ -35,7 +35,7 @@ class Adafruit_USBD_Interface
   public:
     Adafruit_USBD_Interface(void) { _desc_str = NULL; }
 
-    virtual uint16_t getDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize) = 0;
+    virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize) = 0;
     void setStringDescriptor(const char* str) { _desc_str = str; }
     const char* getStringDescriptor(void) { return _desc_str; }
 };

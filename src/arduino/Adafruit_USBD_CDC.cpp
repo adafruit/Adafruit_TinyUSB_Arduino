@@ -44,7 +44,7 @@ Adafruit_USBD_CDC::Adafruit_USBD_CDC(void)
   _itf = 0;
 }
 
-uint16_t Adafruit_USBD_CDC::getDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize)
+uint16_t Adafruit_USBD_CDC::getInterfaceDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize)
 {
   // CDC is mostly always existed for DFU
   // usb core will automatically update endpoint number

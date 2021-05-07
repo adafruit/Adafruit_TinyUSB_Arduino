@@ -72,7 +72,7 @@ void Adafruit_USBD_HID::setReportCallback(get_report_callback_t get_report,
   _set_report_cb = set_report;
 }
 
-uint16_t Adafruit_USBD_HID::getDescriptor(uint8_t itfnum, uint8_t *buf,
+uint16_t Adafruit_USBD_HID::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
                                           uint16_t bufsize) {
   if (!_desc_report_len)
     return 0;
