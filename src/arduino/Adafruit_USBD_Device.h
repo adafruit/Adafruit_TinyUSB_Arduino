@@ -55,35 +55,49 @@ class Adafruit_USBD_Device
   public:
     Adafruit_USBD_Device(void);
 
-    // Device descriptor
+    //------------- Device descriptor -------------//
+
+    // Set VID, PID
     void setID(uint16_t vid, uint16_t pid);
+
+    // Set bcdUSB version e.g 1.0, 2.0, 2.1
     void setVersion(uint16_t bcd);
+
+    // Set bcdDevice version
     void setDeviceVersion(uint16_t bcd);
 
-    // Configuration descriptor
-    bool addInterface(Adafruit_USBD_Interface& itf);
-    void setDescriptorBuffer(uint8_t* buf, uint32_t buflen);
+    //------------- Configuration descriptor -------------//
 
-    // String descriptor
+    // Add an new interface
+    bool addInterface(Adafruit_USBD_Interface& itf);
+
+    // Clear/Reset configuration descriptor
+    void clearConfiguration(void);
+
+    // Provide user buffer for configuration descriptor, needed if total length > 256
+    void setConfigurationBuffer(uint8_t* buf, uint32_t buflen);
+
+    //------------- String descriptor -------------//
     void setLanguageDescriptor(uint16_t language_id);
     void setManufacturerDescriptor(const char *s);
     void setProductDescriptor(const char *s);
     uint8_t getSerialDescriptor(uint16_t* serial_utf16);
 
-    // Control
+    //------------- Control -------------//
+
     bool begin(uint8_t rhport=0);
     void task(void);
-
-    // status
-    bool mounted      (void);
-    bool suspended    (void);
-    bool ready        (void);
-    bool remoteWakeup (void);
 
     // physical disable/enable pull-up
     bool detach       (void);
     bool attach       (void);
 
+
+    //------------- status -------------//
+    bool mounted      (void);
+    bool suspended    (void);
+    bool ready        (void);
+    bool remoteWakeup (void);
 
   private:
     uint16_t const* descriptor_string_cb(uint8_t index, uint16_t langid);

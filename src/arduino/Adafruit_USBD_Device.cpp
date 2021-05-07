@@ -56,6 +56,11 @@ Adafruit_USBD_Device USBDevice;
 
 Adafruit_USBD_Device::Adafruit_USBD_Device(void)
 {
+
+}
+
+void Adafruit_USBD_Device::clearConfiguration(void)
+{
   tusb_desc_device_t const desc_dev =
   {
     .bLength            = sizeof(tusb_desc_device_t),
@@ -81,21 +86,14 @@ Adafruit_USBD_Device::Adafruit_USBD_Device(void)
 
   memcpy(_desc_device, &desc_dev, sizeof(tusb_desc_device_t));
 
-  tusb_desc_configuration_t const dev_cfg =
+  uint8_t const dev_cfg [sizeof(tusb_desc_configuration_t)] =
   {
-    .bLength             = sizeof(tusb_desc_configuration_t),
-    .bDescriptorType     = TUSB_DESC_CONFIGURATION,
-
+    // Config number, interface count, string index, total length, attribute (bit 7 set to 1), power in mA
     // Total Length & Interface Number will be updated later
-    .wTotalLength        = 0,
-    .bNumInterfaces      = 0,
-    .bConfigurationValue = 1,
-    .iConfiguration      = 0x00,
-    .bmAttributes        = TU_BIT(7) | TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP,
-    .bMaxPower           = TUSB_DESC_CONFIG_POWER_MA(USB_CONFIG_POWER)
+    TUD_CONFIG_DESCRIPTOR(1, 0, 0, sizeof(tusb_desc_configuration_t), TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP | TU_BIT(7), 100),
   };
 
-  memcpy(_desc_cfg_buffer, &dev_cfg, sizeof(tusb_desc_configuration_t));
+  memcpy(_desc_cfg_buffer, dev_cfg, sizeof(tusb_desc_configuration_t));
   _desc_cfg        = _desc_cfg_buffer;
   _desc_cfg_maxlen = sizeof(_desc_cfg_buffer);
   _desc_cfg_len    = sizeof(tusb_desc_configuration_t);
@@ -166,10 +164,9 @@ bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface& itf)
   return true;
 }
 
-void Adafruit_USBD_Device::setDescriptorBuffer(uint8_t* buf, uint32_t buflen)
+void Adafruit_USBD_Device::setConfigurationBuffer(uint8_t* buf, uint32_t buflen)
 {
-  if (buflen < _desc_cfg_maxlen)
-    return;
+  if (buflen < _desc_cfg_maxlen) return;
 
   memcpy(buf, _desc_cfg, _desc_cfg_len);
   _desc_cfg        = buf;
@@ -191,7 +188,6 @@ void Adafruit_USBD_Device::setDeviceVersion(uint16_t bcd)
 {
   ((tusb_desc_device_t*)_desc_device)->bcdDevice = bcd;
 }
-
 
 void Adafruit_USBD_Device::setLanguageDescriptor (uint16_t language_id)
 {
@@ -233,9 +229,11 @@ uint8_t Adafruit_USBD_Device::getSerialDescriptor(uint16_t* serial_utf16)
 
 bool Adafruit_USBD_Device::begin(uint8_t rhport)
 {
-  Serial.setStringDescriptor("TinyUSB Serial");
-  USBDevice.addInterface(Serial);
-  USBDevice.setID(USB_VID, USB_PID);
+  clearConfiguration();
+  setID(USB_VID, USB_PID);
+
+  // Serial is always added by default
+  Serial.begin(115200);
 
   TinyUSB_Port_InitDeviceController(rhport);
 

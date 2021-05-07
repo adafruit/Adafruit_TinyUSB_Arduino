@@ -25,10 +25,13 @@
 #ifdef USE_TINYUSB
 
 #include "Arduino.h"
-#include "tusb.h"
+#include "Adafruit_USBD_Device.h"
 #include "Adafruit_USBD_CDC.h"
-
 #include "arduino/ports/Adafruit_TinyUSB_Port.h"
+
+// TODO Multiple instances supports
+//	static uint8_t _itf_count;
+//	static Adafruit_USBD_CDC* _itf_arr[]
 
 #define EPOUT   0x00
 #define EPIN    0x80
@@ -37,7 +40,8 @@ Adafruit_USBD_CDC Serial;
 
 Adafruit_USBD_CDC::Adafruit_USBD_CDC(void)
 {
-
+  _begun = false;
+  _itf = 0;
 }
 
 uint16_t Adafruit_USBD_CDC::getDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize)
@@ -57,12 +61,18 @@ uint16_t Adafruit_USBD_CDC::getDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t
 void Adafruit_USBD_CDC::begin (uint32_t baud)
 {
   (void) baud;
+
+  if (_begun) return;
+  _begun = true;
+
+  Serial.setStringDescriptor("TinyUSB Serial");
+  USBDevice.addInterface(Serial);
 }
 
 void Adafruit_USBD_CDC::begin (uint32_t baud, uint8_t config)
 {
-  (void) baud;
   (void) config;
+  this->begin(baud);
 }
 
 void Adafruit_USBD_CDC::end(void)
