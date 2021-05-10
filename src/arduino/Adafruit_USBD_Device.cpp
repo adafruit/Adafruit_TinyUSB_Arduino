@@ -248,6 +248,8 @@ void Adafruit_USBD_Device::task(void)
   tud_task();
 
 #if CFG_TUSB_OS == OPT_OS_NONE || CFG_TUSB_OS == OPT_OS_PICO
+  // flush Serial if we don't use RTOS TODO multiple CDCs
+  tud_cdc_n_write_flush(0);
 #endif
 }
 

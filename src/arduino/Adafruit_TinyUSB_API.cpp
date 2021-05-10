@@ -31,6 +31,8 @@
 //--------------------------------------------------------------------+
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
 //--------------------------------------------------------------------+
+extern "C"
+{
 
 void TinyUSB_Device_Init(uint8_t rhport)
 {
@@ -39,6 +41,8 @@ void TinyUSB_Device_Init(uint8_t rhport)
 
 void TinyUSB_Device_Task(void)
 {
+  USBDevice.task();
+}
 
 }
 

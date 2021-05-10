@@ -52,13 +52,6 @@ void USB_Handler(void) { tud_int_handler(0); }
 
 #endif
 
-// run TinyUSB background task when yield()
-void yield(void)
-{
-  tud_task();
-  tud_cdc_write_flush();
-}
-
 } // extern C
 
 
