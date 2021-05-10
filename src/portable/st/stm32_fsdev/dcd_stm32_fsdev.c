@@ -696,7 +696,7 @@ static void dcd_pma_free(uint8_t ep_addr)
   // Presently, this should never be called for EP0 IN/OUT
   TU_ASSERT(open_ep_count > 2, /**/);
   TU_ASSERT(xfer_ctl_ptr(epnum,dir)->max_packet_size != 0, /**/);
-  open_ep_count--;#include "common/tusb_fifo.h"
+  open_ep_count--;
 
   // If count is 2, only EP0 should be open, so allocations can be mostly reset.
 
@@ -824,7 +824,7 @@ static void dcd_transmit_packet(xfer_ctl_t * xfer, uint16_t ep_ix)
   {
     dcd_write_packet_memory_ff(xfer->ff, oldAddr, len);
   }
-  else#include "common/tusb_fifo.h"
+  else
 #endif
   {
     dcd_write_packet_memory(oldAddr, &(xfer->buffer[xfer->queued_len]), len);
