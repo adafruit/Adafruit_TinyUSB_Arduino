@@ -25,8 +25,11 @@
 #ifndef ADAFRUIT_USBD_CDC_H_
 #define ADAFRUIT_USBD_CDC_H_
 
-#include "Stream.h"
 #include "Adafruit_TinyUSB_API.h"
+
+#ifdef __cplusplus
+
+#include "Stream.h"
 #include "Adafruit_USBD_Interface.h"
 
 class Adafruit_USBD_CDC : public Stream, public Adafruit_USBD_Interface
@@ -72,4 +75,5 @@ private:
 
 extern Adafruit_USBD_CDC Serial;
 
+#endif // __cplusplus
 #endif

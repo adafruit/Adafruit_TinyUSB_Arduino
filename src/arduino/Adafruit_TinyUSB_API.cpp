@@ -44,6 +44,12 @@ void TinyUSB_Device_Task(void)
   USBDevice.task();
 }
 
+void TinyUSB_Device_FlushCDC(void)
+{
+  // TODO multiple CDCs
+  tud_cdc_n_write_flush(0);
+}
+
 }
 
 #endif
