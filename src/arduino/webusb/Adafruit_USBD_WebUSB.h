@@ -26,7 +26,7 @@
 #define ADAFRUIT_USBD_WEBUSB_H_
 
 #include "Stream.h"
-#include "Adafruit_USBD_Device.h"
+#include "arduino/Adafruit_USBD_Device.h"
 
 #define WEBUSB_URL_DEF(_name, _scheme, _url)                                   \
   struct TU_ATTR_PACKED {                                                      \

@@ -22,24 +22,41 @@
  * THE SOFTWARE.
  */
 
-#include "tusb_option.h"
+#ifndef ADAFRUIT_TINYUSB_API_H_
+#define ADAFRUIT_TINYUSB_API_H_
 
-#if TUSB_OPT_DEVICE_ENABLED
-
-#include "Adafruit_TinyUSB.h"
+#include <stdint.h>
+#include <stdbool.h>
 
 //--------------------------------------------------------------------+
-// MACRO TYPEDEF CONSTANT ENUM DECLARATION
+// Core API
+// Should be called by BSP Core to initialize, process task
+// Weak function allow compile arduino core before linking with this library
 //--------------------------------------------------------------------+
 
-void TinyUSB_Device_Init(uint8_t rhport)
-{
-  USBDevice.begin(rhport);
-}
+// Called by core/sketch to initialize usb device hardware and stack
+// This also initialize Serial as CDC device
+void TinyUSB_Device_Init(uint8_t rhport) __attribute__((weak));
 
-void TinyUSB_Device_Task(void)
-{
+// Called by core/sketch to handle device event
+void TinyUSB_Device_Task(void) __attribute__((weak));
 
-}
+//--------------------------------------------------------------------+
+// Port API
+// Must be implemented by each BSP core/platform
+//--------------------------------------------------------------------+
+
+// To enter/reboot to bootloader
+// usually when host disconnects cdc at baud 1200 (touch 1200)
+void TinyUSB_Port_EnterDFU(void);
+
+// Init device hardware.
+// Called by USBDevice.begin()
+void TinyUSB_Port_InitDeviceController(uint8_t rhport);
+
+// Get unique serial number, needed for Serial String Descriptor
+// Fill serial_id (raw bytes) and return its length (limit to 16 bytes)
+// Note: Serial descriptor can be overwritten by user API
+uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]);
 
 #endif

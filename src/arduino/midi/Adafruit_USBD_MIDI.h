@@ -1,7 +1,7 @@
 /*
  * The MIT License (MIT)
  *
- * Copyright (c) 2019 Ha Thach for Adafruit Industries
+ * Copyright (c) 2019 hathach for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,24 +22,44 @@
  * THE SOFTWARE.
  */
 
-#ifndef ADAFRUIT_TINYUSB_PORTAPI_H_
-#define ADAFRUIT_TINYUSB_PORTAPI_H_
+#ifndef ADAFRUIT_USBD_MIDI_H_
+#define ADAFRUIT_USBD_MIDI_H_
 
-//--------------------------------------------------------------------+
-// Porting API
-//--------------------------------------------------------------------+
+#include "Stream.h"
+#include "arduino/Adafruit_USBD_Device.h"
 
-// To enter/reboot to bootloader
-// usually when host disconnects cdc at baud 1200 (touch 1200)
-void TinyUSB_Port_EnterDFU(void);
+class Adafruit_USBD_MIDI : public Stream, public Adafruit_USBD_Interface {
+public:
+  Adafruit_USBD_MIDI(void);
 
-// Init device hardware.
-// Called by USBDevice.begin()
-void TinyUSB_Port_InitDeviceController(uint8_t rhport);
+  bool begin(void);
 
-// Get unique serial number, needed for Serial String Descriptor
-// Fill serial_id (raw bytes) and return its length (limit to 16 bytes)
-// Note: Serial descriptor can be overwritten by user API
-uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]);
+  // for MIDI library
+  bool begin(uint32_t baud) {
+    (void)baud;
+    return begin();
+  }
 
-#endif
+  // Stream interface to use with MIDI Library
+  virtual int read(void);
+  virtual size_t write(uint8_t b);
+  virtual int available(void);
+  virtual int peek(void);
+  virtual void flush(void);
+
+  using Stream::write;
+
+  // Raw MIDI USB packet interface.
+  bool writePacket(const uint8_t packet[4]);
+  bool readPacket(uint8_t packet[4]);
+
+  // from Adafruit_USBD_Interface
+  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf, uint16_t bufsize);
+
+  void setCables(uint8_t n_cables);
+
+private:
+  uint8_t _n_cables;
+};
+
+#endif /* ADAFRUIT_USBD_MIDI_H_ */

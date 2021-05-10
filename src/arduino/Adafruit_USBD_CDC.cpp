@@ -27,9 +27,10 @@
 #if TUSB_OPT_DEVICE_ENABLED && CFG_TUD_CDC
 
 #include "Arduino.h"
+#include "Adafruit_TinyUSB_API.h"
+
 #include "Adafruit_USBD_Device.h"
 #include "Adafruit_USBD_CDC.h"
-#include "ports/Adafruit_TinyUSB_PortAPI.h"
 
 // TODO Multiple instances supports
 //	static uint8_t _itf_count;

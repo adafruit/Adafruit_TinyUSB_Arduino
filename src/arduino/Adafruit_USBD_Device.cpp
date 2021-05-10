@@ -26,9 +26,10 @@
 
 #if TUSB_OPT_DEVICE_ENABLED
 
+#include "Adafruit_TinyUSB_API.h"
+
 #include "Adafruit_USBD_Device.h"
 #include "Adafruit_USBD_CDC.h"
-#include "ports/Adafruit_TinyUSB_PortAPI.h"
 
 #ifndef USB_MANUFACTURER
   #define USB_MANUFACTURER "Unknown"
@@ -245,6 +246,9 @@ bool Adafruit_USBD_Device::begin(uint8_t rhport)
 void Adafruit_USBD_Device::task(void)
 {
   tud_task();
+
+#if CFG_TUSB_OS == OPT_OS_NONE || CFG_TUSB_OS == OPT_OS_PICO
+#endif
 }
 
 bool Adafruit_USBD_Device::mounted (void)

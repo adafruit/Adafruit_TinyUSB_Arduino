@@ -34,14 +34,12 @@
 #if TUSB_OPT_DEVICE_ENABLED
 
 #include "arduino/Adafruit_USBD_Device.h"
+#include "arduino/Adafruit_USBD_CDC.h"
 
-// CDC can be part of the core
-#include "Adafruit_USBD_CDC.h"
-
-#include "arduino/Adafruit_USBD_HID.h"
-#include "arduino/Adafruit_USBD_MIDI.h"
-#include "arduino/Adafruit_USBD_MSC.h"
-#include "arduino/Adafruit_USBD_WebUSB.h"
+#include "arduino/hid/Adafruit_USBD_HID.h"
+#include "arduino/midi/Adafruit_USBD_MIDI.h"
+#include "arduino/msc/Adafruit_USBD_MSC.h"
+#include "arduino/webusb/Adafruit_USBD_WebUSB.h"
 
 // Initialize device hardware, stack, also Serial as CDC
 // Wrapper for USBDevice.begin(rhport)

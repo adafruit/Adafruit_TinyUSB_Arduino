@@ -25,8 +25,9 @@
 #ifndef ADAFRUIT_USBD_CDC_H_
 #define ADAFRUIT_USBD_CDC_H_
 
-#include "Adafruit_USBD_Interface.h"
 #include "Stream.h"
+#include "Adafruit_TinyUSB_API.h"
+#include "Adafruit_USBD_Interface.h"
 
 class Adafruit_USBD_CDC : public Stream, public Adafruit_USBD_Interface
 {
