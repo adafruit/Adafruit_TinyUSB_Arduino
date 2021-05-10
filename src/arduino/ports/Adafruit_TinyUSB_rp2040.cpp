@@ -38,22 +38,9 @@
 // tinyusb. There is no need to forward IRQ from application
 //--------------------------------------------------------------------+
 
-extern "C"
-{
-
-// run TinyUSB background task when yield()
-void yield(void)
-{
-  tud_task();
-  tud_cdc_write_flush();
-}
-
-} // extern C
-
 //--------------------------------------------------------------------+
 // Porting API
 //--------------------------------------------------------------------+
-
 
 void TinyUSB_Port_InitDeviceController(uint8_t rhport)
 {
