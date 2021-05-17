@@ -70,12 +70,12 @@ static void usb_device_task(void* param)
 {
   (void) param;
 
+  tusb_init();
+
   // RTOS forever loop
   while (1)
   {
     tud_task();
-
-    vTaskDelay(1);
   }
 }
 
