@@ -39,10 +39,13 @@ void TinyUSB_Device_Init(uint8_t rhport)
   USBDevice.begin(rhport);
 }
 
+// RP2040 has its own implementation since it needs mutex for dual core
+#ifndef ARDUINO_ARCH_RP2040
 void TinyUSB_Device_Task(void)
 {
-  USBDevice.task();
+  tud_task();
 }
+#endif
 
 void TinyUSB_Device_FlushCDC(void)
 {

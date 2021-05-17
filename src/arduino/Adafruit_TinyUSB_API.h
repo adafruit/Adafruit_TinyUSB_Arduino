@@ -61,7 +61,7 @@ void TinyUSB_Device_FlushCDC(void) __attribute__((weak));
 void TinyUSB_Port_EnterDFU(void);
 
 // Init device hardware.
-// Called by USBDevice.begin()
+// Called by TinyUSB_Device_Init()
 void TinyUSB_Port_InitDevice(uint8_t rhport);
 
 // Get unique serial number, needed for Serial String Descriptor
