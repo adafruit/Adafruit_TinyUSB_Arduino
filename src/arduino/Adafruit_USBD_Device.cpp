@@ -238,9 +238,10 @@ bool Adafruit_USBD_Device::begin(uint8_t rhport)
 
   Serial.begin(115200);
 
-  TinyUSB_Port_InitDeviceController(rhport);
+  // Init device hardware and call tusb_init()
+  TinyUSB_Port_InitDevice(rhport);
 
-  return tusb_init();
+  return true;
 }
 
 void Adafruit_USBD_Device::task(void)

@@ -27,9 +27,10 @@
 #if defined ARDUINO_ARCH_SAMD & TUSB_OPT_DEVICE_ENABLED
 
 #include "Arduino.h"
-#include "arduino/Adafruit_USBD_Device.h"
-
 #include <Reset.h> // Needed for auto-reset with 1200bps port touch
+
+#include "tusb.h"
+#include "arduino/Adafruit_TinyUSB_API.h"
 
 //--------------------------------------------------------------------+
 // Forward USB interrupt events to TinyUSB IRQ Handler
@@ -76,7 +77,7 @@ extern "C" int serial1_printf(const char *__restrict format, ...)
 //--------------------------------------------------------------------+
 // Porting API
 //--------------------------------------------------------------------+
-void TinyUSB_Port_InitDeviceController(uint8_t rhport)
+void TinyUSB_Port_InitDevice(uint8_t rhport)
 {
   (void) rhport;
 
@@ -120,6 +121,8 @@ void TinyUSB_Port_InitDeviceController(uint8_t rhport)
 
 	NVIC_SetPriority((IRQn_Type) USB_IRQn, 0UL);
 #endif
+
+	tusb_init();
 }
 
 void TinyUSB_Port_EnterDFU(void)
@@ -147,4 +150,4 @@ uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16])
   return 16;
 }
 
-#endif // USE_TINYUSB
+#endif

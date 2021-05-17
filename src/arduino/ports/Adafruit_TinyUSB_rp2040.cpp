@@ -42,7 +42,7 @@
 // Porting API
 //--------------------------------------------------------------------+
 
-void TinyUSB_Port_InitDeviceController(uint8_t rhport)
+void TinyUSB_Port_InitDevice(uint8_t rhport)
 {
   (void) rhport;
 

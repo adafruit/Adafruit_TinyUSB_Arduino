@@ -40,6 +40,6 @@ It is rather easy if you want to integrate TinyUSB lib to your ArduinoCore.
 
 In addition to core changes, library need to be ported to your platform. Don't worry, tinyusb stack has already done most of heavy-lifting. You only need to write a few APIs
 
-1. `TinyUSB_Port_InitDeviceController()` hardware specific (clock, phy) to enable usb hardware. This API is called as part of TinyUSB_Device_Init() invocation.
+1. `TinyUSB_Port_InitDevice()` hardware specific (clock, phy) to enable usb hardware then call tud_init(). This API is called as part of TinyUSB_Device_Init() invocation.
 2. `TinyUSB_Port_EnterDFU()` which is called when device need to enter DFU mode, usually by touch1200 feature
 3. `TinyUSB_Port_GetSerialNumber()` which is called to get unique MCU Serial ID to used as Serial string descriptor.
