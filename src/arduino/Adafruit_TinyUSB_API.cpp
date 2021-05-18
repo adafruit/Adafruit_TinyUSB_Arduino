@@ -22,29 +22,37 @@
  * THE SOFTWARE.
  */
 
-#ifndef ADAFRUIT_TINYUSB_H_
-#define ADAFRUIT_TINYUSB_H_
-
 #include "tusb_option.h"
-
-//#ifndef USE_TINYUSB
-//#error TinyUSB is not selected, please select it in Tools->Menu->USB Stack
-//#endif
 
 #if TUSB_OPT_DEVICE_ENABLED
 
-#include "arduino/Adafruit_USBD_Device.h"
-#include "arduino/Adafruit_USBD_CDC.h"
+#include "Adafruit_TinyUSB.h"
 
-#include "arduino/hid/Adafruit_USBD_HID.h"
-#include "arduino/midi/Adafruit_USBD_MIDI.h"
-#include "arduino/msc/Adafruit_USBD_MSC.h"
-#include "arduino/webusb/Adafruit_USBD_WebUSB.h"
+//--------------------------------------------------------------------+
+// MACRO TYPEDEF CONSTANT ENUM DECLARATION
+//--------------------------------------------------------------------+
+extern "C"
+{
 
-// Initialize device hardware, stack, also Serial as CDC
-// Wrapper for USBDevice.begin(rhport)
-void TinyUSB_Device_Init(uint8_t rhport);
+void TinyUSB_Device_Init(uint8_t rhport)
+{
+  USBDevice.begin(rhport);
+}
 
+// RP2040 has its own implementation since it needs mutex for dual core
+#ifndef ARDUINO_ARCH_RP2040
+void TinyUSB_Device_Task(void)
+{
+  tud_task();
+}
 #endif
 
-#endif /* ADAFRUIT_TINYUSB_H_ */
+void TinyUSB_Device_FlushCDC(void)
+{
+  // TODO multiple CDCs
+  tud_cdc_n_write_flush(0);
+}
+
+}
+
+#endif

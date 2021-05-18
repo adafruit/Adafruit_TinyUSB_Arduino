@@ -1,7 +1,7 @@
 /*
  * The MIT License (MIT)
  *
- * Copyright (c) 2019 Ha Thach for Adafruit Industries
+ * Copyright (c) 2019 hathach for Adafruit Industries
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,29 +22,44 @@
  * THE SOFTWARE.
  */
 
-#ifndef ADAFRUIT_TINYUSB_H_
-#define ADAFRUIT_TINYUSB_H_
+#ifndef ADAFRUIT_USBD_MIDI_H_
+#define ADAFRUIT_USBD_MIDI_H_
 
-#include "tusb_option.h"
-
-//#ifndef USE_TINYUSB
-//#error TinyUSB is not selected, please select it in Tools->Menu->USB Stack
-//#endif
-
-#if TUSB_OPT_DEVICE_ENABLED
-
+#include "Stream.h"
 #include "arduino/Adafruit_USBD_Device.h"
-#include "arduino/Adafruit_USBD_CDC.h"
 
-#include "arduino/hid/Adafruit_USBD_HID.h"
-#include "arduino/midi/Adafruit_USBD_MIDI.h"
-#include "arduino/msc/Adafruit_USBD_MSC.h"
-#include "arduino/webusb/Adafruit_USBD_WebUSB.h"
+class Adafruit_USBD_MIDI : public Stream, public Adafruit_USBD_Interface {
+public:
+  Adafruit_USBD_MIDI(void);
 
-// Initialize device hardware, stack, also Serial as CDC
-// Wrapper for USBDevice.begin(rhport)
-void TinyUSB_Device_Init(uint8_t rhport);
+  bool begin(void);
 
-#endif
+  // for MIDI library
+  bool begin(uint32_t baud) {
+    (void)baud;
+    return begin();
+  }
 
-#endif /* ADAFRUIT_TINYUSB_H_ */
+  // Stream interface to use with MIDI Library
+  virtual int read(void);
+  virtual size_t write(uint8_t b);
+  virtual int available(void);
+  virtual int peek(void);
+  virtual void flush(void);
+
+  using Stream::write;
+
+  // Raw MIDI USB packet interface.
+  bool writePacket(const uint8_t packet[4]);
+  bool readPacket(uint8_t packet[4]);
+
+  // from Adafruit_USBD_Interface
+  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf, uint16_t bufsize);
+
+  void setCables(uint8_t n_cables);
+
+private:
+  uint8_t _n_cables;
+};
+
+#endif /* ADAFRUIT_USBD_MIDI_H_ */

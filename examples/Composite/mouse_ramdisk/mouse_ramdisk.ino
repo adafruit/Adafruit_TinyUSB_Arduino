@@ -31,11 +31,11 @@ uint8_t const desc_hid_report[] =
 Adafruit_USBD_HID usb_hid;
 Adafruit_USBD_MSC usb_msc;
 
-#if defined ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS
+#if defined ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS || defined ARDUINO_NRF52840_CIRCUITPLAY
   const int pin = 4; // Left Button
   bool activeState = true;
-#elif defined ARDUINO_NRF52840_FEATHER
-  const int pin = 7; // UserSw
+#elif defined PIN_BUTTON1
+  const int pin = PIN_BUTTON1;
   bool activeState = false;
 #else
   const int pin = 12;

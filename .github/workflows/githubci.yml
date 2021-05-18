@@ -45,8 +45,10 @@ jobs:
       uses: actions/setup-python@v1
       with:
         python-version: '3.x'  
+
     - name: Checkout code
       uses: actions/checkout@v2
+
     - name: Checkout adafruit/ci-arduino
       uses: actions/checkout@v2
       with:
