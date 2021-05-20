@@ -1,5 +1,16 @@
 # Adafruit TinyUSB Arduino Library Changelog
 
+## 1.0.1 - 2021.05.21
+
+Warn user to select TinyUSB via menu on ports where it is optional e.g SAMD and RP2040 
+
+## 1.0.0 - 2021.05.19
+
+Rework to work as independent libraries, sources from https://github.com/adafruit/Adafruit_TinyUSB_ArduinoCore is now integrated as part of this libraries. Require 
+- Adafruit SAMD core with version at least 1.7.0
+- Adafruit nRF52 core with version at least 0.22.0
+- Support [earlephilhower/arduino-pico](https://github.com/earlephilhower/arduino-pico) version released after https://github.com/earlephilhower/arduino-pico/pull/127
+
 ## 0.9.0 - 2020.04.23
 
 - Fixed mouseButtonRelease() error
