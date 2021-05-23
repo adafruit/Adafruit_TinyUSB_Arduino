@@ -68,6 +68,10 @@ void loop()
 uint16_t get_report_callback (uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen)
 {
   // not used in this example
+  (void) report_id;
+  (void) report_type;
+  (void) buffer;
+  (void) reqlen;
   return 0;
 }
 

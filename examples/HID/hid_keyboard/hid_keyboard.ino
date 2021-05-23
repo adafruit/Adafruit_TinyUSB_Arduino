@@ -13,6 +13,7 @@
 
 /* This sketch demonstrates USB HID keyboard.
  * - PIN A0-A5 is used to send digit '0' to '5' respectively
+ *   (On the RP2040, pins D0-D5 used)
  * - LED will be used as Caplock indicator
  */
 
@@ -27,7 +28,11 @@ Adafruit_USBD_HID usb_hid;
 
 // Array of pins and its keycode
 // For keycode definition see BLEHidGeneric.h
+#ifdef ARDUINO_ARCH_RP2040
+uint8_t pins[]    = { D0, D1, D2, D3, D4, D5 };
+#else
 uint8_t pins[]    = { A0, A1, A2, A3, A4, A5 };
+#endif
 uint8_t hidcode[] = { HID_KEY_0, HID_KEY_1, HID_KEY_2, HID_KEY_3 , HID_KEY_4, HID_KEY_5 };
 
 uint8_t pincount = sizeof(pins)/sizeof(pins[0]);
@@ -122,6 +127,8 @@ void loop()
 // Output report callback for LED indicator such as Caplocks
 void hid_report_callback(uint8_t report_id, hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize)
 {
+  (void) report_id;
+  (void) bufsize;
   // LED indicator is output report with only 1 byte length
   if ( report_type != HID_REPORT_TYPE_OUTPUT ) return;
 
