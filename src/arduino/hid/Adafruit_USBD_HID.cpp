@@ -38,7 +38,7 @@ static Adafruit_USBD_HID *_hid_dev = NULL;
 //------------- IMPLEMENTATION -------------//
 Adafruit_USBD_HID::Adafruit_USBD_HID(void) {
   _interval_ms = 10;
-  _protocol = HID_PROTOCOL_NONE;
+  _protocol = HID_ITF_PROTOCOL_NONE;
 
   _out_endpoint = false;
   _mouse_button = 0;
