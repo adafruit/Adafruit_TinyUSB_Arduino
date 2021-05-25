@@ -29,48 +29,51 @@
 
 #ifdef __cplusplus
 
-#include "Stream.h"
 #include "Adafruit_USBD_Interface.h"
+#include "Stream.h"
 
-class Adafruit_USBD_CDC : public Stream, public Adafruit_USBD_Interface
-{
+class Adafruit_USBD_CDC : public Stream, public Adafruit_USBD_Interface {
 public:
-	Adafruit_USBD_CDC(void);
+  Adafruit_USBD_CDC(void);
 
-	// fron Adafruit_USBD_Interface
-	virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize);
+  // fron Adafruit_USBD_Interface
+  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
+                                          uint16_t bufsize);
 
-	void setPins(uint8_t pin_rx, uint8_t pin_tx) { (void) pin_rx; (void) pin_tx; }
-	void begin(uint32_t baud);
-	void begin(uint32_t baud, uint8_t config);
-	void end(void);
+  void setPins(uint8_t pin_rx, uint8_t pin_tx) {
+    (void)pin_rx;
+    (void)pin_tx;
+  }
+  void begin(uint32_t baud);
+  void begin(uint32_t baud, uint8_t config);
+  void end(void);
 
-	// return line coding set by host
-	uint32_t baud(void);
-	uint8_t  stopbits(void);
-	uint8_t  paritytype(void);
-	uint8_t  numbits(void);
-	int      dtr(void);
+  // return line coding set by host
+  uint32_t baud(void);
+  uint8_t stopbits(void);
+  uint8_t paritytype(void);
+  uint8_t numbits(void);
+  int dtr(void);
 
-	// Stream API
-	virtual int    available(void);
-	virtual int    peek(void);
-	virtual int    read(void);
-	virtual void   flush(void);
-	virtual size_t write(uint8_t);
+  // Stream API
+  virtual int available(void);
+  virtual int peek(void);
+  virtual int read(void);
+  virtual void flush(void);
+  virtual size_t write(uint8_t);
 
-	virtual size_t write(const uint8_t *buffer, size_t size);
-	size_t write(const char *buffer, size_t size) {
-	  return write((const uint8_t *)buffer, size);
-	}
+  virtual size_t write(const uint8_t *buffer, size_t size);
+  size_t write(const char *buffer, size_t size) {
+    return write((const uint8_t *)buffer, size);
+  }
 
-	virtual int availableForWrite(void);
-	using Print::write; // pull in write(str) from Print
-	operator bool();
+  virtual int availableForWrite(void);
+  using Print::write; // pull in write(str) from Print
+  operator bool();
 
 private:
-	bool    _begun;
-	uint8_t _itf;
+  bool _begun;
+  uint8_t _itf;
 };
 
 extern Adafruit_USBD_CDC Serial;

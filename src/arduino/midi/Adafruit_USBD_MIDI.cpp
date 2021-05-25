@@ -46,8 +46,9 @@ bool Adafruit_USBD_MIDI::begin(void) {
   return true;
 }
 
-uint16_t Adafruit_USBD_MIDI::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
-                                           uint16_t bufsize) {
+uint16_t Adafruit_USBD_MIDI::getInterfaceDescriptor(uint8_t itfnum,
+                                                    uint8_t *buf,
+                                                    uint16_t bufsize) {
   uint16_t len = 0;
 
   if (bufsize < TUD_MIDI_DESC_HEAD_LEN + TUD_MIDI_DESC_JACK_LEN * _n_cables +
@@ -102,13 +103,11 @@ int Adafruit_USBD_MIDI::read(void) {
   return tud_midi_stream_read(&ch, 1) ? (int)ch : (-1);
 }
 
-size_t Adafruit_USBD_MIDI::write (uint8_t b) {
+size_t Adafruit_USBD_MIDI::write(uint8_t b) {
   return tud_midi_stream_write(0, &b, 1);
 }
 
-int Adafruit_USBD_MIDI::available (void) {
-  return tud_midi_available();
-}
+int Adafruit_USBD_MIDI::available(void) { return tud_midi_available(); }
 
 int Adafruit_USBD_MIDI::peek(void) {
   // MIDI Library doen't use peek

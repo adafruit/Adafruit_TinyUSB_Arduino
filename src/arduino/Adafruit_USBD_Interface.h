@@ -1,4 +1,4 @@
-/* 
+/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2021 Ha Thach (tinyusb.org) for Adafruit Industries
@@ -25,20 +25,23 @@
 #ifndef ADAFRUIT_USBD_INTERFACE_H_
 #define ADAFRUIT_USBD_INTERFACE_H_
 
-class Adafruit_USBD_Interface
-{
-  protected:
-    const char* _desc_str;
+#include <stddef.h>
+#include <stdint.h>
 
-  public:
-    Adafruit_USBD_Interface(void) { _desc_str = NULL; }
+class Adafruit_USBD_Interface {
+protected:
+  const char *_desc_str;
 
-    // Get Interface Descriptor
-    // Device fill descriptor and return its length
-    virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize) = 0;
+public:
+  Adafruit_USBD_Interface(void) { _desc_str = NULL; }
 
-    void setStringDescriptor(const char* str) { _desc_str = str; }
-    const char* getStringDescriptor(void) { return _desc_str; }
+  // Get Interface Descriptor
+  // Device fill descriptor and return its length
+  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
+                                          uint16_t bufsize) = 0;
+
+  void setStringDescriptor(const char *str) { _desc_str = str; }
+  const char *getStringDescriptor(void) { return _desc_str; }
 };
 
 #endif

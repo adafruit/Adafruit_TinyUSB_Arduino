@@ -36,17 +36,17 @@
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
 //--------------------------------------------------------------------+
 
-#define USBD_STACK_SZ   (200)
+#define USBD_STACK_SZ (200)
 
 // tinyusb function that handles power event (detected, ready, removed)
-// We must call it within SD's SOC event handler, or set it as power event handler if SD is not enabled.
+// We must call it within SD's SOC event handler, or set it as power event
+// handler if SD is not enabled.
 extern "C" void tusb_hal_nrf_power_event(uint32_t event);
 
 //--------------------------------------------------------------------+
 // Forward USB interrupt events to TinyUSB IRQ Handler
 //--------------------------------------------------------------------+
-extern "C" void USBD_IRQHandler(void)
-{
+extern "C" void USBD_IRQHandler(void) {
 #if CFG_SYSVIEW
   SEGGER_SYSVIEW_RecordEnterISR();
 #endif
@@ -66,37 +66,34 @@ static void usb_hardware_init(void);
 
 // USB Device Driver task
 // This top level thread process all usb events and invoke callbacks
-static void usb_device_task(void* param)
-{
-  (void) param;
+static void usb_device_task(void *param) {
+  (void)param;
 
   tusb_init();
 
   // RTOS forever loop
-  while (1)
-  {
+  while (1) {
     tud_task();
   }
 }
 
-void TinyUSB_Port_InitDevice(uint8_t rhport)
-{
-  (void) rhport;
+void TinyUSB_Port_InitDevice(uint8_t rhport) {
+  (void)rhport;
 
   usb_hardware_init();
 
   // Create a task for tinyusb device stack
-  xTaskCreate(usb_device_task, "usbd", USBD_STACK_SZ, NULL, TASK_PRIO_HIGH, NULL);
+  xTaskCreate(usb_device_task, "usbd", USBD_STACK_SZ, NULL, TASK_PRIO_HIGH,
+              NULL);
 }
 
-void TinyUSB_Port_EnterDFU(void)
-{
+void TinyUSB_Port_EnterDFU(void) {
+  // Reset to Bootloader
   enterSerialDfu();
 }
 
-uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16])
-{
-  uint32_t* serial_32 = (uint32_t*) serial_id;
+uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]) {
+  uint32_t *serial_32 = (uint32_t *)serial_id;
 
   serial_32[0] = __builtin_bswap32(NRF_FICR->DEVICEID[1]);
   serial_32[1] = __builtin_bswap32(NRF_FICR->DEVICEID[0]);
@@ -109,8 +106,7 @@ uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16])
 //--------------------------------------------------------------------+
 
 // Init usb hardware when starting up. Softdevice is not enabled yet
-static void usb_hardware_init(void)
-{
+static void usb_hardware_init(void) {
   // Priorities 0, 1, 4 (nRF52) are reserved for SoftDevice
   // 2 is highest for application
   NVIC_SetPriority(USBD_IRQn, 2);
@@ -120,16 +116,19 @@ static void usb_hardware_init(void)
   uint32_t usb_reg = NRF_POWER->USBREGSTATUS;
 
   // Power module init
-  const nrfx_power_config_t pwr_cfg = { 0 };
+  const nrfx_power_config_t pwr_cfg = {0};
   nrfx_power_init(&pwr_cfg);
 
   // Register tusb function as USB power handler
-  const nrfx_power_usbevt_config_t config = { .handler = (nrfx_power_usb_event_handler_t) tusb_hal_nrf_power_event };
+  const nrfx_power_usbevt_config_t config = {
+      .handler = (nrfx_power_usb_event_handler_t)tusb_hal_nrf_power_event};
   nrfx_power_usbevt_init(&config);
 
   nrfx_power_usbevt_enable();
 
-  if ( usb_reg & POWER_USBREGSTATUS_VBUSDETECT_Msk ) tusb_hal_nrf_power_event(NRFX_POWER_USB_EVT_DETECTED);
+  if (usb_reg & POWER_USBREGSTATUS_VBUSDETECT_Msk) {
+    tusb_hal_nrf_power_event(NRFX_POWER_USB_EVT_DETECTED);
+  }
 }
 
 #endif // USE_TINYUSB

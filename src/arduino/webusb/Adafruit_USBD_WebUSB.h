@@ -62,7 +62,8 @@ public:
   operator bool();
 
   // from Adafruit_USBD_Interface
-  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf, uint16_t bufsize);
+  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
+                                          uint16_t bufsize);
 
 private:
   bool _connected;
@@ -70,7 +71,8 @@ private:
   linestate_callback_t _linestate_cb;
 
   // Make all tinyusb callback friend to access private data
-  friend bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const * request);
+  friend bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
+                                         tusb_control_request_t const *request);
 };
 
 #endif /* ADAFRUIT_USBD_WEBUSB_H_ */

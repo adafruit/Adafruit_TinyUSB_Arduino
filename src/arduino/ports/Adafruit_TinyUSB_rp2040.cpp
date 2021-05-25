@@ -27,14 +27,14 @@
 #if defined ARDUINO_ARCH_RP2040 && TUSB_OPT_DEVICE_ENABLED
 
 #include "Arduino.h"
-#include "pico/bootrom.h"
-#include "pico/time.h"
 #include "hardware/irq.h"
+#include "pico/bootrom.h"
 #include "pico/mutex.h"
+#include "pico/time.h"
 #include "pico/unique_id.h"
 
-#include "tusb.h"
 #include "arduino/Adafruit_TinyUSB_API.h"
+#include "tusb.h"
 
 //--------------------------------------------------------------------+
 // Forward USB interrupt events to TinyUSB IRQ Handler
@@ -55,23 +55,22 @@
 mutex_t __usb_mutex;
 
 static void usb_irq() {
-    // if the mutex is already owned, then we are in user code
-    // in this file which will do a tud_task itself, so we'll just do nothing
-    // until the next tick; we won't starve
-    if (mutex_try_enter(&__usb_mutex, NULL)) {
-        tud_task();
-        mutex_exit(&__usb_mutex);
-    }
+  // if the mutex is already owned, then we are in user code
+  // in this file which will do a tud_task itself, so we'll just do nothing
+  // until the next tick; we won't starve
+  if (mutex_try_enter(&__usb_mutex, NULL)) {
+    tud_task();
+    mutex_exit(&__usb_mutex);
+  }
 }
 
 static int64_t timer_task(__unused alarm_id_t id, __unused void *user_data) {
-    irq_set_pending(USB_TASK_IRQ);
-    return USB_TASK_INTERVAL;
+  irq_set_pending(USB_TASK_IRQ);
+  return USB_TASK_INTERVAL;
 }
 
-void TinyUSB_Port_InitDevice(uint8_t rhport)
-{
-  (void) rhport;
+void TinyUSB_Port_InitDevice(uint8_t rhport) {
+  (void)rhport;
 
   mutex_init(&__usb_mutex);
   tusb_init();
@@ -82,15 +81,14 @@ void TinyUSB_Port_InitDevice(uint8_t rhport)
   add_alarm_in_us(USB_TASK_INTERVAL, timer_task, NULL, true);
 }
 
-void TinyUSB_Port_EnterDFU(void)
-{
-  reset_usb_boot(0,0);
-  while(1) {}
+void TinyUSB_Port_EnterDFU(void) {
+  reset_usb_boot(0, 0);
+  while (1) {
+  }
 }
 
-uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16])
-{
-  pico_get_unique_board_id( (pico_unique_board_id_t*) serial_id );
+uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]) {
+  pico_get_unique_board_id((pico_unique_board_id_t *)serial_id);
   return PICO_UNIQUE_BOARD_ID_SIZE_BYTES;
 }
 
@@ -100,19 +98,15 @@ uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16])
 // IRQ context
 //--------------------------------------------------------------------+
 
-extern "C"
-{
+extern "C" {
 
-void TinyUSB_Device_Task(void)
-{
+void TinyUSB_Device_Task(void) {
   // Since tud_task() is also invoked in ISR, we need to get the mutex first
-  if (mutex_try_enter(&__usb_mutex, NULL))
-  {
+  if (mutex_try_enter(&__usb_mutex, NULL)) {
     tud_task();
     mutex_exit(&__usb_mutex);
   }
 }
-
 }
 
 #endif // USE_TINYUSB

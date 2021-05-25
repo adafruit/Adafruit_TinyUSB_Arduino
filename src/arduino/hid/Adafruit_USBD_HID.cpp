@@ -75,9 +75,10 @@ void Adafruit_USBD_HID::setReportCallback(get_report_callback_t get_report,
 }
 
 uint16_t Adafruit_USBD_HID::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
-                                          uint16_t bufsize) {
-  if (!_desc_report_len)
+                                                   uint16_t bufsize) {
+  if (!_desc_report_len) {
     return 0;
+  }
 
   // usb core will automatically update endpoint number
   uint8_t const desc_inout[] = {
@@ -107,8 +108,9 @@ uint16_t Adafruit_USBD_HID::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
 }
 
 bool Adafruit_USBD_HID::begin(void) {
-  if (!USBDevice.addInterface(*this))
+  if (!USBDevice.addInterface(*this)) {
     return false;
+  }
 
   _hid_dev = this;
   return true;
@@ -140,10 +142,11 @@ extern "C" {
 // Application return pointer to descriptor, whose contents must exist long
 // enough for transfer to complete
 uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf) {
-  (void) itf;
+  (void)itf;
 
-  if (!_hid_dev)
+  if (!_hid_dev) {
     return NULL;
+  }
 
   return _hid_dev->_desc_report;
 }
@@ -151,24 +154,28 @@ uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf) {
 // Invoked when received GET_REPORT control request
 // Application must fill buffer report's content and return its length.
 // Return zero will cause the stack to STALL request
-uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type,
-                               uint8_t *buffer, uint16_t reqlen) {
-  (void) itf;
+uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id,
+                               hid_report_type_t report_type, uint8_t *buffer,
+                               uint16_t reqlen) {
+  (void)itf;
 
-  if (!(_hid_dev && _hid_dev->_get_report_cb))
+  if (!(_hid_dev && _hid_dev->_get_report_cb)) {
     return 0;
+  }
 
   return _hid_dev->_get_report_cb(report_id, report_type, buffer, reqlen);
 }
 
 // Invoked when received SET_REPORT control request or
 // received data on OUT endpoint ( Report ID = 0, Type = 0 )
-void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type,
-                           uint8_t const *buffer, uint16_t bufsize) {
-  (void) itf;
+void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id,
+                           hid_report_type_t report_type, uint8_t const *buffer,
+                           uint16_t bufsize) {
+  (void)itf;
 
-  if (!(_hid_dev && _hid_dev->_set_report_cb))
+  if (!(_hid_dev && _hid_dev->_set_report_cb)) {
     return;
+  }
 
   _hid_dev->_set_report_cb(report_id, report_type, buffer, bufsize);
 }
@@ -189,8 +196,9 @@ bool Adafruit_USBD_HID::keyboardPress(uint8_t report_id, char ch) {
   uint8_t modifier = 0;
   uint8_t uch = (uint8_t)ch;
 
-  if (_ascii2keycode[uch][0])
+  if (_ascii2keycode[uch][0]) {
     modifier = KEYBOARD_MODIFIER_LEFTSHIFT;
+  }
   keycode[0] = _ascii2keycode[uch][1];
 
   return tud_hid_keyboard_report(report_id, modifier, keycode);
