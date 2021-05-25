@@ -105,9 +105,8 @@ uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]) {
 // handler if SD is not enabled.
 extern "C" void tusb_hal_nrf_power_event(uint32_t event);
 
-static void power_event_handler(nrfx_power_usb_evt_t event)
-{
-  tusb_hal_nrf_power_event((uint32_t) event);
+static void power_event_handler(nrfx_power_usb_evt_t event) {
+  tusb_hal_nrf_power_event((uint32_t)event);
 }
 
 // Init usb hardware when starting up. Softdevice is not enabled yet
@@ -125,7 +124,7 @@ static void usb_hardware_init(void) {
   nrfx_power_init(&pwr_cfg);
 
   // Register tusb function as USB power handler
-  const nrfx_power_usbevt_config_t config = { .handler = power_event_handler};
+  const nrfx_power_usbevt_config_t config = {.handler = power_event_handler};
 
   nrfx_power_usbevt_init(&config);
   nrfx_power_usbevt_enable();
