@@ -25,8 +25,8 @@
 #ifndef ADAFRUIT_TINYUSB_API_H_
 #define ADAFRUIT_TINYUSB_API_H_
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 //--------------------------------------------------------------------+
 // Core API
@@ -34,7 +34,7 @@
 // Weak function allow compile arduino core before linking with this library
 //--------------------------------------------------------------------+
 #ifdef __cplusplus
- extern "C" {
+extern "C" {
 #endif
 
 // Called by core/sketch to initialize usb device hardware and stack
@@ -48,7 +48,7 @@ void TinyUSB_Device_Task(void) __attribute__((weak));
 void TinyUSB_Device_FlushCDC(void) __attribute__((weak));
 
 #ifdef __cplusplus
- }
+}
 #endif
 
 //--------------------------------------------------------------------+

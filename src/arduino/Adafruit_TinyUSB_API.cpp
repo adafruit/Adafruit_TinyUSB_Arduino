@@ -31,28 +31,25 @@
 //--------------------------------------------------------------------+
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
 //--------------------------------------------------------------------+
-extern "C"
-{
+extern "C" {
 
-void TinyUSB_Device_Init(uint8_t rhport)
-{
+void TinyUSB_Device_Init(uint8_t rhport) {
+  // Init USB Device controller and stack
   USBDevice.begin(rhport);
 }
 
 // RP2040 has its own implementation since it needs mutex for dual core
 #ifndef ARDUINO_ARCH_RP2040
-void TinyUSB_Device_Task(void)
-{
+void TinyUSB_Device_Task(void) {
+  // Run tinyusb device task
   tud_task();
 }
 #endif
 
-void TinyUSB_Device_FlushCDC(void)
-{
+void TinyUSB_Device_FlushCDC(void) {
   // TODO multiple CDCs
   tud_cdc_n_write_flush(0);
 }
-
 }
 
 #endif

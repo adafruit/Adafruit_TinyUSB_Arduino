@@ -40,13 +40,15 @@ Adafruit_USBD_MSC::Adafruit_USBD_MSC(void) {
 }
 
 uint16_t Adafruit_USBD_MSC::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
-                                          uint16_t bufsize) {
+                                                   uint16_t bufsize) {
   // usb core will automatically update endpoint number
   uint8_t desc[] = {TUD_MSC_DESCRIPTOR(itfnum, 0, EPOUT, EPIN, EPSIZE)};
   uint16_t const len = sizeof(desc);
 
-  if (bufsize < len)
+  if (bufsize < len) {
     return 0;
+  }
+
   memcpy(buf, desc, len);
   return len;
 }
@@ -85,8 +87,9 @@ void Adafruit_USBD_MSC::setReadyCallback(uint8_t lun, ready_callback_t cb) {
 }
 
 bool Adafruit_USBD_MSC::begin(void) {
-  if (!USBDevice.addInterface(*this))
+  if (!USBDevice.addInterface(*this)) {
     return false;
+  }
 
   _msc_dev = this;
   return true;
@@ -97,8 +100,9 @@ extern "C" {
 
 // Invoked to determine max LUN
 uint8_t tud_msc_get_maxlun_cb(void) {
-  if (!_msc_dev)
+  if (!_msc_dev) {
     return 0;
+  }
   return _msc_dev->getMaxLun();
 }
 
@@ -107,8 +111,9 @@ uint8_t tud_msc_get_maxlun_cb(void) {
 // 4 characters respectively
 void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8],
                         uint8_t product_id[16], uint8_t product_rev[4]) {
-  if (!_msc_dev)
+  if (!_msc_dev) {
     return;
+  }
 
   // If not set use default ID "Adafruit - Mass Storage - 1.0"
   const char *vid =
@@ -129,8 +134,9 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8],
 // Invoked when received Test Unit Ready command.
 // return true allowing host to read/write this LUN e.g SD card inserted
 bool tud_msc_test_unit_ready_cb(uint8_t lun) {
-  if (!_msc_dev)
+  if (!_msc_dev) {
     return false;
+  }
 
   if (_msc_dev->_lun[lun].ready_cb) {
     _msc_dev->_lun[lun].unit_ready = _msc_dev->_lun[lun].ready_cb();
@@ -142,8 +148,9 @@ bool tud_msc_test_unit_ready_cb(uint8_t lun) {
 // Callback invoked to determine disk's size
 void tud_msc_capacity_cb(uint8_t lun, uint32_t *block_count,
                          uint16_t *block_size) {
-  if (!_msc_dev)
+  if (!_msc_dev) {
     return;
+  }
 
   *block_count = _msc_dev->_lun[lun].block_count;
   *block_size = _msc_dev->_lun[lun].block_size;
@@ -174,8 +181,9 @@ int32_t tud_msc_scsi_cb(uint8_t lun, const uint8_t scsi_cmd[16], void *buffer,
   }
 
   // return len must not larger than bufsize
-  if (resplen > bufsize)
+  if (resplen > bufsize) {
     resplen = bufsize;
+  }
 
   // copy response to stack's buffer if any
   if (response && resplen) {
@@ -191,8 +199,9 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset,
                           void *buffer, uint32_t bufsize) {
   (void)offset;
 
-  if (!(_msc_dev && _msc_dev->_lun[lun].rd_cb))
+  if (!(_msc_dev && _msc_dev->_lun[lun].rd_cb)) {
     return -1;
+  }
 
   return _msc_dev->_lun[lun].rd_cb(lba, buffer, bufsize);
 }
@@ -203,8 +212,9 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset,
                            uint8_t *buffer, uint32_t bufsize) {
   (void)offset;
 
-  if (!(_msc_dev && _msc_dev->_lun[lun].wr_cb))
+  if (!(_msc_dev && _msc_dev->_lun[lun].wr_cb)) {
     return -1;
+  }
 
   return _msc_dev->_lun[lun].wr_cb(lba, buffer, bufsize);
 }
@@ -212,8 +222,9 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset,
 // Callback invoked when WRITE10 command is completed (status received and
 // accepted by host). used to flush any pending cache.
 void tud_msc_write10_complete_cb(uint8_t lun) {
-  if (!(_msc_dev && _msc_dev->_lun[lun].fl_cb))
+  if (!(_msc_dev && _msc_dev->_lun[lun].fl_cb)) {
     return;
+  }
 
   // flush pending cache when write10 is complete
   return _msc_dev->_lun[lun].fl_cb();

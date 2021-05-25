@@ -9,12 +9,16 @@ jobs:
       fail-fast: false
       matrix:
         arduino-platform:
-           # Alphabetical order
+           # nRF52
            - 'cpb'
+           - 'nrf52840'
+           # RP2040
+           #- 'feather_rp2040_tinyusb'
+           #- 'pico_rp2040_tinyusb'
+           # SAMD
            - 'feather_m4_can_tinyusb'
            - 'metro_m0_tinyusb'
            - 'metro_m4_tinyusb'
-           - 'nrf52840'
 
     steps:
     - name: Setup Python
@@ -59,7 +63,7 @@ jobs:
       run: bash ci/actions_install.sh
 
     - name: clang
-      run: python3 ci/run-clang-format.py -e "ci/*" -e "bin/*" -r . 
+      run: python3 ci/run-clang-format.py -r src/arduino
 
     - name: doxygen
       env:
