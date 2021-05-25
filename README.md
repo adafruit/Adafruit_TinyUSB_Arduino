@@ -5,8 +5,8 @@
 This library is a Arduino-friendly version of [TinyUSB](https://github.com/hathach/tinyusb) stack. It is designed with structure and APIs that are easily integrated to existing or new Arduino Core. Supported platform including: 
 
 - [Adafruit_nRF52_Arduino](https://github.com/adafruit/Adafruit_nRF52_Arduino)
-- [Adafruit ArduinoCore-samd](https://github.com/adafruit/ArduinoCore-samd) selectable via menu`Tools->USB Stack->TinyUSB`
-- [earlephilhower/arduino-pico](https://github.com/earlephilhower/arduino-pico) selected via menu `Tools->USB Stack->Adafruit TinyUSB`
+- [Adafruit/ArduinoCore-samd](https://github.com/adafruit/ArduinoCore-samd) selectable via menu`Tools->USB Stack->TinyUSB`
+- [earlephilhower/arduino-pico](https://github.com/earlephilhower/arduino-pico) selectable via menu `Tools->USB Stack->Adafruit TinyUSB`
 
 Current class drivers supported are
 
