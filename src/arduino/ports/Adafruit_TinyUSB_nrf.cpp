@@ -38,11 +38,6 @@
 
 #define USBD_STACK_SZ (200)
 
-// tinyusb function that handles power event (detected, ready, removed)
-// We must call it within SD's SOC event handler, or set it as power event
-// handler if SD is not enabled.
-extern "C" void tusb_hal_nrf_power_event(uint32_t event);
-
 //--------------------------------------------------------------------+
 // Forward USB interrupt events to TinyUSB IRQ Handler
 //--------------------------------------------------------------------+
@@ -105,6 +100,15 @@ uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]) {
 // Helper
 //--------------------------------------------------------------------+
 
+// tinyusb function that handles power event (detected, ready, removed)
+// We must call it within SD's SOC event handler, or set it as power event
+// handler if SD is not enabled.
+extern "C" void tusb_hal_nrf_power_event(uint32_t event);
+
+static void power_event_handler(nrfx_power_usb_evt_t event) {
+  tusb_hal_nrf_power_event((uint32_t)event);
+}
+
 // Init usb hardware when starting up. Softdevice is not enabled yet
 static void usb_hardware_init(void) {
   // Priorities 0, 1, 4 (nRF52) are reserved for SoftDevice
@@ -120,10 +124,9 @@ static void usb_hardware_init(void) {
   nrfx_power_init(&pwr_cfg);
 
   // Register tusb function as USB power handler
-  const nrfx_power_usbevt_config_t config = {
-      .handler = (nrfx_power_usb_event_handler_t)tusb_hal_nrf_power_event};
-  nrfx_power_usbevt_init(&config);
+  const nrfx_power_usbevt_config_t config = {.handler = power_event_handler};
 
+  nrfx_power_usbevt_init(&config);
   nrfx_power_usbevt_enable();
 
   if (usb_reg & POWER_USBREGSTATUS_VBUSDETECT_Msk) {
