@@ -33,7 +33,6 @@ jobs:
       uses: actions/checkout@v2
       with:
          repository: adafruit/ci-arduino
-         ref: 'add-wall'
          path: ci
 
     - name: pre-install
