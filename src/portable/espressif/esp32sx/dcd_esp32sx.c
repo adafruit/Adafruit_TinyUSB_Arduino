@@ -30,8 +30,6 @@
 
 #if (((CFG_TUSB_MCU == OPT_MCU_ESP32S2) ||  (CFG_TUSB_MCU == OPT_MCU_ESP32S3)) && TUSB_OPT_DEVICE_ENABLED)
 
-#include "common/tusb_fifo.h"
-
 // Espressif
 #include "driver/periph_ctrl.h"
 #include "freertos/xtensa_api.h"
@@ -42,6 +40,7 @@
 #include "soc/gpio_sig_map.h"
 #include "soc/usb_periph.h"
 
+#include "common/tusb_fifo.h"
 #include "device/dcd.h"
 
 // Since TinyUSB doesn't use SOF for now, and this interrupt too often (1ms interval)

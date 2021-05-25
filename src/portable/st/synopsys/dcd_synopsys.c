@@ -54,8 +54,6 @@
       (CFG_TUSB_MCU == OPT_MCU_STM32L4 && defined(STM32L4_SYNOPSYS))    \
     )
 
-#include "common/tusb_fifo.h"
-
 // EP_MAX       : Max number of bi-directional endpoints including EP0
 // EP_FIFO_SIZE : Size of dedicated USB SRAM
 #if CFG_TUSB_MCU == OPT_MCU_STM32F1
@@ -99,6 +97,7 @@
 
 #endif
 
+#include "common/tusb_fifo.h"
 #include "device/dcd.h"
 
 //--------------------------------------------------------------------+
