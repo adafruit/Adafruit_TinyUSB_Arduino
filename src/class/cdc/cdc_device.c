@@ -71,7 +71,6 @@ typedef struct
 
 }cdcd_interface_t;
 
-#define ITF_MEM_RESET_SIZE   offsetof(cdcd_interface_t, wanted_char)
 
 //--------------------------------------------------------------------+
 // INTERNAL OBJECT & FUNCTION DECLARATION
