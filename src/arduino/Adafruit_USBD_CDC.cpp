@@ -33,11 +33,7 @@
 #include "Adafruit_USBD_CDC.h"
 #include "Adafruit_USBD_Device.h"
 
-// TODO Multiple instances supports
-//	static uint8_t _itf_count;
-//	static Adafruit_USBD_CDC* _itf_arr[]
-
-#define EPOUT 0x00
+#define EPOUT 0x00   // Starting endpoints; adjusted elsewhere as needed
 #define EPIN 0x80
 
 Adafruit_USBD_CDC Serial;
