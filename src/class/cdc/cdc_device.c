@@ -71,6 +71,7 @@ typedef struct
 
 }cdcd_interface_t;
 
+#define ITF_MEM_RESET_SIZE   offsetof(cdcd_interface_t, wanted_char)
 
 //--------------------------------------------------------------------+
 // INTERNAL OBJECT & FUNCTION DECLARATION
@@ -214,7 +215,7 @@ bool tud_cdc_n_write_clear (uint8_t itf)
 {
   return tu_fifo_clear(&_cdcd_itf[itf].tx_ff);
 }
-#define STR(s) #s
+
 //--------------------------------------------------------------------+
 // USBD Driver API
 //--------------------------------------------------------------------+
