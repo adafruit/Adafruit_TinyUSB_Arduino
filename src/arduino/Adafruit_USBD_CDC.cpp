@@ -42,9 +42,9 @@
 
 Adafruit_USBD_CDC Serial;
 
-Adafruit_USBD_CDC::Adafruit_USBD_CDC(void) {
+Adafruit_USBD_CDC::Adafruit_USBD_CDC(int instance) {
   _begun = false;
-  _itf = 0;
+  _instance = instance;
 }
 
 uint16_t Adafruit_USBD_CDC::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
@@ -71,9 +71,8 @@ void Adafruit_USBD_CDC::begin(uint32_t baud) {
   }
 
   _begun = true;
-
-  Serial.setStringDescriptor("TinyUSB Serial");
-  USBDevice.addInterface(Serial);
+  this->setStringDescriptor("TinyUSB Serial");
+  USBDevice.addInterface(*this);
 }
 
 void Adafruit_USBD_CDC::begin(uint32_t baud, uint8_t config) {
@@ -88,36 +87,36 @@ void Adafruit_USBD_CDC::end(void) {
 
 uint32_t Adafruit_USBD_CDC::baud(void) {
   cdc_line_coding_t coding;
-  tud_cdc_get_line_coding(&coding);
+  tud_cdc_n_get_line_coding(_instance, &coding);
 
   return coding.bit_rate;
 }
 
 uint8_t Adafruit_USBD_CDC::stopbits(void) {
   cdc_line_coding_t coding;
-  tud_cdc_get_line_coding(&coding);
+  tud_cdc_n_get_line_coding(_instance, &coding);
 
   return coding.stop_bits;
 }
 
 uint8_t Adafruit_USBD_CDC::paritytype(void) {
   cdc_line_coding_t coding;
-  tud_cdc_get_line_coding(&coding);
+  tud_cdc_n_get_line_coding(_instance, &coding);
 
   return coding.parity;
 }
 
 uint8_t Adafruit_USBD_CDC::numbits(void) {
   cdc_line_coding_t coding;
-  tud_cdc_get_line_coding(&coding);
+  tud_cdc_n_get_line_coding(_instance, &coding);
 
   return coding.data_bits;
 }
 
-int Adafruit_USBD_CDC::dtr(void) { return tud_cdc_connected(); }
+int Adafruit_USBD_CDC::dtr(void) { return tud_cdc_n_connected(_instance); }
 
 Adafruit_USBD_CDC::operator bool() {
-  bool ret = tud_cdc_connected();
+  bool ret = tud_cdc_n_connected(_instance);
 
   // Add an yield to run usb background in case sketch block wait as follows
   // while( !Serial ) {}
@@ -128,7 +127,7 @@ Adafruit_USBD_CDC::operator bool() {
 }
 
 int Adafruit_USBD_CDC::available(void) {
-  uint32_t count = tud_cdc_available();
+  uint32_t count = tud_cdc_n_available(_instance);
 
   // Add an yield to run usb background in case sketch block wait as follows
   // while( !Serial.available() ) {}
@@ -141,19 +140,19 @@ int Adafruit_USBD_CDC::available(void) {
 
 int Adafruit_USBD_CDC::peek(void) {
   uint8_t ch;
-  return tud_cdc_peek(&ch) ? (int)ch : -1;
+  return tud_cdc_n_peek(_instance, &ch) ? (int)ch : -1;
 }
 
-int Adafruit_USBD_CDC::read(void) { return (int)tud_cdc_read_char(); }
+int Adafruit_USBD_CDC::read(void) { return (int)tud_cdc_n_read_char(_instance); }
 
-void Adafruit_USBD_CDC::flush(void) { tud_cdc_write_flush(); }
+void Adafruit_USBD_CDC::flush(void) { tud_cdc_n_write_flush(_instance); }
 
 size_t Adafruit_USBD_CDC::write(uint8_t ch) { return write(&ch, 1); }
 
 size_t Adafruit_USBD_CDC::write(const uint8_t *buffer, size_t size) {
   size_t remain = size;
-  while (remain && tud_cdc_connected()) {
-    size_t wrcount = tud_cdc_write(buffer, remain);
+  while (remain && tud_cdc_n_connected(_instance)) {
+    size_t wrcount = tud_cdc_n_write(_instance, buffer, remain);
     remain -= wrcount;
     buffer += wrcount;
 
@@ -167,20 +166,20 @@ size_t Adafruit_USBD_CDC::write(const uint8_t *buffer, size_t size) {
 }
 
 int Adafruit_USBD_CDC::availableForWrite(void) {
-  return tud_cdc_write_available();
+  return tud_cdc_n_write_available(_instance);
 }
 
 extern "C" {
 
 // Invoked when cdc when line state changed e.g connected/disconnected
 // Use to reset to DFU when disconnect with 1200 bps
-void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts) {
+  void tud_cdc_line_state_cb(uint8_t instance, bool dtr, bool rts) {
   (void)rts;
 
   // DTR = false is counted as disconnected
   if (!dtr) {
     // touch1200 only with first CDC instance (Serial)
-    if (itf == 0) {
+    if (instance == 0) {
       cdc_line_coding_t coding;
       tud_cdc_get_line_coding(&coding);
 

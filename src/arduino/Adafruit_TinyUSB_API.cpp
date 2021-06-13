@@ -47,8 +47,10 @@ void TinyUSB_Device_Task(void) {
 #endif
 
 void TinyUSB_Device_FlushCDC(void) {
-  // TODO multiple CDCs
-  tud_cdc_n_write_flush(0);
+  for (uint8_t CDCinstance=0; CDCinstance < CFG_TUD_CDC; CDCinstance++) {
+    // note that flushing an uninitialized CDC is harmless.
+    tud_cdc_n_write_flush(CDCinstance);
+  }
 }
 }
 

@@ -34,7 +34,8 @@
 
 class Adafruit_USBD_CDC : public Stream, public Adafruit_USBD_Interface {
 public:
-  Adafruit_USBD_CDC(void);
+  Adafruit_USBD_CDC(int instance);
+  Adafruit_USBD_CDC(void) { Adafruit_USBD_CDC(0); }
 
   // fron Adafruit_USBD_Interface
   virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
@@ -70,10 +71,11 @@ public:
   virtual int availableForWrite(void);
   using Print::write; // pull in write(str) from Print
   operator bool();
+  uint8_t getInstance() { return _instance; }
 
 private:
   bool _begun;
-  uint8_t _itf;
+  uint8_t _instance;  // which CDC of CFG_TUD_CDC total CDCs.
 };
 
 extern Adafruit_USBD_CDC Serial;
