@@ -241,11 +241,11 @@ void loop()
   delay(2000);
 
   
-  // Test buttons
-  for (int i=0; i<=15; ++i)
+  // Test buttons (up to 32 buttons)
+  for (int i=0; i<32; ++i)
   {
-    Serial.print("Pressing button "); Serial.println(i+1);
-    gp.buttons = (0x00 | TU_BIT(i));
+    Serial.print("Pressing button "); Serial.println(i);
+    gp.buttons = (1 << i);
     usb_hid.sendReport(0, &gp, sizeof(gp));
     delay(1000);
   }
