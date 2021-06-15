@@ -1,23 +1,23 @@
 /*
-    This example demonstrates the use of multiple USB CDC/ACM "Virtual Serial" ports,
-    using Ha Thach's tinyUSB library, and the port of that library to the Arduino environment
+    This example demonstrates the use of multiple USB CDC/ACM "Virtual
+    Serial" ports, using Ha Thach's tinyUSB library, and the port of
+    that library to the Arduino environment
+
     https://github.com/hathach/tinyusb
     https://github.com/adafruit/Adafruit_TinyUSB_Arduino
 
     Written by Bill Westfield (aka WestfW), June 2021.
-    This code is released to the public domain (note that this is a different
-    license than the rest of the TinyUSB library and examples.)
+    Copyright 2021 by Bill Westfield
+    MIT license, check LICENSE for more information
 
-    The example creates three virtual serial ports, runs a non-blocking parser on
-    each one, and allows them to send messages to each other.  This is pretty useless,
-    and is relatively complex for an example, but it exercises a bunch of the CDC features.
+    The example creates three virtual serial ports.  Text entered on
+    any of the ports will be echoed to the other two ports.
 
-    The max number of CDC ports (CFG_TUD_CDC) has to be changed to at least 3, changed in
-    the core tusb_config.h file.
+    The max number of CDC ports (CFG_TUD_CDC) has to be changed to at
+    least 3, changed in the core tusb_config.h file.
 */
 
 #include <Adafruit_TinyUSB.h>
-#include "simpleParser.h"
 
 #define LED LED_BUILTIN
 
@@ -47,74 +47,31 @@ void setup() {
     }
     delay(1000);
   }
-  Serial.print("You are TTY0\n\r\n0> ");
-  USBSer2.print("You are TTY1\n\r\n1> ");
-  USBSer3.print("You are TTY2\n\r\n2> ");
+  Serial.print("You are port 0\n\r\n0> ");
+  USBSer2.print("You are port 1\n\r\n1> ");
+  USBSer3.print("You are port 2\n\r\n2> ");
 }
-
-
-// We need a parser for each Virtual Serial port
-simpleParser<80> line0(Serial);
-simpleParser<80> line1(USBSer2);
-simpleParser<80> line2(USBSer3);
 
 int LEDstate = 0;
 
-// Given an input port and an output port and a message, send it off.
-
-void sendmsg(Adafruit_USBD_CDC &out, Adafruit_USBD_CDC &in, char *msg) {
-  out.print("\r\nTTY");
-  out.print(in.getInstance());
-  out.print(": ");
-  out.println(msg);
-  out.flush();
-}
-
-// we've received a line on some port.  Check if it's a valid comand,
-// parse the arguments, and take appropriate action
-void parseMsg(Adafruit_USBD_CDC &in, parserCore &parser) {
-  int target;
-  enum {                    CMD_SEND, CMD_HELP, CMD_HELP2 };
-  int cmd = parser.keyword("send help ? ");
-  switch (cmd) {
-    case CMD_SEND:
-      target = parser.number();
-      if (target < 0 || target >= CFG_TUD_CDC || ports[target] == NULL) {
-        in.println("Bad target line");
-        return;
-      }
-      sendmsg(*ports[target], in, parser.restOfLine());
-      break;
-
-    case CMD_HELP:
-    case CMD_HELP2:
-      in.println("Available commands:\r\n  SEND N msg");
-      break;
-    default:
-      in.println("invalid command");
-      break;
-  }
-}
-
 void loop() {
-  if (line0.getLine()) {
-    parseMsg(Serial, line0);
-    line0.reset();
-    Serial.print("0> ");
-
+  int ch;
+  ch = Serial.read();
+  if (ch > 0) {
+    USBSer2.write(ch);
+    USBSer3.write(ch);
   }
-  if (line1.getLine()) {
-    parseMsg(USBSer2, line1);
-    line1.reset();
-    USBSer2.print("1> ");
+  ch = USBSer2.read();
+  if (ch > 0) {
+    Serial.write(ch);
+    USBSer3.write(ch);
   }
-  if (line2.getLine()) {
-    parseMsg(USBSer3, line2);
-    line2.reset();
-    USBSer3.print("2> ");
+  ch = USBSer3.read();
+  if (ch > 0) {
+    Serial.write(ch);
+    USBSer2.write(ch);
   }
   if (delay_without_delaying(500)) {
-    // blink LED to show we're still alive
     LEDstate = !LEDstate;
     digitalWrite(LED, LEDstate);
   }
@@ -132,3 +89,5 @@ boolean delay_without_delaying(unsigned long time) {
   }
   return false;
 }
+
+// Helper: non-blocking line-at-a-time read.
