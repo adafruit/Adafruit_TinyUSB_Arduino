@@ -92,6 +92,10 @@ void Adafruit_USBD_CDC::end(void) {
 }
 
 uint32_t Adafruit_USBD_CDC::baud(void) {
+  if (!_begun) {
+    return 0;
+  }
+
   cdc_line_coding_t coding;
   tud_cdc_n_get_line_coding(_itf, &coding);
 
@@ -99,6 +103,10 @@ uint32_t Adafruit_USBD_CDC::baud(void) {
 }
 
 uint8_t Adafruit_USBD_CDC::stopbits(void) {
+  if (!_begun) {
+    return 0;
+  }
+
   cdc_line_coding_t coding;
   tud_cdc_n_get_line_coding(_itf, &coding);
 
@@ -106,6 +114,10 @@ uint8_t Adafruit_USBD_CDC::stopbits(void) {
 }
 
 uint8_t Adafruit_USBD_CDC::paritytype(void) {
+  if (!_begun) {
+    return 0;
+  }
+
   cdc_line_coding_t coding;
   tud_cdc_n_get_line_coding(_itf, &coding);
 
@@ -113,15 +125,29 @@ uint8_t Adafruit_USBD_CDC::paritytype(void) {
 }
 
 uint8_t Adafruit_USBD_CDC::numbits(void) {
+  if (!_begun) {
+    return 0;
+  }
+
   cdc_line_coding_t coding;
   tud_cdc_n_get_line_coding(_itf, &coding);
 
   return coding.data_bits;
 }
 
-int Adafruit_USBD_CDC::dtr(void) { return tud_cdc_n_connected(_itf); }
+int Adafruit_USBD_CDC::dtr(void) {
+  if (!_begun) {
+    return 0;
+  }
+
+  return tud_cdc_n_connected(_itf);
+}
 
 Adafruit_USBD_CDC::operator bool() {
+  if (!_begun) {
+    return false;
+  }
+
   bool ret = tud_cdc_n_connected(_itf);
 
   // Add an yield to run usb background in case sketch block wait as follows
@@ -133,6 +159,10 @@ Adafruit_USBD_CDC::operator bool() {
 }
 
 int Adafruit_USBD_CDC::available(void) {
+  if (!_begun) {
+    return 0;
+  }
+
   uint32_t count = tud_cdc_n_available(_itf);
 
   // Add an yield to run usb background in case sketch block wait as follows
@@ -145,17 +175,36 @@ int Adafruit_USBD_CDC::available(void) {
 }
 
 int Adafruit_USBD_CDC::peek(void) {
+  if (!_begun) {
+    return -1;
+  }
+
   uint8_t ch;
   return tud_cdc_n_peek(_itf, &ch) ? (int)ch : -1;
 }
 
-int Adafruit_USBD_CDC::read(void) { return (int)tud_cdc_n_read_char(_itf); }
+int Adafruit_USBD_CDC::read(void) {
+  if (!_begun) {
+    return -1;
+  }
+  return (int)tud_cdc_n_read_char(_itf);
+}
 
-void Adafruit_USBD_CDC::flush(void) { tud_cdc_n_write_flush(_itf); }
+void Adafruit_USBD_CDC::flush(void) {
+  if (!_begun) {
+    return;
+  }
+
+  tud_cdc_n_write_flush(_itf);
+}
 
 size_t Adafruit_USBD_CDC::write(uint8_t ch) { return write(&ch, 1); }
 
 size_t Adafruit_USBD_CDC::write(const uint8_t *buffer, size_t size) {
+  if (!_begun) {
+    return 0;
+  }
+
   size_t remain = size;
   while (remain && tud_cdc_n_connected(_itf)) {
     size_t wrcount = tud_cdc_n_write(_itf, buffer, remain);
@@ -172,6 +221,9 @@ size_t Adafruit_USBD_CDC::write(const uint8_t *buffer, size_t size) {
 }
 
 int Adafruit_USBD_CDC::availableForWrite(void) {
+  if (!_begun) {
+    return 0;
+  }
   return tud_cdc_n_write_available(_itf);
 }
 

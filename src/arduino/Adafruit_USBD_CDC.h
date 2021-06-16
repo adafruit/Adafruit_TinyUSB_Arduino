@@ -76,7 +76,7 @@ private:
   uint8_t _itf;
 
   /* TODO when closed to BSP release cycle (SAMD, nRF, rp2040)
-   * rename _itf to _instance and add
+   * rename _itf to _instance, _begun can be removed
    *
    * static uint8_t getInstanceCount(void);
    * static uint8_t _instance_count;

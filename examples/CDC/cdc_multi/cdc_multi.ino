@@ -1,6 +1,6 @@
 /*
     This example demonstrates the use of multiple USB CDC/ACM "Virtual
-    Serial" ports, using Ha Thach's tinyUSB library, and the port of
+    Serial" ports, using Ha Thach's TinyUSB library, and the port of
     that library to the Arduino environment
 
     https://github.com/hathach/tinyusb
