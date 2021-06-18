@@ -46,9 +46,14 @@ void TinyUSB_Device_Task(void) {
 }
 #endif
 
+// TODO should use getInstanceCount() API (when closed to BSP release cycle)
+// from Adafruit_USBD_CDC.cpp
+extern uint8_t _cdc_instance_count;
+
 void TinyUSB_Device_FlushCDC(void) {
-  // TODO multiple CDCs
-  tud_cdc_n_write_flush(0);
+  for (uint8_t instance = 0; instance < _cdc_instance_count; instance++) {
+    tud_cdc_n_write_flush(instance);
+  }
 }
 }
 

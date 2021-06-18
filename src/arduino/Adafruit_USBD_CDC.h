@@ -74,6 +74,13 @@ public:
 private:
   bool _begun;
   uint8_t _itf;
+
+  /* TODO when closed to BSP release cycle (SAMD, nRF, rp2040)
+   * rename _itf to _instance, _begun can be removed
+   *
+   * static uint8_t getInstanceCount(void);
+   * static uint8_t _instance_count;
+   */
 };
 
 extern Adafruit_USBD_CDC Serial;
