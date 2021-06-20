@@ -54,20 +54,20 @@ void USB_Handler(void) { tud_int_handler(0); }
 
 } // extern C
 
-//--------------------------------------------------------------------+
-// MACRO TYPEDEF CONSTANT ENUM DECLARATION
-//--------------------------------------------------------------------+
-
+// Debug log with Serial1
 #if CFG_TUSB_DEBUG
 extern "C" int serial1_printf(const char *__restrict format, ...) {
-  char buf[PRINTF_BUF];
+  char buf[256];
+  int len;
   va_list ap;
   va_start(ap, format);
-  vsnprintf(buf, sizeof(buf), format, ap);
+  len = vsnprintf(buf, sizeof(buf), format, ap);
   Serial1.write(buf);
   va_end(ap);
+  return len;
 }
 #endif
+
 
 //--------------------------------------------------------------------+
 // Porting API
@@ -125,6 +125,10 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
   }
 
   NVIC_SetPriority((IRQn_Type)USB_IRQn, 0UL);
+#endif
+
+#if CFG_TUSB_DEBUG
+  Serial1.begin(115200);
 #endif
 
   tusb_init();

@@ -1,4 +1,4 @@
-/* 
+/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2019 Ha Thach (tinyusb.org)
@@ -183,7 +183,19 @@ static usbd_class_driver_t const _usbd_driver[] =
     .reset            = dfu_rtd_reset,
     .open             = dfu_rtd_open,
     .control_xfer_cb  = dfu_rtd_control_xfer_cb,
-    .xfer_cb          = dfu_rtd_xfer_cb,
+    .xfer_cb          = NULL,
+    .sof              = NULL
+  },
+  #endif
+
+  #if CFG_TUD_DFU_MODE
+  {
+    DRIVER_NAME("DFU-MODE")
+    .init             = dfu_moded_init,
+    .reset            = dfu_moded_reset,
+    .open             = dfu_moded_open,
+    .control_xfer_cb  = dfu_moded_control_xfer_cb,
+    .xfer_cb          = NULL,
     .sof              = NULL
   },
   #endif
@@ -1236,8 +1248,8 @@ bool usbd_edpt_xfer(uint8_t rhport, uint8_t ep_addr, uint8_t * buffer, uint16_t 
   // Attempt to transfer on a busy endpoint, sound like an race condition !
   TU_ASSERT(_usbd_dev.ep_status[epnum][dir].busy == 0);
 
-  // Set busy first since the actual transfer can be complete before dcd_edpt_xfer() could return
-  // and usbd task can preempt and clear the busy
+  // Set busy first since the actual transfer can be complete before dcd_edpt_xfer()
+  // could return and USBD task can preempt and clear the busy
   _usbd_dev.ep_status[epnum][dir].busy = true;
 
   if ( dcd_edpt_xfer(rhport, ep_addr, buffer, total_bytes) )
@@ -1259,7 +1271,7 @@ bool usbd_edpt_xfer(uint8_t rhport, uint8_t ep_addr, uint8_t * buffer, uint16_t 
 // bytes should be written and second to keep the return value free to give back a boolean
 // success message. If total_bytes is too big, the FIFO will copy only what is available
 // into the USB buffer!
-bool usbd_edpt_iso_xfer(uint8_t rhport, uint8_t ep_addr, tu_fifo_t * ff, uint16_t total_bytes)
+bool usbd_edpt_xfer_fifo(uint8_t rhport, uint8_t ep_addr, tu_fifo_t * ff, uint16_t total_bytes)
 {
   uint8_t const epnum = tu_edpt_number(ep_addr);
   uint8_t const dir   = tu_edpt_dir(ep_addr);
@@ -1330,9 +1342,9 @@ bool usbd_edpt_stalled(uint8_t rhport, uint8_t ep_addr)
 
 /**
  * usbd_edpt_close will disable an endpoint.
- * 
+ *
  * In progress transfers on this EP may be delivered after this call.
- * 
+ *
  */
 void usbd_edpt_close(uint8_t rhport, uint8_t ep_addr)
 {

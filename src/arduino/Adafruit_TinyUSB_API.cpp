@@ -55,6 +55,7 @@ void TinyUSB_Device_FlushCDC(void) {
     tud_cdc_n_write_flush(instance);
   }
 }
-}
+
+} // extern C
 
 #endif
