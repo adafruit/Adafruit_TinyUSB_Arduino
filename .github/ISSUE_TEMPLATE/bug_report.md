@@ -12,6 +12,7 @@ assignees: ''
 - Your OS (mac/windows/linux) and Arduino IDE version
 - Your Board and BSP version
 - TinyUSB library version
+- Sketch: If is your custom sketch, please provide a minimal sketch as attached file
 
 **Describe**
 
@@ -30,4 +31,4 @@ If applicable, add screenshots to help explain your problem.
 
 **Log**
 
-If applicable, provide your Serial log. If the log is too long, attach it as txt file instead.
+If applicable, provide your Serial log as attached txt file.
