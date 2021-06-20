@@ -245,7 +245,7 @@ void loop()
   for (int i=0; i<32; ++i)
   {
     Serial.print("Pressing button "); Serial.println(i);
-    gp.buttons = (1 << i);
+    gp.buttons = (1U << i);
     usb_hid.sendReport(0, &gp, sizeof(gp));
     delay(1000);
   }
