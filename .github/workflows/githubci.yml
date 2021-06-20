@@ -13,8 +13,7 @@ jobs:
            - 'cpb'
            - 'nrf52840'
            # RP2040
-           #- 'feather_rp2040_tinyusb'
-           #- 'pico_rp2040_tinyusb'
+           - 'feather_rp2040_tinyusb'
            # SAMD
            - 'feather_m4_can_tinyusb'
            - 'metro_m0_tinyusb'
