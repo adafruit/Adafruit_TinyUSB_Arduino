@@ -1,5 +1,22 @@
 # Adafruit TinyUSB Arduino Library Changelog
 
+## 1.1.0 - 2021.06.21
+
+- Add support for multiple CDC ports (need to modify tusb_config.h)
+- fix #86 when calling midi API when device is not fully enumerated
+- fix Serial connection issue with nrf52 on windows
+- Update device driver of rp2040 to match tinyusb upstream
+- Added feather rp2040 to ci build (skipped the external flash example for now due to SdFat compilation error)
+- Add optional debug log for stack with Serial1 on samd core (will expand later to other core).
+- lost more bug fixes to the stack
+
+## 1.0.3 - 2021.05.26
+
+- Update tinyusb stack to latest
+- Added HID Gamepad example with Dhat support
+- Fix warnings with -Wall -Wextra
+- Fix warnings with cast function type for nrf
+
 ## 1.0.1 - 2021.05.21
 
 Warn user to select TinyUSB via menu on ports where it is optional e.g SAMD and RP2040 
