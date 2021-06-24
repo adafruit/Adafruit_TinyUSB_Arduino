@@ -69,25 +69,7 @@
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
 //--------------------------------------------------------------------+
 
-#define USBD_STACK_SZ (4096)
-
-//--------------------------------------------------------------------+
-// Forward USB interrupt events to TinyUSB IRQ Handler
-//--------------------------------------------------------------------+
-// extern "C" void USBD_IRQHandler(void) {
-//  tud_int_handler(0);
-//}
-
-//--------------------------------------------------------------------+
-// Porting API
-//--------------------------------------------------------------------+
-
-// USB Device Driver task
-// This top level thread processes all usb events and invokes callbacks
-static void usb_device_task(void *param) {
-    (void)param;
-    while(1) tud_task(); // RTOS forever loop
-}
+// Note: persist mode is mostly copied from esp32-hal-tinyusb.c from arduino-esp32 core.
 
 typedef enum {
     RESTART_NO_PERSIST,
@@ -148,6 +130,19 @@ static void configure_pins(usb_hal_context_t *usb)
         gpio_set_drive_capability((gpio_num_t) USBPHY_DM_NUM, GPIO_DRIVE_CAP_3);
         gpio_set_drive_capability((gpio_num_t) USBPHY_DP_NUM, GPIO_DRIVE_CAP_3);
     }
+}
+
+//--------------------------------------------------------------------+
+// Porting API
+//--------------------------------------------------------------------+
+
+#define USBD_STACK_SZ (4096)
+
+// USB Device Driver task
+// This top level thread processes all usb events and invokes callbacks
+static void usb_device_task(void *param) {
+    (void)param;
+    while(1) tud_task(); // RTOS forever loop
 }
 
 void TinyUSB_Port_InitDevice(uint8_t rhport) {
