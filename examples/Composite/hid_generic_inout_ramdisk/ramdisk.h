@@ -26,7 +26,7 @@
 #define RAMDISK_H_
 
 #define README_CONTENTS                                                        \
-  "This is Adafruit TinyUSB MassStorage device demo on RAM disk."
+  "This is TinyUSB MassStorage device demo for Arduino on RAM disk."
 
 uint8_t msc_disk[DISK_BLOCK_NUM][DISK_BLOCK_SIZE] = {
     //------------- Block0: Boot Sector -------------//

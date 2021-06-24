@@ -41,6 +41,10 @@
   #include "arduino/ports/rp2040/tusb_config_rp2040.h"
 #endif
 
+#if defined(ARDUINO_ARCH_ESP32)
+  #include "arduino/ports/esp32/tusb_config_esp32.h"
+#endif
+
 #ifdef __cplusplus
  }
 #endif

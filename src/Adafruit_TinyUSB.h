@@ -26,8 +26,9 @@
 #define ADAFRUIT_TINYUSB_H_
 
 // Give warning for Core that must select TinyUSB via menu
-#if (defined ARDUINO_ARCH_SAMD || defined ARDUINO_ARCH_RP2040) && !defined USE_TINYUSB
-#error TinyUSB is not selected, please select it in Tools->Menu->USB Stack
+#if !defined(USE_TINYUSB) && ( defined(ARDUINO_ARCH_SAMD) || \
+                               (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)) )
+#error TinyUSB is not selected, please select it in "Tools->Menu->USB Stack"
 #endif
 
 #include "tusb_option.h"

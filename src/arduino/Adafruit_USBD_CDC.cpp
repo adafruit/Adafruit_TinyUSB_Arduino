@@ -39,7 +39,7 @@
 
 uint8_t _cdc_instance_count = 0;
 
-Adafruit_USBD_CDC Serial;
+Adafruit_USBD_CDC SerialTinyUSB;
 
 Adafruit_USBD_CDC::Adafruit_USBD_CDC(void) {
   _begun = false;

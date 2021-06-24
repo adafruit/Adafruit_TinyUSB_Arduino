@@ -31,6 +31,11 @@
 #include "Adafruit_USBD_CDC.h"
 #include "Adafruit_USBD_Device.h"
 
+#ifndef USB_VID
+#define USB_VID 0xcafe
+#define USB_PID 0xcafe
+#endif
+
 #ifndef USB_MANUFACTURER
 #define USB_MANUFACTURER "Unknown"
 #endif
@@ -46,6 +51,7 @@
 #ifndef USB_CONFIG_POWER
 #define USB_CONFIG_POWER 100
 #endif
+
 
 enum { STRID_LANGUAGE = 0, STRID_MANUFACTURER, STRID_PRODUCT, STRID_SERIAL };
 
@@ -217,7 +223,7 @@ bool Adafruit_USBD_Device::begin(uint8_t rhport) {
   _desc_device.bDeviceSubClass = MISC_SUBCLASS_COMMON;
   _desc_device.bDeviceProtocol = MISC_PROTOCOL_IAD;
 
-  Serial.begin(115200);
+  SerialTinyUSB.begin(115200);
 
   // Init device hardware and call tusb_init()
   TinyUSB_Port_InitDevice(rhport);
