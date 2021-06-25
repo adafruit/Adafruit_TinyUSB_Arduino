@@ -36,6 +36,8 @@ class Adafruit_USBD_CDC : public Stream, public Adafruit_USBD_Interface {
 public:
   Adafruit_USBD_CDC(void);
 
+  static uint8_t getInstanceCount(void);
+
   // fron Adafruit_USBD_Interface
   virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
                                           uint16_t bufsize);
@@ -72,15 +74,14 @@ public:
   operator bool();
 
 private:
-  bool _begun;
-  uint8_t _itf;
+  enum { INVALID_INSTANCE = 0xffu };
+  static uint8_t _instance_count;
 
-  /* TODO when closed to BSP release cycle (SAMD, nRF, rp2040)
-   * rename _itf to _instance, _begun can be removed
-   *
-   * static uint8_t getInstanceCount(void);
-   * static uint8_t _instance_count;
-   */
+  uint8_t _instance;
+
+  bool isValid(void) {
+    return _instance != INVALID_INSTANCE;
+  }
 };
 
 // "Serial" is used with TinyUSB CDC
