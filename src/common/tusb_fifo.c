@@ -325,6 +325,9 @@ static uint16_t advance_pointer(tu_fifo_t* f, uint16_t p, uint16_t offset)
   // We are exploiting the wrap around to the correct index
 
   // TODO warning: assuming signed overflow does not occur when assuming that (X + c) < X is always false [-Wstrict-overflow]
+  #pragma GCC diagnostic push
+  #pragma GCC diagnostic ignored "-Wstrict-overflow"
+
   if ((p > p + offset) || (p + offset > f->max_pointer_idx))
   {
     p = (p + offset) + f->non_used_index_space;
@@ -333,6 +336,9 @@ static uint16_t advance_pointer(tu_fifo_t* f, uint16_t p, uint16_t offset)
   {
     p += offset;
   }
+
+  #pragma GCC diagnostic pop
+
   return p;
 }
 
