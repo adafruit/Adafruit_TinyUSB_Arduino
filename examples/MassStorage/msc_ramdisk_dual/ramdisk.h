@@ -29,9 +29,7 @@
 // LUN 0
 //--------------------------------------------------------------------+
 #define README0_CONTENTS                                                       \
-  "LUN0: This is tinyusb's MassStorage Class demo.\r\n\r\n\
-If you find any bugs or get any questions, feel free to file an\r\n\
-issue at github.com/hathach/tinyusb"
+  "LUN0: This is TinyUSB MassStorage device demo for Arduino on RAM disk."
 
 uint8_t msc_disk0[DISK_BLOCK_NUM][DISK_BLOCK_SIZE] = {
     //------------- Block0: Boot Sector -------------//
@@ -119,9 +117,7 @@ uint8_t msc_disk0[DISK_BLOCK_NUM][DISK_BLOCK_SIZE] = {
 // LUN 1
 //--------------------------------------------------------------------+
 #define README1_CONTENTS                                                       \
-  "LUN1: This is tinyusb's MassStorage Class demo.\r\n\r\n\
-If you find any bugs or get any questions, feel free to file an\r\n\
-issue at github.com/hathach/tinyusb"
+  "LUN1: This is TinyUSB MassStorage device demo for Arduino on RAM disk."
 
 uint8_t msc_disk1[DISK_BLOCK_NUM][DISK_BLOCK_SIZE] = {
     //------------- Block0: Boot Sector -------------//
