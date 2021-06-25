@@ -52,7 +52,6 @@
 #define USB_CONFIG_POWER 100
 #endif
 
-
 enum { STRID_LANGUAGE = 0, STRID_MANUFACTURER, STRID_PRODUCT, STRID_SERIAL };
 
 Adafruit_USBD_Device USBDevice;

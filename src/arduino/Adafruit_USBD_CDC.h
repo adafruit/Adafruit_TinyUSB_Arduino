@@ -79,20 +79,19 @@ private:
 
   uint8_t _instance;
 
-  bool isValid(void) {
-    return _instance != INVALID_INSTANCE;
-  }
+  bool isValid(void) { return _instance != INVALID_INSTANCE; }
 };
 
 // "Serial" is used with TinyUSB CDC
-#if defined(USE_TINYUSB) && !(defined(ARDUINO_ARCH_ESP32) && ARDUINO_SERIAL_PORT==0)
-  extern Adafruit_USBD_CDC Serial;
-  #define SerialTinyUSB Serial
+#if defined(USE_TINYUSB) &&                                                    \
+    !(defined(ARDUINO_ARCH_ESP32) && ARDUINO_SERIAL_PORT == 0)
+extern Adafruit_USBD_CDC Serial;
+#define SerialTinyUSB Serial
 #endif
 
 // Serial is probably used with HW Uart
 #ifndef SerialTinyUSB
-  extern Adafruit_USBD_CDC SerialTinyUSB;
+extern Adafruit_USBD_CDC SerialTinyUSB;
 #endif
 
 #endif // __cplusplus

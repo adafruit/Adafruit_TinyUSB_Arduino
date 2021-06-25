@@ -43,14 +43,9 @@ Adafruit_USBD_CDC SerialTinyUSB;
 //------------- Static member -------------//
 uint8_t Adafruit_USBD_CDC::_instance_count = 0;
 
-uint8_t Adafruit_USBD_CDC::getInstanceCount(void)
-{
-  return _instance_count;
-}
+uint8_t Adafruit_USBD_CDC::getInstanceCount(void) { return _instance_count; }
 
-Adafruit_USBD_CDC::Adafruit_USBD_CDC(void) {
-  _instance = INVALID_INSTANCE;
-}
+Adafruit_USBD_CDC::Adafruit_USBD_CDC(void) { _instance = INVALID_INSTANCE; }
 
 uint16_t Adafruit_USBD_CDC::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
                                                    uint16_t bufsize) {
