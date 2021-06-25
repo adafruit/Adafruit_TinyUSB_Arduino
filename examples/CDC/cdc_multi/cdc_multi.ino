@@ -14,18 +14,15 @@
     any of the ports will be echoed to the all ports.
 
     The max number of CDC ports (CFG_TUD_CDC) has to be changed to at
-    least 3, changed in the core tusb_config.h file.
+    least 2, changed in the core tusb_config.h file.
 */
 
 #include <Adafruit_TinyUSB.h>
 
 #define LED LED_BUILTIN
 
-/*
-    Create extra USB Serial Ports.  "Serial" is already created.
-*/
+// Create extra USB Serial Ports.  "Serial" is already created.
 Adafruit_USBD_CDC USBSer1;
-Adafruit_USBD_CDC USBSer2;
 
 void setup() {
   pinMode(LED, OUTPUT);
@@ -33,24 +30,21 @@ void setup() {
   // start up all of the USB Vitual ports, and wait for them to enumerate.
   Serial.begin(115200);
   USBSer1.begin(115200);
-  USBSer2.begin(115200);
 
-  while (!Serial || !USBSer1 || !USBSer2) {
+  while (!Serial || !USBSer1) {
     if (Serial) {
       Serial.println("Waiting for other USB ports");
     }
+
     if (USBSer1) {
       USBSer1.println("Waiting for other USB ports");
     }
-    if (USBSer2) {
-      USBSer2.println("Waiting for other USB ports");
-    }
+
     delay(1000);
   }
 
   Serial.print("You are port 0\n\r\n0> ");
   USBSer1.print("You are port 1\n\r\n1> ");
-  USBSer2.print("You are port 2\n\r\n2> ");
 }
 
 int LEDstate = 0;
@@ -68,11 +62,6 @@ void loop() {
     printAll(ch);
   }
 
-  ch = USBSer2.read();
-  if (ch > 0) {
-    printAll(ch);
-  }
-
   if (delay_without_delaying(500)) {
     LEDstate = !LEDstate;
     digitalWrite(LED, LEDstate);
@@ -81,14 +70,11 @@ void loop() {
 
 // print to all CDC ports
 void printAll(int ch) {
-  // print as it is
-  Serial.write(ch);
-
   // always lower case
-  USBSer1.write(tolower(ch));
+  Serial.write(tolower(ch));
 
   // always upper case
-  USBSer2.write(toupper(ch));
+  USBSer1.write(toupper(ch));
 }
 
 // Helper: non-blocking "delay" alternative.
