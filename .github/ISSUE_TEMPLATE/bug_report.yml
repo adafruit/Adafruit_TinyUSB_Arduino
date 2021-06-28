@@ -52,10 +52,10 @@ body:
 
   - type: textarea
     attributes:
-      label: Firmware
+      label: Sketch
       placeholder: |
-        e.g examples/device/cdc_msc.
-        If it is custom firmware, please provide links to your minimal sources or as attached files.
+        e.g examples/MassStorage/msc_ramdisk.
+        If it is custom sketch, please provide links to your minimal sources or as attached files.
     validations:
       required: true
 
