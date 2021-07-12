@@ -55,7 +55,7 @@ body:
       label: Sketch
       placeholder: |
         e.g examples/MassStorage/msc_ramdisk.
-        If it is custom sketch, please provide links to your minimal sources or as attached files.
+        If it is custom sketch, please provide it as **ATTACHED** files or link to it.
     validations:
       required: true
 
