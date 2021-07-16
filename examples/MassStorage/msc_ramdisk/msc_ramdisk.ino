@@ -21,9 +21,15 @@ Adafruit_USBD_MSC usb_msc;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+#if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
+  // Manual begin() is required on unsupported BSP such as mbed rp2040
+  // VID/PID, Manufacturer & Product string also need to be set as well
+  TinyUSBDevice.begin(0);
+#endif
+
   // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
   usb_msc.setID("Adafruit", "Mass Storage", "1.0");
-  
+
   // Set disk size
   usb_msc.setCapacity(DISK_BLOCK_NUM, DISK_BLOCK_SIZE);
 
@@ -32,7 +38,7 @@ void setup()
 
   // Set Lun ready (RAM disk is always ready)
   usb_msc.setUnitReady(true);
-  
+
   usb_msc.begin();
 
   Serial.begin(115200);
@@ -47,8 +53,8 @@ void loop()
 }
 
 // Callback invoked when received READ10 command.
-// Copy disk's data to buffer (up to bufsize) and 
-// return number of copied bytes (must be multiple of block size) 
+// Copy disk's data to buffer (up to bufsize) and
+// return number of copied bytes (must be multiple of block size)
 int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 {
   uint8_t const* addr = msc_disk[lba];
@@ -58,7 +64,7 @@ int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 }
 
 // Callback invoked when received WRITE10 command.
-// Process data in buffer to disk's storage and 
+// Process data in buffer to disk's storage and
 // return number of written bytes (must be multiple of block size)
 int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 {
