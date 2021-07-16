@@ -34,20 +34,42 @@
 // USB Information can be defined in variant file e.g pins_arduino.h
 #include "Arduino.h"
 
+// - USB_VID, USB_PID, USB_MANUFACTURER, USB_PRODUCT are defined on most
+// core that has built-in support for TinyUSB. Otherwise
+// - BOARD_VENDORID, BOARD_PRODUCTID, BOARD_MANUFACTURER, BOARD_NAME are use
+// if defined, mostly on mbed core
+
 #ifndef USB_VID
-#define USB_VID 0xcafe
+  #ifdef BOARD_VENDORID
+    #define USB_VID BOARD_VENDORID
+  #else
+    #define USB_VID 0x239a
+  #endif
 #endif
 
 #ifndef USB_PID
-#define USB_PID 0xcafe
+  #ifdef BOARD_PRODUCTID
+    #define USB_PID BOARD_PRODUCTID
+  #else
+    #define USB_PID 0xcafe
+  #endif
 #endif
 
 #ifndef USB_MANUFACTURER
-#define USB_MANUFACTURER "Unknown"
+
+  #ifdef BOARD_MANUFACTURER
+    #define USB_MANUFACTURER BOARD_MANUFACTURER
+  #else
+    #define USB_MANUFACTURER "Adafruit"
+  #endif
 #endif
 
 #ifndef USB_PRODUCT
-#define USB_PRODUCT "Unknown"
+  #ifdef BOARD_NAME
+    #define USB_PRODUCT BOARD_NAME
+  #else
+    #define USB_PRODUCT "Unknown"
+  #endif
 #endif
 
 #ifndef USB_LANGUAGE
