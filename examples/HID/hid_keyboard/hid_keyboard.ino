@@ -40,6 +40,11 @@ uint8_t pincount = sizeof(pins)/sizeof(pins[0]);
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+#if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
+  // Manual begin() is required on core without built-in support for TinyUSB such as mbed rp2040
+  TinyUSBDevice.begin(0);
+#endif
+
   usb_hid.setPollInterval(2);
   usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
   usb_hid.setReportCallback(NULL, hid_report_callback);

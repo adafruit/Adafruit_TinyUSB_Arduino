@@ -45,6 +45,11 @@ Adafruit_USBD_MSC usb_msc;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+#if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
+  // Manual begin() is required on core without built-in support for TinyUSB such as mbed rp2040
+  TinyUSBDevice.begin(0);
+#endif
+
   // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
   usb_msc.setID("Adafruit", "Mass Storage", "1.0");
   

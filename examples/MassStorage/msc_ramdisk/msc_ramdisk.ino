@@ -22,8 +22,7 @@ Adafruit_USBD_MSC usb_msc;
 void setup()
 {
 #if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
-  // Manual begin() is required on unsupported BSP such as mbed rp2040
-  // VID/PID, Manufacturer & Product string also need to be set as well
+  // Manual begin() is required on core without built-in support for TinyUSB such as mbed rp2040
   TinyUSBDevice.begin(0);
 #endif
 

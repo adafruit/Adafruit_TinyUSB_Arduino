@@ -36,6 +36,11 @@ hid_gamepad_report_t    gp;     // defined in hid.h from Adafruit_TinyUSB_Arduin
 
 void setup() 
 {
+#if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
+  // Manual begin() is required on core without built-in support for TinyUSB such as mbed rp2040
+  TinyUSBDevice.begin(0);
+#endif
+
   Serial.begin(115200);
   
   usb_hid.setPollInterval(2);
