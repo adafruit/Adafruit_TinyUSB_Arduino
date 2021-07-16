@@ -66,7 +66,7 @@ void setup()
   Serial.println("Adafruit TinyUSB HID Composite example");
 
   // wait until device mounted
-  while( !USBDevice.mounted() ) delay(1);
+  while( !TinyUSBDevice.mounted() ) delay(1);
 }
 
 void loop()
@@ -78,11 +78,11 @@ void loop()
   bool btn_pressed = (digitalRead(pin) == activeState);
 
   // Remote wakeup
-  if ( USBDevice.suspended() && btn_pressed )
+  if ( TinyUSBDevice.suspended() && btn_pressed )
   {
     // Wake up host if we are in suspend mode
     // and REMOTE_WAKEUP feature is enabled by host
-    USBDevice.remoteWakeup();
+    TinyUSBDevice.remoteWakeup();
   }
 
   /*------------- Mouse -------------*/

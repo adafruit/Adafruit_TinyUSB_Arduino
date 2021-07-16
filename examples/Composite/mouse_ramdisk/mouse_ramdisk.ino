@@ -66,7 +66,7 @@ void setup()
   usb_hid.begin();
 
   Serial.begin(115200);
-  while( !USBDevice.mounted() ) delay(1);   // wait for native usb
+  while( !TinyUSBDevice.mounted() ) delay(1);   // wait for native usb
 
   Serial.println("Adafruit TinyUSB Mouse + Mass Storage (ramdisk) example");
 }
@@ -80,7 +80,7 @@ void loop()
   uint32_t const btn = (digitalRead(pin) == activeState);
 
   // Remote wakeup
-  if ( USBDevice.suspended() && btn )
+  if ( TinyUSBDevice.suspended() && btn )
   {
     // Wake up host if we are in suspend mode
     // and REMOTE_WAKEUP feature is enabled by host

@@ -58,7 +58,7 @@ void setup()
   }
 
   // wait until device mounted
-  while( !USBDevice.mounted() ) delay(1);
+  while( !TinyUSBDevice.mounted() ) delay(1);
 }
 
 
@@ -68,11 +68,11 @@ void loop()
   delay(2);
 
 //  // Remote wakeup
-//  if ( USBDevice.suspended() && btn )
+//  if ( TinyUSBDevice.suspended() && btn )
 //  {
 //    // Wake up host if we are in suspend mode
 //    // and REMOTE_WAKEUP feature is enabled by host
-//    USBDevice.remoteWakeup();
+//    TinyUSBDevice.remoteWakeup();
 //  }
 
   if ( !usb_hid.ready() ) return;

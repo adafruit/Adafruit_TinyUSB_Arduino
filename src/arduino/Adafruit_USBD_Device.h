@@ -107,6 +107,12 @@ private:
                                                   uint16_t langid);
 };
 
-extern Adafruit_USBD_Device USBDevice;
+extern Adafruit_USBD_Device TinyUSBDevice;
+
+// USBDevice has a high chance to conflict with other usb stack
+// only define if supported BSP
+#ifdef USE_TINYUSB
+#define USBDevice  TinyUSBDevice
+#endif
 
 #endif /* ADAFRUIT_USBD_DEVICE_H_ */
