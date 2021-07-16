@@ -30,11 +30,11 @@
 
 // mbed old pico-sdk need to wrap with cpp
 extern "C" {
+#include "hardware/flash.h"
 #include "hardware/irq.h"
 #include "pico/bootrom.h"
 #include "pico/mutex.h"
 #include "pico/time.h"
-#include "hardware/flash.h"
 }
 
 #include "arduino/Adafruit_TinyUSB_API.h"
@@ -60,31 +60,27 @@ extern "C" {
 #include "mbed.h"
 static mbed::Ticker _usb_ticker;
 
-#define get_unique_id(_serial)    flash_get_unique_id(_serial)
+#define get_unique_id(_serial) flash_get_unique_id(_serial)
 
-static void ticker_task(void)
-{
-  irq_set_pending(USB_TASK_IRQ);
-}
+static void ticker_task(void) { irq_set_pending(USB_TASK_IRQ); }
 
-static void setup_periodic_usb_hanlder(uint64_t us)
-{
-  _usb_ticker.attach(ticker_task, (std::chrono::microseconds) us);
+static void setup_periodic_usb_hanlder(uint64_t us) {
+  _usb_ticker.attach(ticker_task, (std::chrono::microseconds)us);
 }
 
 #else
 
 #include "pico/unique_id.h"
 
-#define get_unique_id(_serial)    pico_get_unique_board_id((pico_unique_board_id_t *)_serial);
+#define get_unique_id(_serial)                                                 \
+  pico_get_unique_board_id((pico_unique_board_id_t *)_serial);
 
 static int64_t timer_task(__unused alarm_id_t id, __unused void *user_data) {
   irq_set_pending(USB_TASK_IRQ);
   return USB_TASK_INTERVAL;
 }
 
-static void setup_periodic_usb_hanlder(uint64_t us)
-{
+static void setup_periodic_usb_hanlder(uint64_t us) {
   add_alarm_in_us(us, timer_task, NULL, true);
 }
 
@@ -115,7 +111,7 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
 
   irq_set_enabled(USBCTRL_IRQ, false);
   irq_handler_t current_handler = irq_get_exclusive_handler(USBCTRL_IRQ);
-  if(current_handler) {
+  if (current_handler) {
     irq_remove_handler(USBCTRL_IRQ, current_handler);
   }
 
