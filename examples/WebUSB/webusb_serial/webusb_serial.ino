@@ -54,7 +54,7 @@ void setup()
   Serial.begin(115200);
 
   // wait until device mounted
-  //while( !TinyUSBDevice.mounted() ) delay(1);
+  while( !TinyUSBDevice.mounted() ) delay(1);
 
   Serial.println("TinyUSB WebUSB Serial example");
 }
