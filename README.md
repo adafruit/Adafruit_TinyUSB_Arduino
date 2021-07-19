@@ -2,13 +2,12 @@
 
 [![Build Status](https://github.com/adafruit/Adafruit_TinyUSB_Arduino/workflows/Build/badge.svg)](https://github.com/adafruit/Adafruit_TinyUSB_Arduino/actions) [![License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](https://opensource.org/licenses/MIT)
 
-This library is a Arduino-friendly version of [TinyUSB](https://github.com/hathach/tinyusb) stack. It is designed with structure and APIs that are easily integrated to existing or new Arduino Core. Supported platform including: 
+This library is a Arduino-friendly version of [TinyUSB](https://github.com/hathach/tinyusb) stack.
+It is designed with structure and APIs that are easily integrated to an Arduino Core.
 
-- [Adafruit_nRF52_Arduino](https://github.com/adafruit/Adafruit_nRF52_Arduino)
-- [Adafruit/ArduinoCore-samd](https://github.com/adafruit/ArduinoCore-samd) selectable via menu`Tools->USB Stack->TinyUSB`
-- [earlephilhower/arduino-pico](https://github.com/earlephilhower/arduino-pico) selectable via menu `Tools->USB Stack->Adafruit TinyUSB`
+## Features
 
-Current class drivers supported are
+Currently only support device mode only, supported class drivers are:
 
 - Communication (CDC): which is used to implement `Serial` monitor
 - Human Interface Device (HID): Generic (In & Out), Keyboard, Mouse, Gamepad etc ...
@@ -16,7 +15,30 @@ Current class drivers supported are
 - Musical Instrument Digital Interface (MIDI)
 - WebUSB with vendor specific class
 
-For supported ArduinoCore, to use this library, you only need to have `<Adafruit_TinyUSB.h>` in your sketch. If your ArduinoCore does not support TinyUSB library yet, it is rather simple to port.
+## Supported Cores
+
+There are 2 type of supported cores: with and without built-in support for TinyUSB. Built-in support provide seamless integration but requires extra code added to core's source code. Unfortunately it is not always easy or possible to make those modification.
+
+### Cores with built-in support
+
+Following core has Tinyusb as either the primary usb stack or selectable via menu `Tools->USB Stack`. You only need to include `<Adafruit_TinyUSB.h>` in your sketch to use.
+
+- [Adafruit_nRF52_Arduino](https://github.com/adafruit/Adafruit_nRF52_Arduino)
+- [adafruit/ArduinoCore-samd](https://github.com/adafruit/ArduinoCore-samd)
+- [earlephilhower/arduino-pico](https://github.com/earlephilhower/arduino-pico)
+
+### Cores without built-in support
+
+Following is cores without built-in support
+
+- **mbed_rp2040**
+
+It is still possible to use TinyUSB but with some limits such as:
+
+- `TinyUSB_Device_Init()` need to be manually called in setup()
+- `TinyUSB_Device_Task()` and/or `TinyUSB_Device_FlushCDC()` may (or not) need to be manually called in loop()
+- Use `SerialTinyUSB` name instead of Serial for serial monitor
+- And there could be more other issues, using on these cores should be considered as experimental
 
 ## Class Driver API
 
@@ -24,9 +46,11 @@ More document to write ...
 
 ## Porting Guide
 
-It is rather easy if you want to integrate TinyUSB lib to your ArduinoCore.
+To integrate TinyUSB library to a Arduino core, you will need to make changes to the core for built-in support and library for porting the mcu/platform.
 
-### ArduinoCore Changes
+### Arduino Core Changes
+
+If possible, making changes to core will allow it to have built-in which make it almost transparent to user sketch 
 
 1. Add this repo as submodule (or have local copy) at your ArduioCore/libraries/Adafruit_TinyUSB_Arduino (much like SPI).
 2. Since Serial as CDC is considered as part of the core, we need to have `#include "Adafruit_USBD_CDC.h"` within your `Arduino.h`. For this to work, your `platform.txt` include path need to have `"-I{runtime.platform.path}/libraries/Adafruit_TinyUSB_Arduino/src/arduino"`.

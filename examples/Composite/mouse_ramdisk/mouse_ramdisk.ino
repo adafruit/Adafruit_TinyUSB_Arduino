@@ -47,7 +47,7 @@ void setup()
 {
 #if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
   // Manual begin() is required on core without built-in support for TinyUSB such as mbed rp2040
-  TinyUSBDevice.begin(0);
+  TinyUSB_Device_Init(0);
 #endif
 
   // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
