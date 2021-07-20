@@ -40,6 +40,11 @@ uint8_t pincount = sizeof(pins)/sizeof(pins[0]);
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+#if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
+  // Manual begin() is required on core without built-in support for TinyUSB such as mbed rp2040
+  TinyUSB_Device_Init(0);
+#endif
+
   usb_hid.setPollInterval(2);
   usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
   usb_hid.setReportCallback(NULL, hid_report_callback);
@@ -58,7 +63,7 @@ void setup()
   }
 
   // wait until device mounted
-  while( !USBDevice.mounted() ) delay(1);
+  while( !TinyUSBDevice.mounted() ) delay(1);
 }
 
 
@@ -68,11 +73,11 @@ void loop()
   delay(2);
 
 //  // Remote wakeup
-//  if ( USBDevice.suspended() && btn )
+//  if ( TinyUSBDevice.suspended() && btn )
 //  {
 //    // Wake up host if we are in suspend mode
 //    // and REMOTE_WAKEUP feature is enabled by host
-//    USBDevice.remoteWakeup();
+//    TinyUSBDevice.remoteWakeup();
 //  }
 
   if ( !usb_hid.ready() ) return;

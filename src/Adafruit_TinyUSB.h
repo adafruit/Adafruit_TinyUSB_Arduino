@@ -45,7 +45,7 @@
 #include "arduino/webusb/Adafruit_USBD_WebUSB.h"
 
 // Initialize device hardware, stack, also Serial as CDC
-// Wrapper for USBDevice.begin(rhport)
+// Wrapper for TinyUSBDevice.begin(rhport)
 void TinyUSB_Device_Init(uint8_t rhport);
 
 #endif

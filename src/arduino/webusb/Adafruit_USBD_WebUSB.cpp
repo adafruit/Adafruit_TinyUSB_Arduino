@@ -127,11 +127,11 @@ Adafruit_USBD_WebUSB::Adafruit_USBD_WebUSB(void) {
 }
 
 bool Adafruit_USBD_WebUSB::begin(void) {
-  if (!USBDevice.addInterface(*this))
+  if (!TinyUSBDevice.addInterface(*this))
     return false;
 
   // WebUSB requires to change USB version from 2.0 to 2.1
-  USBDevice.setVersion(0x0210);
+  TinyUSBDevice.setVersion(0x0210);
 
   _webusb_dev = this;
   return true;

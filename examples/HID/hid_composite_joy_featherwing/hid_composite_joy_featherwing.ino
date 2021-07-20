@@ -77,7 +77,7 @@ void setup()
   last_x = ss.analogRead(3);
 
   // wait until device mounted
-  while( !USBDevice.mounted() ) delay(1);
+  while( !TinyUSBDevice.mounted() ) delay(1);
 }
 
 void loop()
@@ -145,10 +145,10 @@ void loop()
 
   /*------------- Remote Wakeup -------------*/
   // Remote wakeup if PC is suspended and we has user interaction with joy feather wing
-  if ( has_action && USBDevice.suspended() )
+  if ( has_action && TinyUSBDevice.suspended() )
   {
     // Wake up only works if REMOTE_WAKEUP feature is enable by host
     // Usually this is the case with Mouse/Keyboard device
-    USBDevice.remoteWakeup();
+    TinyUSBDevice.remoteWakeup();
   }
 }

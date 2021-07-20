@@ -108,7 +108,7 @@ uint16_t Adafruit_USBD_HID::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
 }
 
 bool Adafruit_USBD_HID::begin(void) {
-  if (!USBDevice.addInterface(*this)) {
+  if (!TinyUSBDevice.addInterface(*this)) {
     return false;
   }
 

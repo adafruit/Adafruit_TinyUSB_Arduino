@@ -41,6 +41,11 @@ Adafruit_USBD_HID usb_hid;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+#if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
+  // Manual begin() is required on core without built-in support for TinyUSB such as mbed rp2040
+  TinyUSB_Device_Init(0);
+#endif
+
   usb_hid.enableOutEndpoint(true);
   usb_hid.setPollInterval(2);
   usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
@@ -52,7 +57,7 @@ void setup()
   Serial.begin(115200);
 
   // wait until device mounted
-  while( !USBDevice.mounted() ) delay(1);
+  while( !TinyUSBDevice.mounted() ) delay(1);
 
   Serial.println("Adafruit TinyUSB HID Generic In Out example");
 }

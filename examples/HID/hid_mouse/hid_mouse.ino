@@ -43,6 +43,11 @@ Adafruit_USBD_HID usb_hid;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+#if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
+  // Manual begin() is required on core without built-in support for TinyUSB such as mbed rp2040
+  TinyUSB_Device_Init(0);
+#endif
+
   // Set up button, pullup opposite to active state
   pinMode(pin, activeState ? INPUT_PULLDOWN : INPUT_PULLUP);
 
@@ -55,7 +60,7 @@ void setup()
   Serial.begin(115200);
 
   // wait until device mounted
-  while( !USBDevice.mounted() ) delay(1);
+  while( !TinyUSBDevice.mounted() ) delay(1);
 
   Serial.println("Adafruit TinyUSB HID Mouse example");
 }
@@ -72,11 +77,11 @@ void loop()
   if (!btn_pressed) return;
 
   // Remote wakeup
-  if ( USBDevice.suspended() )
+  if ( TinyUSBDevice.suspended() )
   {
     // Wake up host if we are in suspend mode
     // and REMOTE_WAKEUP feature is enabled by host
-    USBDevice.remoteWakeup();
+    TinyUSBDevice.remoteWakeup();
   }
 
   if ( usb_hid.ready() )

@@ -94,7 +94,7 @@ void setup() {
   for(uint8_t i=0; i<FRAMES; i++) lvl[i] = 256;
 
   // Wait until device is enumerated properly before sending MIDI message
-  while( !USBDevice.mounted() ) delay(1);
+  while( !TinyUSBDevice.mounted() ) delay(1);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

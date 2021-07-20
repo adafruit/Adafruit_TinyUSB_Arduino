@@ -40,7 +40,7 @@ Adafruit_USBD_MIDI::Adafruit_USBD_MIDI(void) : _n_cables(1) {}
 void Adafruit_USBD_MIDI::setCables(uint8_t n_cables) { _n_cables = n_cables; }
 
 bool Adafruit_USBD_MIDI::begin(void) {
-  if (!USBDevice.addInterface(*this))
+  if (!TinyUSBDevice.addInterface(*this))
     return false;
 
   return true;

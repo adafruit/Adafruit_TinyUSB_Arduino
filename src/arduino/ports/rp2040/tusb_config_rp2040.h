@@ -32,11 +32,7 @@ extern "C" {
 //--------------------------------------------------------------------
 // COMMON CONFIGURATION
 //--------------------------------------------------------------------
-#ifdef USE_TINYUSB
 #define CFG_TUSB_RHPORT0_MODE OPT_MODE_DEVICE
-#else
-#define CFG_TUSB_RHPORT0_MODE OPT_MODE_NONE
-#endif
 
 #ifndef CFG_TUSB_MCU
 #define CFG_TUSB_MCU OPT_MCU_RP2040

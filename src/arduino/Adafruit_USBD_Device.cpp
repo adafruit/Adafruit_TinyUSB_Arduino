@@ -34,20 +34,42 @@
 // USB Information can be defined in variant file e.g pins_arduino.h
 #include "Arduino.h"
 
+// - USB_VID, USB_PID, USB_MANUFACTURER, USB_PRODUCT are defined on most
+// core that has built-in support for TinyUSB. Otherwise
+// - BOARD_VENDORID, BOARD_PRODUCTID, BOARD_MANUFACTURER, BOARD_NAME are use
+// if defined, mostly on mbed core
+
 #ifndef USB_VID
-#define USB_VID 0xcafe
+#ifdef BOARD_VENDORID
+#define USB_VID BOARD_VENDORID
+#else
+#define USB_VID 0x239a
+#endif
 #endif
 
 #ifndef USB_PID
+#ifdef BOARD_PRODUCTID
+#define USB_PID BOARD_PRODUCTID
+#else
 #define USB_PID 0xcafe
+#endif
 #endif
 
 #ifndef USB_MANUFACTURER
-#define USB_MANUFACTURER "Unknown"
+
+#ifdef BOARD_MANUFACTURER
+#define USB_MANUFACTURER BOARD_MANUFACTURER
+#else
+#define USB_MANUFACTURER "Adafruit"
+#endif
 #endif
 
 #ifndef USB_PRODUCT
+#ifdef BOARD_NAME
+#define USB_PRODUCT BOARD_NAME
+#else
 #define USB_PRODUCT "Unknown"
+#endif
 #endif
 
 #ifndef USB_LANGUAGE
@@ -60,7 +82,7 @@
 
 enum { STRID_LANGUAGE = 0, STRID_MANUFACTURER, STRID_PRODUCT, STRID_SERIAL };
 
-Adafruit_USBD_Device USBDevice;
+Adafruit_USBD_Device TinyUSBDevice;
 
 Adafruit_USBD_Device::Adafruit_USBD_Device(void) {}
 
@@ -291,7 +313,7 @@ extern "C" {
 // Invoked when received GET DEVICE DESCRIPTOR
 // Application return pointer to descriptor
 uint8_t const *tud_descriptor_device_cb(void) {
-  return (uint8_t const *)&USBDevice._desc_device;
+  return (uint8_t const *)&TinyUSBDevice._desc_device;
 }
 
 // Invoked when received GET CONFIGURATION DESCRIPTOR
@@ -299,7 +321,7 @@ uint8_t const *tud_descriptor_device_cb(void) {
 // enough for transfer to complete
 uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
   (void)index;
-  return USBDevice._desc_cfg;
+  return TinyUSBDevice._desc_cfg;
 }
 
 // Invoked when received GET STRING DESCRIPTOR request
@@ -308,7 +330,7 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
 // OS 1.0 Descriptors.
 // https://docs.microsoft.com/en-us/windows-hardware/drivers/usbcon/microsoft-defined-usb-descriptors
 uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
-  return USBDevice.descriptor_string_cb(index, langid);
+  return TinyUSBDevice.descriptor_string_cb(index, langid);
 }
 
 } // extern C
