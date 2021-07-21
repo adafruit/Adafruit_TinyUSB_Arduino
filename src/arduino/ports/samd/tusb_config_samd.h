@@ -85,6 +85,9 @@ extern "C" {
 #define CFG_TUD_VENDOR_RX_BUFSIZE 64
 #define CFG_TUD_VENDOR_TX_BUFSIZE 64
 
+// Vendor Max number of (bidirectional) endpoints
+#define CFG_TUD_EP_MAX 8
+
 #ifdef __cplusplus
 }
 #endif

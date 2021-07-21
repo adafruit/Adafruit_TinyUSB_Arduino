@@ -73,6 +73,7 @@ void Adafruit_USBD_CDC::begin(uint32_t baud) {
 
   // too many instances
   if (!(_instance_count < CFG_TUD_CDC)) {
+    TU_LOG1("%s: Failed: %s\r\n", __PRETTY_FUNCTION__, "CFG_TUD_CDC count exceeded");
     return;
   }
 
