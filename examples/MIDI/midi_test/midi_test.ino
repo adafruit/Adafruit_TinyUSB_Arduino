@@ -38,6 +38,11 @@ byte note_sequence[] = {
 
 void setup()
 {
+#if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
+  // Manual begin() is required on core without built-in support for TinyUSB such as mbed rp2040
+  TinyUSB_Device_Init(0);
+#endif
+
   pinMode(LED_BUILTIN, OUTPUT);
   
   //usb_midi.setStringDescriptor("TinyUSB MIDI");
@@ -56,7 +61,7 @@ void setup()
   Serial.begin(115200);
 
   // wait until device mounted
-  while( !USBDevice.mounted() ) delay(1);
+  while( !TinyUSBDevice.mounted() ) delay(1);
 }
 
 void loop()
@@ -98,13 +103,25 @@ void loop()
 void handleNoteOn(byte channel, byte pitch, byte velocity)
 {
   // Log when a note is pressed.
-  Serial.printf("Note on: channel = %d, pitch = %d, velocity - %d", channel, pitch, velocity);
-  Serial.println();
+  Serial.print("Note on: channel = ");
+  Serial.print(channel);
+
+  Serial.print(" pitch = ");
+  Serial.print(pitch);
+
+  Serial.print(" velocity = ");
+  Serial.println(velocity);
 }
 
 void handleNoteOff(byte channel, byte pitch, byte velocity)
 {
   // Log when a note is released.
-  Serial.printf("Note off: channel = %d, pitch = %d, velocity - %d", channel, pitch, velocity);
-  Serial.println();
+  Serial.print("Note off: channel = ");
+  Serial.print(channel);
+
+  Serial.print(" pitch = ");
+  Serial.print(pitch);
+
+  Serial.print(" velocity = ");
+  Serial.println(velocity);
 }

@@ -79,7 +79,7 @@ void Adafruit_USBD_CDC::begin(uint32_t baud) {
 
   _instance = _instance_count++;
   this->setStringDescriptor("TinyUSB Serial");
-  USBDevice.addInterface(*this);
+  TinyUSBDevice.addInterface(*this);
 }
 
 void Adafruit_USBD_CDC::begin(uint32_t baud, uint8_t config) {
@@ -89,7 +89,7 @@ void Adafruit_USBD_CDC::begin(uint32_t baud, uint8_t config) {
 
 void Adafruit_USBD_CDC::end(void) {
   // Reset configuration descriptor without Serial as CDC
-  USBDevice.clearConfiguration();
+  TinyUSBDevice.clearConfiguration();
   _instance_count = 0;
 }
 

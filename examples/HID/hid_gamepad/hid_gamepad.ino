@@ -36,6 +36,11 @@ hid_gamepad_report_t    gp;     // defined in hid.h from Adafruit_TinyUSB_Arduin
 
 void setup() 
 {
+#if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
+  // Manual begin() is required on core without built-in support for TinyUSB such as mbed rp2040
+  TinyUSB_Device_Init(0);
+#endif
+
   Serial.begin(115200);
   
   usb_hid.setPollInterval(2);
@@ -44,7 +49,7 @@ void setup()
   usb_hid.begin();
 
   // wait until device mounted
-  while( !USBDevice.mounted() ) delay(1);
+  while( !TinyUSBDevice.mounted() ) delay(1);
   
   Serial.println("Adafruit TinyUSB HID Gamepad example");
 }
@@ -52,11 +57,11 @@ void setup()
 void loop() 
 { 
 //  // Remote wakeup
-//  if ( USBDevice.suspended() && btn )
+//  if ( TinyUSBDevice.suspended() && btn )
 //  {
 //    // Wake up host if we are in suspend mode
 //    // and REMOTE_WAKEUP feature is enabled by host
-//    USBDevice.remoteWakeup();
+//    TinyUSBDevice.remoteWakeup();
 //  }
 
   if ( !usb_hid.ready() ) return;
