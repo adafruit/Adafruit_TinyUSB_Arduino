@@ -68,9 +68,9 @@ void setup()
   usb_hid.begin();
 
   Serial.begin(115200);
-  Serial.println("Waiting for USBDevice mount");
+  Serial.println("Waiting for TinyUSBDevice mount");
   // wait until device mounted
-  while( !USBDevice.mounted() ) delay(1);
+  while( !TinyUSBDevice.mounted() ) delay(1);
 
   Serial.println("Adafruit TinyUSB HID Generic In Out example");
 }

@@ -68,7 +68,7 @@ void setup()
   pixels.show();
 
   // wait until device mounted
-  while( !USBDevice.mounted() ) delay(1);
+  while( !TinyUSBDevice.mounted() ) delay(1);
 
   Serial.println("TinyUSB WebUSB RGB example");
 }
