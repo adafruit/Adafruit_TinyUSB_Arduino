@@ -166,11 +166,6 @@ bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface &itf) {
       }
     } else if (desc[1] == TUSB_DESC_ENDPOINT) {
       tusb_desc_endpoint_t *desc_ep = (tusb_desc_endpoint_t *)desc;
-      if (_epin_count >= CFG_TUD_EP_MAX || _epout_count >= CFG_TUD_EP_MAX) {
-        TU_LOG1("%s: Failed: Max endpoints (%d) exceeded\r\n",
-                __PRETTY_FUNCTION__, CFG_TUD_EP_MAX);
-        return false;
-      }
       desc_ep->bEndpointAddress |=
           (desc_ep->bEndpointAddress & 0x80) ? _epin_count++ : _epout_count++;
     }
