@@ -121,7 +121,7 @@ bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface &itf) {
   const char *desc_str = itf.getStringDescriptor();
 
   if (!len) {
-    TU_LOG1("%s: Failed: %s\r\n", __PRETTY_FUNCTION__, "no room for CDC descriptor");
+    TU_LOG1("%s: Failed: %s\r\n", __PRETTY_FUNCTION__, "no room for descriptor");
     return false;
   }
 
