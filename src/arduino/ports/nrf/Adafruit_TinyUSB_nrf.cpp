@@ -64,7 +64,13 @@ static void usb_hardware_init(void);
 static void usb_device_task(void *param) {
   (void)param;
 
+  // Priorities 0, 1, 4 (nRF52) are reserved for SoftDevice
+  // 2 is highest for application
+  NVIC_SetPriority(USBD_IRQn, 2);
+
   tusb_init();
+
+  usb_hardware_init();
 
   // RTOS forever loop
   while (1) {
@@ -74,8 +80,6 @@ static void usb_device_task(void *param) {
 
 void TinyUSB_Port_InitDevice(uint8_t rhport) {
   (void)rhport;
-
-  usb_hardware_init();
 
   // Create a task for tinyusb device stack
   xTaskCreate(usb_device_task, "usbd", USBD_STACK_SZ, NULL, TASK_PRIO_HIGH,
@@ -111,10 +115,6 @@ static void power_event_handler(nrfx_power_usb_evt_t event) {
 
 // Init usb hardware when starting up. Softdevice is not enabled yet
 static void usb_hardware_init(void) {
-  // Priorities 0, 1, 4 (nRF52) are reserved for SoftDevice
-  // 2 is highest for application
-  NVIC_SetPriority(USBD_IRQn, 2);
-
   // USB power may already be ready at this time -> no event generated
   // We need to invoke the handler based on the status initially
   uint32_t usb_reg = NRF_POWER->USBREGSTATUS;
