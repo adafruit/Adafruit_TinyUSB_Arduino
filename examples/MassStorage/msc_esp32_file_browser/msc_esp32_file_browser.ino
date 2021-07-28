@@ -40,7 +40,7 @@
 #endif
 
 // Debug with FTDI (Serial0) or USBCDC (Serial)
-#define DBG_SERIAL Serial0
+#define DBG_SERIAL Serial
 
 // ESP32 use same flash device that store code.
 // Therefore there is no need to specify the SPI and SS
@@ -245,11 +245,11 @@ bool handleFileRead(String path) {
     path += "index.htm";
   }
   String contentType = getContentType(path);
-  String pathWithGz = path + ".gz";
-  if (exists(pathWithGz) || exists(path)) {
-    if (exists(pathWithGz)) {
-      path += ".gz";
-    }
+//  String pathWithGz = path + ".gz";
+  if ( /*exists(pathWithGz) ||*/ exists(path)) {
+//    if (exists(pathWithGz)) {
+//      path += ".gz";
+//    }
     File file = fatfs.open(path, O_READ);
     server.streamFile(file, contentType);
     file.close();
