@@ -33,12 +33,12 @@
 #include "device/usbd_pvt.h"
 #include "device/dcd.h"
 
-#ifndef CFG_TUD_TASK_QUEUE_SZ
-#define CFG_TUD_TASK_QUEUE_SZ   16
-#endif
+//--------------------------------------------------------------------+
+// USBD Configuration
+//--------------------------------------------------------------------+
 
-#ifndef CFG_TUD_EP_MAX
-#define CFG_TUD_EP_MAX          9
+#ifndef CFG_TUD_TASK_QUEUE_SZ
+  #define CFG_TUD_TASK_QUEUE_SZ   16
 #endif
 
 //--------------------------------------------------------------------+
@@ -65,7 +65,7 @@ typedef struct
   uint8_t speed;
 
   uint8_t itf2drv[16];     // map interface number to driver (0xff is invalid)
-  uint8_t ep2drv[CFG_TUD_EP_MAX][2]; // map endpoint to driver ( 0xff is invalid )
+  uint8_t ep2drv[CFG_TUD_ENDPPOINT_MAX][2]; // map endpoint to driver ( 0xff is invalid )
 
   struct TU_ATTR_PACKED
   {
@@ -74,7 +74,7 @@ typedef struct
     volatile bool claimed : 1;
 
     // TODO merge ep2drv here, 4-bit should be sufficient
-  }ep_status[CFG_TUD_EP_MAX][2];
+  }ep_status[CFG_TUD_ENDPPOINT_MAX][2];
 
 }usbd_device_t;
 
@@ -188,9 +188,9 @@ static usbd_class_driver_t const _usbd_driver[] =
   },
   #endif
 
-  #if CFG_TUD_DFU_MODE
+  #if CFG_TUD_DFU
   {
-    DRIVER_NAME("DFU-MODE")
+    DRIVER_NAME("DFU")
     .init             = dfu_moded_init,
     .reset            = dfu_moded_reset,
     .open             = dfu_moded_open,
@@ -831,7 +831,7 @@ static bool process_set_config(uint8_t rhport, uint8_t cfg_num)
 
   // Parse interface descriptor
   uint8_t const * p_desc   = ((uint8_t const*) desc_cfg) + sizeof(tusb_desc_configuration_t);
-  uint8_t const * desc_end = ((uint8_t const*) desc_cfg) + desc_cfg->wTotalLength;
+  uint8_t const * desc_end = ((uint8_t const*) desc_cfg) + tu_le16toh(desc_cfg->wTotalLength);
 
   while( p_desc < desc_end )
   {
@@ -953,9 +953,8 @@ static bool process_get_descriptor(uint8_t rhport, tusb_control_request_t const 
 
       tusb_desc_bos_t const* desc_bos = (tusb_desc_bos_t const*) tud_descriptor_bos_cb();
 
-      uint16_t total_len;
       // Use offsetof to avoid pointer to the odd/misaligned address
-      memcpy(&total_len, (uint8_t*) desc_bos + offsetof(tusb_desc_bos_t, wTotalLength), 2);
+      uint16_t const total_len = tu_le16toh( tu_unaligned_read16((uint8_t*) desc_bos + offsetof(tusb_desc_bos_t, wTotalLength)) );
 
       return tud_control_xfer(rhport, p_request, (void*) desc_bos, total_len);
     }
@@ -968,9 +967,8 @@ static bool process_get_descriptor(uint8_t rhport, tusb_control_request_t const 
       tusb_desc_configuration_t const* desc_config = (tusb_desc_configuration_t const*) tud_descriptor_configuration_cb(desc_index);
       TU_ASSERT(desc_config);
 
-      uint16_t total_len;
       // Use offsetof to avoid pointer to the odd/misaligned address
-      memcpy(&total_len, (uint8_t*) desc_config + offsetof(tusb_desc_configuration_t, wTotalLength), 2);
+      uint16_t const total_len = tu_le16toh( tu_unaligned_read16((uint8_t*) desc_config + offsetof(tusb_desc_configuration_t, wTotalLength)) );
 
       return tud_control_xfer(rhport, p_request, (void*) desc_config, total_len);
     }
@@ -1150,14 +1148,17 @@ void usbd_defer_func(osal_task_func_t func, void* param, bool in_isr)
 
 bool usbd_edpt_open(uint8_t rhport, tusb_desc_endpoint_t const * desc_ep)
 {
-  TU_LOG2("  Open EP %02X with Size = %u\r\n", desc_ep->bEndpointAddress, desc_ep->wMaxPacketSize.size);
+  uint16_t const max_packet_size = tu_le16toh(desc_ep->wMaxPacketSize.size);
+
+  TU_LOG2("  Open EP %02X with Size = %u\r\n", desc_ep->bEndpointAddress, max_packet_size);
+  TU_ASSERT(tu_edpt_number(desc_ep->bEndpointAddress) < CFG_TUD_ENDPPOINT_MAX);
 
   switch (desc_ep->bmAttributes.xfer)
   {
     case TUSB_XFER_ISOCHRONOUS:
     {
-      uint16_t const max_epsize = (_usbd_dev.speed == TUSB_SPEED_HIGH ? 1024 : 1023);
-      TU_ASSERT(desc_ep->wMaxPacketSize.size <= max_epsize);
+      uint16_t const spec_size = (_usbd_dev.speed == TUSB_SPEED_HIGH ? 1024 : 1023);
+      TU_ASSERT(max_packet_size <= spec_size);
     }
     break;
 
@@ -1165,18 +1166,18 @@ bool usbd_edpt_open(uint8_t rhport, tusb_desc_endpoint_t const * desc_ep)
       if (_usbd_dev.speed == TUSB_SPEED_HIGH)
       {
         // Bulk highspeed must be EXACTLY 512
-        TU_ASSERT(desc_ep->wMaxPacketSize.size == 512);
+        TU_ASSERT(max_packet_size == 512);
       }else
       {
         // TODO Bulk fullspeed can only be 8, 16, 32, 64
-        TU_ASSERT(desc_ep->wMaxPacketSize.size <= 64);
+        TU_ASSERT(max_packet_size <= 64);
       }
     break;
 
     case TUSB_XFER_INTERRUPT:
     {
-      uint16_t const max_epsize = (_usbd_dev.speed == TUSB_SPEED_HIGH ? 1024 : 64);
-      TU_ASSERT(desc_ep->wMaxPacketSize.size <= max_epsize);
+      uint16_t const spec_size = (_usbd_dev.speed == TUSB_SPEED_HIGH ? 1024 : 64);
+      TU_ASSERT(max_packet_size <= spec_size);
     }
     break;
 
@@ -1243,7 +1244,7 @@ bool usbd_edpt_xfer(uint8_t rhport, uint8_t ep_addr, uint8_t * buffer, uint16_t 
   uint8_t const epnum = tu_edpt_number(ep_addr);
   uint8_t const dir   = tu_edpt_dir(ep_addr);
 
-  TU_LOG2("  Queue EP %02X with %u bytes ... ", ep_addr, total_bytes);
+  TU_LOG2("  Queue EP %02X with %u bytes ...\r\n", ep_addr, total_bytes);
 
   // Attempt to transfer on a busy endpoint, sound like an race condition !
   TU_ASSERT(_usbd_dev.ep_status[epnum][dir].busy == 0);
@@ -1254,14 +1255,13 @@ bool usbd_edpt_xfer(uint8_t rhport, uint8_t ep_addr, uint8_t * buffer, uint16_t 
 
   if ( dcd_edpt_xfer(rhport, ep_addr, buffer, total_bytes) )
   {
-    TU_LOG2("OK\r\n");
     return true;
   }else
   {
     // DCD error, mark endpoint as ready to allow next transfer
     _usbd_dev.ep_status[epnum][dir].busy = false;
     _usbd_dev.ep_status[epnum][dir].claimed = 0;
-    TU_LOG2("failed\r\n");
+    TU_LOG2("FAILED\r\n");
     TU_BREAKPOINT();
     return false;
   }
