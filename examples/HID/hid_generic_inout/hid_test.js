@@ -62,7 +62,7 @@ function anySupportedBoard(d) {
 
 
 function isDevice(board,d){
-  // product id 0xff is matches all
+	// product id 0xff is matches all
 	return d.vendorId==board[0] && (d.productId==board[1] || board[1] == 0xFFFF);
 }
 
