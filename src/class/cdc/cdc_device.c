@@ -466,7 +466,7 @@ bool cdcd_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint32_
     {
       // If there is no data left, a ZLP should be sent if
       // xferred_bytes is multiple of EP Packet size and not zero
-      if ( !tu_fifo_count(&p_cdc->tx_ff) && xferred_bytes && (0 == (xferred_bytes & (BULK_PACKET_SIZE-1))) )
+      if ( !tu_fifo_count(&p_cdc->tx_ff) /* && xferred_bytes && (0 == (xferred_bytes & (BULK_PACKET_SIZE-1))) */)
       {
         if ( usbd_edpt_claim(rhport, p_cdc->ep_in) )
         {
