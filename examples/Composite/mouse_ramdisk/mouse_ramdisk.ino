@@ -34,9 +34,11 @@ Adafruit_USBD_MSC usb_msc;
 #if defined ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS || defined ARDUINO_NRF52840_CIRCUITPLAY
   const int pin = 4; // Left Button
   bool activeState = true;
+
 #elif defined PIN_BUTTON1
   const int pin = PIN_BUTTON1;
   bool activeState = false;
+
 #else
   const int pin = 12;
   bool activeState = false;

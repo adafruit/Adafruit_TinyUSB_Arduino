@@ -21,7 +21,7 @@
 // Single Report (no ID) descriptor
 uint8_t const desc_hid_report[] =
 {
-  TUD_HID_REPORT_DESC_KEYBOARD(),
+  TUD_HID_REPORT_DESC_KEYBOARD()
 };
 
 Adafruit_USBD_HID usb_hid;
@@ -29,11 +29,12 @@ Adafruit_USBD_HID usb_hid;
 // Array of pins and its keycode
 // For keycode definition see BLEHidGeneric.h
 #ifdef ARDUINO_ARCH_RP2040
-uint8_t pins[]    = { D0, D1, D2, D3, D4, D5 };
+  uint8_t pins[]    = { D0, D1, D2, D3, D4, D5 };
 #else
-uint8_t pins[]    = { A0, A1, A2, A3, A4, A5 };
+  uint8_t pins[]    = { A0, A1, A2, A3, A4, A5 };
 #endif
-uint8_t hidcode[] = { HID_KEY_0, HID_KEY_1, HID_KEY_2, HID_KEY_3 , HID_KEY_4, HID_KEY_5 };
+
+uint8_t hidcode[] = { HID_KEY_ARROW_RIGHT, HID_KEY_ARROW_LEFT, HID_KEY_ARROW_DOWN, HID_KEY_ARROW_UP , HID_KEY_4, HID_KEY_5 };
 
 uint8_t pincount = sizeof(pins)/sizeof(pins[0]);
 
@@ -45,6 +46,7 @@ void setup()
   TinyUSB_Device_Init(0);
 #endif
 
+  usb_hid.setBootProtocol(HID_ITF_PROTOCOL_KEYBOARD);
   usb_hid.setPollInterval(2);
   usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
   usb_hid.setReportCallback(NULL, hid_report_callback);
@@ -72,18 +74,8 @@ void loop()
   // poll gpio once each 2 ms
   delay(2);
 
-//  // Remote wakeup
-//  if ( TinyUSBDevice.suspended() && btn )
-//  {
-//    // Wake up host if we are in suspend mode
-//    // and REMOTE_WAKEUP feature is enabled by host
-//    TinyUSBDevice.remoteWakeup();
-//  }
-
-  if ( !usb_hid.ready() ) return;
-
+  // used to avoid send multiple consecutive zero report for keyboard
   static bool keyPressedPreviously = false;
-  bool anyKeyPressed = false;
 
   uint8_t count=0;
   uint8_t keycode[6] = { 0 };
@@ -97,35 +89,38 @@ void loop()
       keycode[count++] = hidcode[i];
 
       // 6 is max keycode per report
-      if (count == 6)
-      {
-        usb_hid.keyboardReport(0, 0, keycode);
-        delay(2); // delay for report to send out
-
-        // reset report
-        count = 0;
-        memset(keycode, 0, 6);
-      }
-
-      // used later
-      anyKeyPressed = true;
-      keyPressedPreviously = true;
+      if (count == 6) break;
     }
   }
 
-  // Send any remaining keys (not accumulated up to 6)
-  if ( count )
+  if ( TinyUSBDevice.suspended() && count )
   {
-    usb_hid.keyboardReport(0, 0, keycode);
+    // Wake up host if we are in suspend mode
+    // and REMOTE_WAKEUP feature is enabled by host
+    TinyUSBDevice.remoteWakeup();
   }
 
-  // Send All-zero report to indicate there is no keys pressed
-  // Most of the time, it is, though we don't need to send zero report
-  // every loop(), only a key is pressed in previous loop()
-  if ( !anyKeyPressed && keyPressedPreviously )
+  // skip if hid is not ready e.g still transferring previous report
+  if ( !usb_hid.ready() ) return;
+
+  if ( count )
   {
-    keyPressedPreviously = false;
-    usb_hid.keyboardRelease(0);
+    // Send report if there is key pressed
+    uint8_t const report_id = 0;
+    uint8_t const modifier = 0;
+
+    keyPressedPreviously = true;
+    usb_hid.keyboardReport(report_id, modifier, keycode);
+  }else
+  {
+    // Send All-zero report to indicate there is no keys pressed
+    // Most of the time, it is, though we don't need to send zero report
+    // every loop(), only a key is pressed in previous loop()
+    if ( keyPressedPreviously )
+    {
+      keyPressedPreviously = false;
+      usb_hid.keyboardRelease(0);
+    }
   }
 }
 
