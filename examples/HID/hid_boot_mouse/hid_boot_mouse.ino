@@ -14,21 +14,23 @@
 /* This sketch demonstrates USB HID mouse
  * Press button pin will move
  * - mouse toward bottom right of monitor
- * 
+ *
  * Depending on the board, the button pin
  * and its active state (when pressed) are different
  */
-#if defined ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS
+#if defined ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS || defined ARDUINO_NRF52840_CIRCUITPLAY
   const int pin = 4; // Left Button
   bool activeState = true;
-#elif defined ARDUINO_NRF52840_FEATHER
-  const int pin = 7; // UserSw
+
+#elif defined PIN_BUTTON1
+  const int pin = PIN_BUTTON1;
   bool activeState = false;
+
 #else
   const int pin = 12;
   bool activeState = false;
 #endif
-  
+
 
 // HID report descriptor using TinyUSB's template
 // Single Report (no ID) descriptor
@@ -51,6 +53,7 @@ void setup()
   // Set up button, pullup opposite to active state
   pinMode(pin, activeState ? INPUT_PULLDOWN : INPUT_PULLUP);
 
+  usb_hid.setBootProtocol(HID_ITF_PROTOCOL_MOUSE);
   usb_hid.setPollInterval(2);
   usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
   //usb_hid.setStringDescriptor("TinyUSB Mouse");
@@ -86,7 +89,8 @@ void loop()
 
   if ( usb_hid.ready() )
   {
+    uint8_t const report_id = 0; // no ID
     int8_t const delta = 5;
-    usb_hid.mouseMove(0, delta, delta); // no ID: right + down
+    usb_hid.mouseMove(report_id, delta, delta); // right + down
   }
 }
