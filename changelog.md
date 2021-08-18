@@ -1,5 +1,28 @@
 # Adafruit TinyUSB Arduino Library Changelog
 
+## 1.4.4 - 2021.08.18
+
+- Update tinyusb stack
+- Fully support nRF5x suspend, resume & remote wakeup
+- Update hid_keyboard/mouse example to hid boot keyboard/mouse
+
+## 1.4.3 - 2021.08.11
+
+- Fix HID generic inout example python/js script cause missing 1st byte in report
+- Use correct HID code for newline 0x28
+
+## 1.4.2 - 2021.08.03
+
+- Update tinyusb to match upstream
+
+## 1.4.1 - 2021.07.27
+
+- Fix nRF race condition when initialize usb stack
+
+## 1.4.0 - 2021.07.22
+
+- Support rp2040 mbed core as non built-in support
+
 ## 1.3.2 - 2021.07.07
 
 - revert CFG_TUSB_DEBUG = 0 on SAMD port
