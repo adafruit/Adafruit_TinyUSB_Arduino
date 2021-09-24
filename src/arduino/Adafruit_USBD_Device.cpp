@@ -308,6 +308,8 @@ uint16_t const *Adafruit_USBD_Device::descriptor_string_cb(uint8_t index,
 //--------------------------------------------------------------------+
 // TinyUSB stack callbacks
 //--------------------------------------------------------------------+
+#if !defined(ARDUINO_ARCH_ESP32)
+
 extern "C" {
 
 // Invoked when received GET DEVICE DESCRIPTOR
@@ -493,10 +495,12 @@ static int strcpy_utf16(const char *s, uint16_t *buf, int bufsize) {
 }
 
 // TODO just for compiling, will move to DFU specific file
-#if CFG_TUD_DFU_RUNTIME
+#if CFG_TUD_DFU_RUNTIME && !defined(ARDUINO_ARCH_ESP32)
 void tud_dfu_runtime_reboot_to_dfu_cb(void) {
   // TinyUSB_Port_EnterDFU();
 }
 #endif
+
+#endif // ESP32
 
 #endif // TUSB_OPT_DEVICE_ENABLED

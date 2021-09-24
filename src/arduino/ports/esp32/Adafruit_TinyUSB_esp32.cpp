@@ -54,10 +54,7 @@
 #include "driver/gpio.h"
 #include "driver/periph_ctrl.h"
 
-#include "esp_efuse.h"
-#include "esp_efuse_table.h"
 #include "esp_rom_gpio.h"
-
 #include "esp32-hal.h"
 
 #include "esp32s2/rom/usb/chip_usb_dw_wrapper.h"
