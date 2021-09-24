@@ -216,8 +216,8 @@ typedef enum
 //--------------------------------------------------------------------+
 
 // Start of all packed definitions for compiler without per-type packed
-TU_ATTR_PACKED_BEGIN
-TU_ATTR_BIT_FIELD_ORDER_BEGIN
+// TU_ATTR_PACKED_BEGIN
+// TU_ATTR_BIT_FIELD_ORDER_BEGIN
 
 /// Header Functional Descriptor (Communication Interface)
 typedef struct TU_ATTR_PACKED
@@ -398,8 +398,8 @@ typedef struct TU_ATTR_PACKED
 
 TU_VERIFY_STATIC(sizeof(cdc_line_control_state_t) == 2, "size is not correct");
 
-TU_ATTR_PACKED_END  // End of all packed definitions
-TU_ATTR_BIT_FIELD_ORDER_END
+// TU_ATTR_PACKED_END  // End of all packed definitions
+// TU_ATTR_BIT_FIELD_ORDER_END
 
 #ifdef __cplusplus
  }

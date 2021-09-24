@@ -263,8 +263,8 @@ enum
 //--------------------------------------------------------------------+
 
 // Start of all packed definitions for compiler without per-type packed
-TU_ATTR_PACKED_BEGIN
-TU_ATTR_BIT_FIELD_ORDER_BEGIN
+// TU_ATTR_PACKED_BEGIN
+// TU_ATTR_BIT_FIELD_ORDER_BEGIN
 
 /// USB Device Descriptor
 typedef struct TU_ATTR_PACKED
@@ -482,8 +482,8 @@ typedef struct TU_ATTR_PACKED{
 TU_VERIFY_STATIC( sizeof(tusb_control_request_t) == 8, "size is not correct");
 
 
-TU_ATTR_PACKED_END  // End of all packed definitions
-TU_ATTR_BIT_FIELD_ORDER_END
+// TU_ATTR_PACKED_END  // End of all packed definitions
+// TU_ATTR_BIT_FIELD_ORDER_END
 
 //--------------------------------------------------------------------+
 // Endpoint helper
