@@ -50,14 +50,17 @@ uint8_t const desc_hid_report[] =
 };
 
 // USB HID object
-Adafruit_USBD_HID usb_hid;
+// Note: For ESP32 these values cannot be changed after this declaration
+// desc report, desc len, protocol, interval, use out endpoint
+Adafruit_USBD_HID usb_hid(desc_hid_report, sizeof(desc_hid_report), HID_ITF_PROTOCOL_NONE, 2, false);
 
 // the setup function runs once when you press reset or power the board
 void setup()
 {
-  usb_hid.setPollInterval(2);
-  usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
-  //usb_hid.setStringDescriptor("TinyUSB HID Composite");
+  // Following function has no affect on ESP32
+  // usb_hid.setPollInterval(2);
+  // usb_hid.setReportDescriptor();
+  // usb_hid.setStringDescriptor("TinyUSB HID Composite");
 
   usb_hid.begin();
 
@@ -65,10 +68,11 @@ void setup()
   pinMode(pin, activeState ? INPUT_PULLDOWN : INPUT_PULLUP);
 
   Serial.begin(115200);
-  Serial.println("Adafruit TinyUSB HID Composite example");
 
   // wait until device mounted
   while( !TinyUSBDevice.mounted() ) delay(1);
+
+  Serial.println("Adafruit TinyUSB HID Composite example");
 }
 
 void loop()
