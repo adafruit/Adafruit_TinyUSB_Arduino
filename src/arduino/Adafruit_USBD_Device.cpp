@@ -150,7 +150,7 @@ bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface &itf) {
   // - Interface Number & string descriptor
   // - Endpoint address
   while (desc < desc_end) {
-    if (desc[1] == TUSB_DESC_INTERFACE) {
+    if (tu_desc_type(desc) == TUSB_DESC_INTERFACE) {
       tusb_desc_interface_t *desc_itf = (tusb_desc_interface_t *)desc;
       if (desc_itf->bAlternateSetting == 0) {
         _itf_count++;
@@ -163,7 +163,7 @@ bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface &itf) {
           desc_str = NULL;
         }
       }
-    } else if (desc[1] == TUSB_DESC_ENDPOINT) {
+    } else if (tu_desc_type(desc) == TUSB_DESC_ENDPOINT) {
       tusb_desc_endpoint_t *desc_ep = (tusb_desc_endpoint_t *)desc;
       desc_ep->bEndpointAddress |=
           (desc_ep->bEndpointAddress & 0x80) ? _epin_count++ : _epout_count++;
@@ -173,7 +173,7 @@ bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface &itf) {
       return false;
     }
 
-    desc += desc[0]; // next
+    desc += tu_desc_len(desc);
   }
 
   _desc_cfg_len += len;
@@ -250,10 +250,12 @@ bool Adafruit_USBD_Device::begin(uint8_t rhport) {
   _desc_device.bDeviceSubClass = MISC_SUBCLASS_COMMON;
   _desc_device.bDeviceProtocol = MISC_PROTOCOL_IAD;
 
+#ifndef ARDUINO_ARCH_ESP32
   SerialTinyUSB.begin(115200);
 
   // Init device hardware and call tusb_init()
   TinyUSB_Port_InitDevice(rhport);
+#endif
 
   return true;
 }
@@ -271,6 +273,19 @@ bool Adafruit_USBD_Device::remoteWakeup(void) { return tud_remote_wakeup(); }
 bool Adafruit_USBD_Device::detach(void) { return tud_disconnect(); }
 
 bool Adafruit_USBD_Device::attach(void) { return tud_connect(); }
+
+#ifdef ARDUINO_ARCH_ESP32
+
+// EPS32 use built-in core descriptor builder
+uint16_t const *Adafruit_USBD_Device::descriptor_string_cb(uint8_t index,
+                                                           uint16_t langid) {
+  (void)index;
+  (void)langid;
+
+  return NULL;
+}
+
+#else
 
 static int strcpy_utf16(const char *s, uint16_t *buf, int bufsize);
 uint16_t const *Adafruit_USBD_Device::descriptor_string_cb(uint8_t index,
@@ -308,7 +323,7 @@ uint16_t const *Adafruit_USBD_Device::descriptor_string_cb(uint8_t index,
 //--------------------------------------------------------------------+
 // TinyUSB stack callbacks
 //--------------------------------------------------------------------+
-#if !defined(ARDUINO_ARCH_ESP32)
+
 
 extern "C" {
 

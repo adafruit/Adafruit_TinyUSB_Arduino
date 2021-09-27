@@ -34,15 +34,39 @@
 
 static Adafruit_USBD_MSC *_msc_dev = NULL;
 
+#ifdef ARDUINO_ARCH_ESP32
+static uint16_t msc_load_descriptor(uint8_t * dst, uint8_t * itf)
+{
+    // uint8_t str_index = tinyusb_add_string_descriptor("TinyUSB MSC");
+    uint8_t str_index = 0;
+    uint8_t ep_num = tinyusb_get_free_duplex_endpoint();
+    TU_VERIFY (ep_num != 0);
+
+    uint8_t const descriptor[TUD_MSC_DESC_LEN] = {
+        // Interface number, string index, EP Out & EP In address, EP size
+        TUD_MSC_DESCRIPTOR(*itf, str_index, ep_num, (uint8_t)(0x80 | ep_num), EPSIZE)
+    };
+
+    *itf+=1;
+    memcpy(dst, descriptor, TUD_MSC_DESC_LEN);
+    return TUD_MSC_DESC_LEN;
+}
+#endif
+
 Adafruit_USBD_MSC::Adafruit_USBD_MSC(void) {
   _maxlun = 1;
-  memset(_lun, 0, sizeof(_lun));
+  memset(_lun_info, 0, sizeof(_lun_info));
+
+#ifdef ARDUINO_ARCH_ESP32
+  // ESP32 requires setup configuration descriptor on declaration
+  tinyusb_enable_interface(USB_INTERFACE_MSC, TUD_MSC_DESC_LEN, msc_load_descriptor);
+#endif
 }
 
 uint16_t Adafruit_USBD_MSC::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
                                                    uint16_t bufsize) {
   // usb core will automatically update endpoint number
-  uint8_t desc[] = {TUD_MSC_DESCRIPTOR(itfnum, 0, EPOUT, EPIN, EPSIZE)};
+  uint8_t const desc[] = {TUD_MSC_DESCRIPTOR(itfnum, 0, EPOUT, EPIN, EPSIZE)};
   uint16_t const len = sizeof(desc);
 
   if (bufsize < len) {
@@ -59,37 +83,40 @@ uint8_t Adafruit_USBD_MSC::getMaxLun(void) { return _maxlun; }
 
 void Adafruit_USBD_MSC::setID(uint8_t lun, const char *vendor_id,
                               const char *product_id, const char *product_rev) {
-  _lun[lun]._inquiry_vid = vendor_id;
-  _lun[lun]._inquiry_pid = product_id;
-  _lun[lun]._inquiry_rev = product_rev;
+  _lun_info[lun]._inquiry_vid = vendor_id;
+  _lun_info[lun]._inquiry_pid = product_id;
+  _lun_info[lun]._inquiry_rev = product_rev;
 }
 
 void Adafruit_USBD_MSC::setCapacity(uint8_t lun, uint32_t block_count,
                                     uint16_t block_size) {
-  _lun[lun].block_count = block_count;
-  _lun[lun].block_size = block_size;
+  _lun_info[lun].block_count = block_count;
+  _lun_info[lun].block_size = block_size;
 }
 
 void Adafruit_USBD_MSC::setUnitReady(uint8_t lun, bool ready) {
-  _lun[lun].unit_ready = ready;
+  _lun_info[lun].unit_ready = ready;
 }
 
 void Adafruit_USBD_MSC::setReadWriteCallback(uint8_t lun, read_callback_t rd_cb,
                                              write_callback_t wr_cb,
                                              flush_callback_t fl_cb) {
-  _lun[lun].rd_cb = rd_cb;
-  _lun[lun].wr_cb = wr_cb;
-  _lun[lun].fl_cb = fl_cb;
+  _lun_info[lun].rd_cb = rd_cb;
+  _lun_info[lun].wr_cb = wr_cb;
+  _lun_info[lun].fl_cb = fl_cb;
 }
 
 void Adafruit_USBD_MSC::setReadyCallback(uint8_t lun, ready_callback_t cb) {
-  _lun[lun].ready_cb = cb;
+  _lun_info[lun].ready_cb = cb;
 }
 
 bool Adafruit_USBD_MSC::begin(void) {
+
+#ifndef ARDUINO_ARCH_ESP32
   if (!TinyUSBDevice.addInterface(*this)) {
     return false;
   }
+#endif
 
   _msc_dev = this;
   return true;
@@ -117,13 +144,13 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8],
 
   // If not set use default ID "Adafruit - Mass Storage - 1.0"
   const char *vid =
-      (_msc_dev->_lun[lun]._inquiry_vid ? _msc_dev->_lun[lun]._inquiry_vid
+      (_msc_dev->_lun_info[lun]._inquiry_vid ? _msc_dev->_lun_info[lun]._inquiry_vid
                                         : "Adafruit");
   const char *pid =
-      (_msc_dev->_lun[lun]._inquiry_pid ? _msc_dev->_lun[lun]._inquiry_pid
+      (_msc_dev->_lun_info[lun]._inquiry_pid ? _msc_dev->_lun_info[lun]._inquiry_pid
                                         : "Mass Storage");
   const char *rev =
-      (_msc_dev->_lun[lun]._inquiry_rev ? _msc_dev->_lun[lun]._inquiry_rev
+      (_msc_dev->_lun_info[lun]._inquiry_rev ? _msc_dev->_lun_info[lun]._inquiry_rev
                                         : "1.0");
 
   memcpy(vendor_id, vid, tu_min32(strlen(vid), 8));
@@ -138,11 +165,11 @@ bool tud_msc_test_unit_ready_cb(uint8_t lun) {
     return false;
   }
 
-  if (_msc_dev->_lun[lun].ready_cb) {
-    _msc_dev->_lun[lun].unit_ready = _msc_dev->_lun[lun].ready_cb();
+  if (_msc_dev->_lun_info[lun].ready_cb) {
+    _msc_dev->_lun_info[lun].unit_ready = _msc_dev->_lun_info[lun].ready_cb();
   }
 
-  return _msc_dev->_lun[lun].unit_ready;
+  return _msc_dev->_lun_info[lun].unit_ready;
 }
 
 // Callback invoked to determine disk's size
@@ -152,8 +179,8 @@ void tud_msc_capacity_cb(uint8_t lun, uint32_t *block_count,
     return;
   }
 
-  *block_count = _msc_dev->_lun[lun].block_count;
-  *block_size = _msc_dev->_lun[lun].block_size;
+  *block_count = _msc_dev->_lun_info[lun].block_count;
+  *block_size = _msc_dev->_lun_info[lun].block_size;
 }
 
 // Callback invoked when received an SCSI command not in built-in list below
@@ -199,11 +226,11 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset,
                           void *buffer, uint32_t bufsize) {
   (void)offset;
 
-  if (!(_msc_dev && _msc_dev->_lun[lun].rd_cb)) {
+  if (!(_msc_dev && _msc_dev->_lun_info[lun].rd_cb)) {
     return -1;
   }
 
-  return _msc_dev->_lun[lun].rd_cb(lba, buffer, bufsize);
+  return _msc_dev->_lun_info[lun].rd_cb(lba, buffer, bufsize);
 }
 
 // Callback invoked when received WRITE10 command.
@@ -212,22 +239,22 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset,
                            uint8_t *buffer, uint32_t bufsize) {
   (void)offset;
 
-  if (!(_msc_dev && _msc_dev->_lun[lun].wr_cb)) {
+  if (!(_msc_dev && _msc_dev->_lun_info[lun].wr_cb)) {
     return -1;
   }
 
-  return _msc_dev->_lun[lun].wr_cb(lba, buffer, bufsize);
+  return _msc_dev->_lun_info[lun].wr_cb(lba, buffer, bufsize);
 }
 
 // Callback invoked when WRITE10 command is completed (status received and
 // accepted by host). used to flush any pending cache.
 void tud_msc_write10_complete_cb(uint8_t lun) {
-  if (!(_msc_dev && _msc_dev->_lun[lun].fl_cb)) {
+  if (!(_msc_dev && _msc_dev->_lun_info[lun].fl_cb)) {
     return;
   }
 
   // flush pending cache when write10 is complete
-  return _msc_dev->_lun[lun].fl_cb();
+  return _msc_dev->_lun_info[lun].fl_cb();
 }
 
 } // extern "C"

@@ -27,7 +27,7 @@
 
 #include "Adafruit_TinyUSB_API.h"
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(ARDUINO_ARCH_ESP32)
 
 #include "Adafruit_USBD_Interface.h"
 #include "Stream.h"
