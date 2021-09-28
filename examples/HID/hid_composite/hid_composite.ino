@@ -19,8 +19,12 @@
  * Depending on the board, the button pin
  * and its active state (when pressed) are different
  */
-#if defined ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS || defined ARDUINO_NRF52840_CIRCUITPLAY
+#if defined(ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS) || defined(ARDUINO_NRF52840_CIRCUITPLAY)
   const int pin = 4; // Left Button
+  bool activeState = true;
+
+#elif defined(ARDUINO_FUNHOUSE_ESP32S2)
+  const int pin = BUTTON_DOWN;
   bool activeState = true;
 
 #elif defined PIN_BUTTON1
@@ -57,7 +61,7 @@ Adafruit_USBD_HID usb_hid(desc_hid_report, sizeof(desc_hid_report), HID_ITF_PROT
 // the setup function runs once when you press reset or power the board
 void setup()
 {
-  // Following function has no affect on ESP32
+  // Notes: following commented-out functions has no affect on ESP32
   // usb_hid.setPollInterval(2);
   // usb_hid.setReportDescriptor();
   // usb_hid.setStringDescriptor("TinyUSB HID Composite");
@@ -131,7 +135,7 @@ void loop()
   {
     // Consumer Control is used to control Media playback, Volume, Brightness etc ...
     // Consumer report is 2-byte containing the control code of the key
-    // For list of control check out https://github.com/hathach/tinyusb/blob/master/src/class/hid/hid.h#L544
+    // For list of control check out https://github.com/hathach/tinyusb/blob/master/src/class/hid/hid.h
 
     // use to send consumer release report
     static bool has_consumer_key = false;
