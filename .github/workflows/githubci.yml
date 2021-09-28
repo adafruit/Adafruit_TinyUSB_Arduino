@@ -34,6 +34,7 @@ jobs:
       uses: actions/checkout@v2
       with:
          repository: adafruit/ci-arduino
+         ref: increase-timeout
          path: ci
 
     - name: pre-install
