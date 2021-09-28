@@ -86,6 +86,88 @@ Adafruit_USBD_Device TinyUSBDevice;
 
 Adafruit_USBD_Device::Adafruit_USBD_Device(void) {}
 
+void Adafruit_USBD_Device::setConfigurationBuffer(uint8_t *buf,
+                                                  uint32_t buflen) {
+  if (buflen < _desc_cfg_maxlen) {
+    return;
+  }
+
+  memcpy(buf, _desc_cfg, _desc_cfg_len);
+  _desc_cfg = buf;
+  _desc_cfg_maxlen = buflen;
+}
+
+void Adafruit_USBD_Device::setID(uint16_t vid, uint16_t pid) {
+  _desc_device.idVendor = vid;
+  _desc_device.idProduct = pid;
+}
+
+void Adafruit_USBD_Device::setVersion(uint16_t bcd) {
+  _desc_device.bcdUSB = bcd;
+}
+
+void Adafruit_USBD_Device::setDeviceVersion(uint16_t bcd) {
+  _desc_device.bcdDevice = bcd;
+}
+
+void Adafruit_USBD_Device::setLanguageDescriptor(uint16_t language_id) {
+  _desc_str_arr[STRID_LANGUAGE] = (const char *)((uint32_t)language_id);
+}
+
+void Adafruit_USBD_Device::setManufacturerDescriptor(const char *s) {
+  _desc_str_arr[STRID_MANUFACTURER] = s;
+}
+
+void Adafruit_USBD_Device::setProductDescriptor(const char *s) {
+  _desc_str_arr[STRID_PRODUCT] = s;
+}
+
+void Adafruit_USBD_Device::task(void) { tud_task(); }
+
+bool Adafruit_USBD_Device::mounted(void) { return tud_mounted(); }
+
+bool Adafruit_USBD_Device::suspended(void) { return tud_suspended(); }
+
+bool Adafruit_USBD_Device::ready(void) { return tud_ready(); }
+
+bool Adafruit_USBD_Device::remoteWakeup(void) { return tud_remote_wakeup(); }
+
+bool Adafruit_USBD_Device::detach(void) { return tud_disconnect(); }
+
+bool Adafruit_USBD_Device::attach(void) { return tud_connect(); }
+
+// EPS32 use built-in core descriptor builder.
+// Therefore most of descriptors are stubs only
+#ifdef ARDUINO_ARCH_ESP32
+
+void Adafruit_USBD_Device::clearConfiguration(void) {
+
+}
+
+bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface &itf) {
+  (void)itf;
+  return true;
+}
+
+bool Adafruit_USBD_Device::begin(uint8_t rhport) {
+  (void) rhport;
+  return true;
+}
+
+uint8_t Adafruit_USBD_Device::getSerialDescriptor(uint16_t *serial_utf16) {
+  (void) serial_utf16;
+  return 0;
+}
+
+uint16_t const *Adafruit_USBD_Device::descriptor_string_cb(uint8_t index,
+                                                           uint16_t langid) {
+  (void)index;
+  (void)langid;
+  return NULL;
+}
+
+#else
+
 void Adafruit_USBD_Device::clearConfiguration(void) {
   tusb_desc_device_t const desc_dev = {.bLength = sizeof(tusb_desc_device_t),
                                        .bDescriptorType = TUSB_DESC_DEVICE,
@@ -186,40 +268,23 @@ bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface &itf) {
   return true;
 }
 
-void Adafruit_USBD_Device::setConfigurationBuffer(uint8_t *buf,
-                                                  uint32_t buflen) {
-  if (buflen < _desc_cfg_maxlen) {
-    return;
-  }
+bool Adafruit_USBD_Device::begin(uint8_t rhport) {
+  clearConfiguration();
 
-  memcpy(buf, _desc_cfg, _desc_cfg_len);
-  _desc_cfg = buf;
-  _desc_cfg_maxlen = buflen;
-}
+  // Serial is always added by default
+  // Use Interface Association Descriptor (IAD) for CDC
+  // As required by USB Specs IAD's subclass must be common class (2) and
+  // protocol must be IAD (1)
+  _desc_device.bDeviceClass = TUSB_CLASS_MISC;
+  _desc_device.bDeviceSubClass = MISC_SUBCLASS_COMMON;
+  _desc_device.bDeviceProtocol = MISC_PROTOCOL_IAD;
 
-void Adafruit_USBD_Device::setID(uint16_t vid, uint16_t pid) {
-  _desc_device.idVendor = vid;
-  _desc_device.idProduct = pid;
-}
+  SerialTinyUSB.begin(115200);
 
-void Adafruit_USBD_Device::setVersion(uint16_t bcd) {
-  _desc_device.bcdUSB = bcd;
-}
+  // Init device hardware and call tusb_init()
+  TinyUSB_Port_InitDevice(rhport);
 
-void Adafruit_USBD_Device::setDeviceVersion(uint16_t bcd) {
-  _desc_device.bcdDevice = bcd;
-}
-
-void Adafruit_USBD_Device::setLanguageDescriptor(uint16_t language_id) {
-  _desc_str_arr[STRID_LANGUAGE] = (const char *)((uint32_t)language_id);
-}
-
-void Adafruit_USBD_Device::setManufacturerDescriptor(const char *s) {
-  _desc_str_arr[STRID_MANUFACTURER] = s;
-}
-
-void Adafruit_USBD_Device::setProductDescriptor(const char *s) {
-  _desc_str_arr[STRID_PRODUCT] = s;
+  return true;
 }
 
 uint8_t Adafruit_USBD_Device::getSerialDescriptor(uint16_t *serial_utf16) {
@@ -238,54 +303,6 @@ uint8_t Adafruit_USBD_Device::getSerialDescriptor(uint16_t *serial_utf16) {
 
   return 2 * serial_len;
 }
-
-bool Adafruit_USBD_Device::begin(uint8_t rhport) {
-  clearConfiguration();
-
-  // Serial is always added by default
-  // Use Interface Association Descriptor (IAD) for CDC
-  // As required by USB Specs IAD's subclass must be common class (2) and
-  // protocol must be IAD (1)
-  _desc_device.bDeviceClass = TUSB_CLASS_MISC;
-  _desc_device.bDeviceSubClass = MISC_SUBCLASS_COMMON;
-  _desc_device.bDeviceProtocol = MISC_PROTOCOL_IAD;
-
-#ifndef ARDUINO_ARCH_ESP32
-  SerialTinyUSB.begin(115200);
-
-  // Init device hardware and call tusb_init()
-  TinyUSB_Port_InitDevice(rhport);
-#endif
-
-  return true;
-}
-
-void Adafruit_USBD_Device::task(void) { tud_task(); }
-
-bool Adafruit_USBD_Device::mounted(void) { return tud_mounted(); }
-
-bool Adafruit_USBD_Device::suspended(void) { return tud_suspended(); }
-
-bool Adafruit_USBD_Device::ready(void) { return tud_ready(); }
-
-bool Adafruit_USBD_Device::remoteWakeup(void) { return tud_remote_wakeup(); }
-
-bool Adafruit_USBD_Device::detach(void) { return tud_disconnect(); }
-
-bool Adafruit_USBD_Device::attach(void) { return tud_connect(); }
-
-#ifdef ARDUINO_ARCH_ESP32
-
-// EPS32 use built-in core descriptor builder
-uint16_t const *Adafruit_USBD_Device::descriptor_string_cb(uint8_t index,
-                                                           uint16_t langid) {
-  (void)index;
-  (void)langid;
-
-  return NULL;
-}
-
-#else
 
 static int strcpy_utf16(const char *s, uint16_t *buf, int bufsize);
 uint16_t const *Adafruit_USBD_Device::descriptor_string_cb(uint8_t index,

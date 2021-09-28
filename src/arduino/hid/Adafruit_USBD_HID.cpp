@@ -162,12 +162,9 @@ uint16_t Adafruit_USBD_HID::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
 }
 
 bool Adafruit_USBD_HID::begin(void) {
-
-#ifndef ARDUINO_ARCH_ESP32
   if (!TinyUSBDevice.addInterface(*this)) {
     return false;
   }
-#endif
 
   _hid_dev = this;
   return true;
