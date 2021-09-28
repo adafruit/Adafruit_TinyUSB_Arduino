@@ -74,8 +74,7 @@ uint8_t const desc_bos[] = {
     TUD_BOS_WEBUSB_DESCRIPTOR(VENDOR_REQUEST_WEBUSB, 1),
 
     // Microsoft OS 2.0 descriptor
-    TUD_BOS_MS_OS_20_DESCRIPTOR(MS_OS_20_DESC_LEN, VENDOR_REQUEST_MICROSOFT)
-};
+    TUD_BOS_MS_OS_20_DESCRIPTOR(MS_OS_20_DESC_LEN, VENDOR_REQUEST_MICROSOFT)};
 
 uint8_t desc_ms_os_20[] = {
     // Set header: length, type, windows version, total length
@@ -123,29 +122,27 @@ TU_VERIFY_STATIC(sizeof(desc_ms_os_20) == MS_OS_20_DESC_LEN, "Incorrect size");
 //--------------------------------------------------------------------+
 
 #ifdef ARDUINO_ARCH_ESP32
-static uint16_t webusb_load_descriptor(uint8_t * dst, uint8_t * itf)
-{
+static uint16_t webusb_load_descriptor(uint8_t *dst, uint8_t *itf) {
   // uint8_t str_index = tinyusb_add_string_descriptor("TinyUSB MSC");
   uint8_t str_index = 0;
 
   uint8_t ep_in = tinyusb_get_free_in_endpoint();
   uint8_t ep_out = tinyusb_get_free_out_endpoint();
-  TU_VERIFY (ep_in && ep_out);
+  TU_VERIFY(ep_in && ep_out);
   ep_in |= 0x80;
 
   uint16_t desc_len = _webusb_dev->getInterfaceDescriptor(0, NULL, 0);
 
   desc_len = _webusb_dev->makeItfDesc(*itf, dst, desc_len, ep_in, ep_out);
 
-  *itf+=1;
+  *itf += 1;
   return desc_len;
 }
 #endif
 
-
 Adafruit_USBD_WebUSB::Adafruit_USBD_WebUSB(const void *url) {
   _connected = false;
-  _url = (const uint8_t *) url;
+  _url = (const uint8_t *)url;
   _linestate_cb = NULL;
 
 #ifdef ARDUINO_ARCH_ESP32
@@ -156,7 +153,8 @@ Adafruit_USBD_WebUSB::Adafruit_USBD_WebUSB(const void *url) {
 
   _webusb_dev = this;
   uint16_t const desc_len = getInterfaceDescriptor(0, NULL, 0);
-  tinyusb_enable_interface(USB_INTERFACE_VENDOR, desc_len, webusb_load_descriptor);
+  tinyusb_enable_interface(USB_INTERFACE_VENDOR, desc_len,
+                           webusb_load_descriptor);
 #endif
 }
 
@@ -181,12 +179,14 @@ void Adafruit_USBD_WebUSB::setLineStateCallback(linestate_callback_t fp) {
   _linestate_cb = fp;
 }
 
-uint16_t Adafruit_USBD_WebUSB::makeItfDesc(uint8_t itfnum, uint8_t *buf, uint16_t bufsize, uint8_t ep_in, uint8_t ep_out) {
+uint16_t Adafruit_USBD_WebUSB::makeItfDesc(uint8_t itfnum, uint8_t *buf,
+                                           uint16_t bufsize, uint8_t ep_in,
+                                           uint8_t ep_out) {
   uint8_t desc[] = {TUD_VENDOR_DESCRIPTOR(itfnum, 0, ep_out, ep_in, EPSIZE)};
   uint16_t const len = sizeof(desc);
 
   // null buffer for length only
-  if ( buf ) {
+  if (buf) {
     if (bufsize < len) {
       return 0;
     }
@@ -340,7 +340,6 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
 
   return true;
 }
-
 }
 
 #endif // TUSB_OPT_DEVICE_ENABLED

@@ -33,13 +33,9 @@
 
 void TinyUSB_Port_EnterDFU(void) {}
 
-void TinyUSB_Port_InitDevice(uint8_t rhport) {
-  (void) rhport;
-}
+void TinyUSB_Port_InitDevice(uint8_t rhport) { (void)rhport; }
 
-uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]) {
-  (void) serial_id;
-}
+uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]) { (void)serial_id; }
 
 #if 0
 
@@ -73,8 +69,8 @@ uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]) {
 #include "driver/gpio.h"
 #include "driver/periph_ctrl.h"
 
-#include "esp_rom_gpio.h"
 #include "esp32-hal.h"
+#include "esp_rom_gpio.h"
 
 #include "esp32s2/rom/usb/chip_usb_dw_wrapper.h"
 #include "esp32s2/rom/usb/usb_dc.h"

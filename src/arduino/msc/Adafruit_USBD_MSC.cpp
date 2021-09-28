@@ -35,24 +35,22 @@
 static Adafruit_USBD_MSC *_msc_dev = NULL;
 
 #ifdef ARDUINO_ARCH_ESP32
-static uint16_t msc_load_descriptor(uint8_t * dst, uint8_t * itf)
-{
-    // uint8_t str_index = tinyusb_add_string_descriptor("TinyUSB MSC");
-    uint8_t str_index = 0;
+static uint16_t msc_load_descriptor(uint8_t *dst, uint8_t *itf) {
+  // uint8_t str_index = tinyusb_add_string_descriptor("TinyUSB MSC");
+  uint8_t str_index = 0;
 
-    uint8_t ep_in = tinyusb_get_free_in_endpoint();
-    uint8_t ep_out = tinyusb_get_free_out_endpoint();
-    TU_VERIFY (ep_in && ep_out);
-    ep_in |= 0x80;
+  uint8_t ep_in = tinyusb_get_free_in_endpoint();
+  uint8_t ep_out = tinyusb_get_free_out_endpoint();
+  TU_VERIFY(ep_in && ep_out);
+  ep_in |= 0x80;
 
-    uint8_t const descriptor[TUD_MSC_DESC_LEN] = {
-        // Interface number, string index, EP Out & EP In address, EP size
-        TUD_MSC_DESCRIPTOR(*itf, str_index, ep_out, ep_in, EPSIZE)
-    };
+  uint8_t const descriptor[TUD_MSC_DESC_LEN] = {
+      // Interface number, string index, EP Out & EP In address, EP size
+      TUD_MSC_DESCRIPTOR(*itf, str_index, ep_out, ep_in, EPSIZE)};
 
-    *itf+=1;
-    memcpy(dst, descriptor, TUD_MSC_DESC_LEN);
-    return TUD_MSC_DESC_LEN;
+  *itf += 1;
+  memcpy(dst, descriptor, TUD_MSC_DESC_LEN);
+  return TUD_MSC_DESC_LEN;
 }
 #endif
 
@@ -62,7 +60,8 @@ Adafruit_USBD_MSC::Adafruit_USBD_MSC(void) {
 
 #ifdef ARDUINO_ARCH_ESP32
   // ESP32 requires setup configuration descriptor on declaration
-  tinyusb_enable_interface(USB_INTERFACE_MSC, TUD_MSC_DESC_LEN, msc_load_descriptor);
+  tinyusb_enable_interface(USB_INTERFACE_MSC, TUD_MSC_DESC_LEN,
+                           msc_load_descriptor);
 #endif
 }
 
@@ -143,15 +142,15 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8],
   }
 
   // If not set use default ID "Adafruit - Mass Storage - 1.0"
-  const char *vid =
-      (_msc_dev->_lun_info[lun]._inquiry_vid ? _msc_dev->_lun_info[lun]._inquiry_vid
-                                        : "Adafruit");
-  const char *pid =
-      (_msc_dev->_lun_info[lun]._inquiry_pid ? _msc_dev->_lun_info[lun]._inquiry_pid
-                                        : "Mass Storage");
-  const char *rev =
-      (_msc_dev->_lun_info[lun]._inquiry_rev ? _msc_dev->_lun_info[lun]._inquiry_rev
-                                        : "1.0");
+  const char *vid = (_msc_dev->_lun_info[lun]._inquiry_vid
+                         ? _msc_dev->_lun_info[lun]._inquiry_vid
+                         : "Adafruit");
+  const char *pid = (_msc_dev->_lun_info[lun]._inquiry_pid
+                         ? _msc_dev->_lun_info[lun]._inquiry_pid
+                         : "Mass Storage");
+  const char *rev = (_msc_dev->_lun_info[lun]._inquiry_rev
+                         ? _msc_dev->_lun_info[lun]._inquiry_rev
+                         : "1.0");
 
   memcpy(vendor_id, vid, tu_min32(strlen(vid), 8));
   memcpy(product_id, pid, tu_min32(strlen(pid), 16));

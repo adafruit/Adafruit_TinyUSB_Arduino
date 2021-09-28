@@ -140,9 +140,7 @@ bool Adafruit_USBD_Device::attach(void) { return tud_connect(); }
 // Therefore most of descriptors are stubs only
 #ifdef ARDUINO_ARCH_ESP32
 
-void Adafruit_USBD_Device::clearConfiguration(void) {
-
-}
+void Adafruit_USBD_Device::clearConfiguration(void) {}
 
 bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface &itf) {
   (void)itf;
@@ -150,12 +148,12 @@ bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface &itf) {
 }
 
 bool Adafruit_USBD_Device::begin(uint8_t rhport) {
-  (void) rhport;
+  (void)rhport;
   return true;
 }
 
 uint8_t Adafruit_USBD_Device::getSerialDescriptor(uint16_t *serial_utf16) {
-  (void) serial_utf16;
+  (void)serial_utf16;
   return 0;
 }
 
@@ -340,7 +338,6 @@ uint16_t const *Adafruit_USBD_Device::descriptor_string_cb(uint8_t index,
 //--------------------------------------------------------------------+
 // TinyUSB stack callbacks
 //--------------------------------------------------------------------+
-
 
 extern "C" {
 

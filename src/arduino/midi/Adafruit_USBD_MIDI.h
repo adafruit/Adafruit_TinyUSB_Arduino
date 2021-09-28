@@ -60,7 +60,8 @@ public:
                                           uint16_t bufsize);
 
   // internal use only
-  uint16_t makeItfDesc(uint8_t itfnum, uint8_t *buf, uint16_t bufsize, uint8_t ep_in, uint8_t ep_out);
+  uint16_t makeItfDesc(uint8_t itfnum, uint8_t *buf, uint16_t bufsize,
+                       uint8_t ep_in, uint8_t ep_out);
 
 private:
   uint8_t _n_cables;

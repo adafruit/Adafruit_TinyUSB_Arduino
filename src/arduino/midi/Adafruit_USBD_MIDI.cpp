@@ -38,28 +38,26 @@
 // TODO multiple instances
 static Adafruit_USBD_MIDI *_midi_dev = NULL;
 
-
 #ifdef ARDUINO_ARCH_ESP32
-static uint16_t midi_load_descriptor(uint8_t * dst, uint8_t * itf)
-{
+static uint16_t midi_load_descriptor(uint8_t *dst, uint8_t *itf) {
   // uint8_t str_index = tinyusb_add_string_descriptor("TinyUSB HID");
   uint8_t str_index = 0;
 
   uint8_t ep_in = tinyusb_get_free_in_endpoint();
   uint8_t ep_out = tinyusb_get_free_out_endpoint();
-  TU_VERIFY (ep_in && ep_out);
+  TU_VERIFY(ep_in && ep_out);
   ep_in |= 0x80;
 
   uint16_t desc_len = _midi_dev->getInterfaceDescriptor(0, NULL, 0);
 
   desc_len = _midi_dev->makeItfDesc(*itf, dst, desc_len, ep_in, ep_out);
 
-  *itf+=2;
+  *itf += 2;
   return desc_len;
 }
 #endif
 
-Adafruit_USBD_MIDI::Adafruit_USBD_MIDI(uint8_t n_cables){
+Adafruit_USBD_MIDI::Adafruit_USBD_MIDI(uint8_t n_cables) {
   _n_cables = n_cables;
 
 #ifdef ARDUINO_ARCH_ESP32
@@ -81,8 +79,12 @@ bool Adafruit_USBD_MIDI::begin(void) {
   return true;
 }
 
-uint16_t Adafruit_USBD_MIDI::makeItfDesc(uint8_t itfnum, uint8_t *buf, uint16_t bufsize, uint8_t ep_in, uint8_t ep_out) {
-  uint16_t const desc_len = TUD_MIDI_DESC_HEAD_LEN + TUD_MIDI_DESC_JACK_LEN * _n_cables + 2 * TUD_MIDI_DESC_EP_LEN(_n_cables);
+uint16_t Adafruit_USBD_MIDI::makeItfDesc(uint8_t itfnum, uint8_t *buf,
+                                         uint16_t bufsize, uint8_t ep_in,
+                                         uint8_t ep_out) {
+  uint16_t const desc_len = TUD_MIDI_DESC_HEAD_LEN +
+                            TUD_MIDI_DESC_JACK_LEN * _n_cables +
+                            2 * TUD_MIDI_DESC_EP_LEN(_n_cables);
 
   // null buf is for length only
   if (!buf) {
@@ -135,7 +137,7 @@ uint16_t Adafruit_USBD_MIDI::makeItfDesc(uint8_t itfnum, uint8_t *buf, uint16_t 
     len += sizeof(jack);
   }
 
-  if ( len != desc_len ) {
+  if (len != desc_len) {
     // TODO should throw an error message
     return 0;
   }

@@ -40,9 +40,7 @@ public:
   Adafruit_USBD_HID(void);
   Adafruit_USBD_HID(uint8_t const *desc_report, uint16_t len,
                     uint8_t protocol = HID_ITF_PROTOCOL_NONE,
-                    uint8_t interval_ms = 4,
-                    bool has_out_endpoint = false
-                    );
+                    uint8_t interval_ms = 4, bool has_out_endpoint = false);
 
   void setPollInterval(uint8_t interval_ms);
   void setBootProtocol(uint8_t protocol); // 0: None, 1: Keyboard, 2:Mouse
@@ -82,7 +80,8 @@ public:
                                           uint16_t bufsize);
 
   // internal use only
-  uint16_t makeItfDesc(uint8_t itfnum, uint8_t *buf, uint16_t bufsize, uint8_t ep_in, uint8_t ep_out);
+  uint16_t makeItfDesc(uint8_t itfnum, uint8_t *buf, uint16_t bufsize,
+                       uint8_t ep_in, uint8_t ep_out);
 
 private:
   uint8_t _interval_ms;
