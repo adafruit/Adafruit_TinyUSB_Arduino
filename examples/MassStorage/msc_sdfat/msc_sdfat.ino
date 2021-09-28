@@ -29,7 +29,7 @@ SdFile file;
 Adafruit_USBD_MSC usb_msc;
 
 // Set to true when PC write to flash
-bool changed;
+bool fs_changed;
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -76,12 +76,12 @@ void setup()
   // MSC is ready for read/write
   usb_msc.setUnitReady(true);
 
-  changed = true; // to print contents initially
+  fs_changed = true; // to print contents initially
 }
 
 void loop()
 {
-  if ( changed )
+  if ( fs_changed )
   {
     root.open("/");
     Serial.println("SD contents:");
@@ -107,7 +107,7 @@ void loop()
 
     Serial.println();
 
-    changed = false;
+    fs_changed = false;
     delay(1000); // refresh every 0.5 second
   }
 }
@@ -139,7 +139,7 @@ void msc_flush_cb (void)
   // clear file system's cache to force refresh
   sd.cacheClear();
 
-  changed = true;
+  fs_changed = true;
 
   digitalWrite(LED_BUILTIN, LOW);
 }
