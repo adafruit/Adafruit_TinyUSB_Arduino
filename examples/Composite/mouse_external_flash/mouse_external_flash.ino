@@ -20,7 +20,7 @@
 #include "Adafruit_TinyUSB.h"
 
 //--------------------------------------------------------------------+
-// MSC External Flash
+// MSC External Flash Config
 //--------------------------------------------------------------------+
 
 // Uncomment to run example with FRAM
@@ -56,7 +56,7 @@ Adafruit_SPIFlash flash(&flashTransport);
 Adafruit_USBD_MSC usb_msc;
 
 //--------------------------------------------------------------------+
-// HID
+// HID Config
 //--------------------------------------------------------------------+
 
 // HID report descriptor using TinyUSB's template
