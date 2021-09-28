@@ -35,7 +35,10 @@ void TinyUSB_Port_EnterDFU(void) {}
 
 void TinyUSB_Port_InitDevice(uint8_t rhport) { (void)rhport; }
 
-uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]) { (void)serial_id; }
+uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]) {
+  (void)serial_id;
+  return 0;
+}
 
 #if 0
 

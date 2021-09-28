@@ -19,6 +19,10 @@
 #include "Adafruit_SPIFlash.h"
 #include "Adafruit_TinyUSB.h"
 
+//--------------------------------------------------------------------+
+// MSC External Flash
+//--------------------------------------------------------------------+
+
 // Uncomment to run example with FRAM
 // #define FRAM_CS   A5
 // #define FRAM_SPI  SPI
@@ -51,6 +55,10 @@ Adafruit_SPIFlash flash(&flashTransport);
 
 Adafruit_USBD_MSC usb_msc;
 
+//--------------------------------------------------------------------+
+// HID
+//--------------------------------------------------------------------+
+
 // HID report descriptor using TinyUSB's template
 // Single Report (no ID) descriptor
 uint8_t const desc_hid_report[] =
@@ -58,18 +66,27 @@ uint8_t const desc_hid_report[] =
   TUD_HID_REPORT_DESC_MOUSE()
 };
 
-Adafruit_USBD_HID usb_hid;
+// USB HID object. For ESP32 these values cannot be changed after this declaration
+// desc report, desc len, protocol, interval, use out endpoint
+Adafruit_USBD_HID usb_hid(desc_hid_report, sizeof(desc_hid_report), HID_ITF_PROTOCOL_NONE, 2, false);
 
-#if defined ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS
+#if defined(ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS) || defined(ARDUINO_NRF52840_CIRCUITPLAY)
   const int pin = 4; // Left Button
   bool activeState = true;
-#elif defined ARDUINO_NRF52840_FEATHER
-  const int pin = 7; // UserSw
+
+#elif defined(ARDUINO_FUNHOUSE_ESP32S2)
+  const int pin = BUTTON_DOWN;
+  bool activeState = true;
+
+#elif defined PIN_BUTTON1
+  const int pin = PIN_BUTTON1;
   bool activeState = false;
+
 #else
   const int pin = 12;
   bool activeState = false;
 #endif
+
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -92,11 +109,12 @@ void setup()
   
   usb_msc.begin();
 
-
   // Set up button
   pinMode(pin, activeState ? INPUT_PULLDOWN : INPUT_PULLUP);
 
-  usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
+  // Notes: following commented-out functions has no affect on ESP32
+  // usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
+
   usb_hid.begin();
 
   Serial.begin(115200);

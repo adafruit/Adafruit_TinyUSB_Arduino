@@ -18,8 +18,12 @@
  * Depending on the board, the button pin
  * and its active state (when pressed) are different
  */
-#if defined ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS || defined ARDUINO_NRF52840_CIRCUITPLAY
+#if defined(ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS) || defined(ARDUINO_NRF52840_CIRCUITPLAY)
   const int pin = 4; // Left Button
+  bool activeState = true;
+
+#elif defined(ARDUINO_FUNHOUSE_ESP32S2)
+  const int pin = BUTTON_DOWN;
   bool activeState = true;
 
 #elif defined PIN_BUTTON1
@@ -39,8 +43,9 @@ uint8_t const desc_hid_report[] =
   TUD_HID_REPORT_DESC_MOUSE()
 };
 
-// USB HID object
-Adafruit_USBD_HID usb_hid;
+// USB HID object. For ESP32 these values cannot be changed after this declaration
+// desc report, desc len, protocol, interval, use out endpoint
+Adafruit_USBD_HID usb_hid(desc_hid_report, sizeof(desc_hid_report), HID_ITF_PROTOCOL_MOUSE, 2, false);
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -53,10 +58,11 @@ void setup()
   // Set up button, pullup opposite to active state
   pinMode(pin, activeState ? INPUT_PULLDOWN : INPUT_PULLUP);
 
-  usb_hid.setBootProtocol(HID_ITF_PROTOCOL_MOUSE);
-  usb_hid.setPollInterval(2);
-  usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
-  //usb_hid.setStringDescriptor("TinyUSB Mouse");
+  // Notes: following commented-out functions has no affect on ESP32
+  // usb_hid.setBootProtocol(HID_ITF_PROTOCOL_MOUSE);
+  // usb_hid.setPollInterval(2);
+  // usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
+  // usb_hid.setStringDescriptor("TinyUSB Mouse");
 
   usb_hid.begin();
 
