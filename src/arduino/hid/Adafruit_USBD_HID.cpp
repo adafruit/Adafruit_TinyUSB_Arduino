@@ -55,7 +55,7 @@ static uint16_t hid_load_descriptor(uint8_t * dst, uint8_t * itf)
     TU_VERIFY (ep_out != 0);
   }
 
-  uint16_t const desc_len = _hid_dev->makeItfDesc(*itf, 0x80 | ep_in, ep_out, dst, TUD_HID_INOUT_DESC_LEN);
+  uint16_t const desc_len = _hid_dev->makeItfDesc(*itf, dst, TUD_HID_INOUT_DESC_LEN, 0x80 | ep_in, ep_out);
 
   *itf+=1;
   return desc_len;
@@ -84,9 +84,9 @@ Adafruit_USBD_HID::Adafruit_USBD_HID(uint8_t const *desc_report, uint16_t len, u
   _set_report_cb = NULL;
 
 #ifdef ARDUINO_ARCH_ESP32
-  // ESP32 requires setup configuration descriptor wihtin constructor
+  // ESP32 requires setup configuration descriptor within constructor
   _hid_dev = this;
-  uint16_t const desc_len = makeItfDesc(0, EPIN, EPOUT, NULL, 0);
+  uint16_t const desc_len = getInterfaceDescriptor(0, NULL, 0);
   tinyusb_enable_interface(USB_INTERFACE_HID, desc_len, hid_load_descriptor);
 #endif
 }
@@ -119,7 +119,7 @@ void Adafruit_USBD_HID::setReportCallback(get_report_callback_t get_report,
   _set_report_cb = set_report;
 }
 
-uint16_t Adafruit_USBD_HID::makeItfDesc(uint8_t itfnum, uint8_t ep_in, uint8_t ep_out, uint8_t *buf, uint16_t bufsize)
+uint16_t Adafruit_USBD_HID::makeItfDesc(uint8_t itfnum, uint8_t *buf, uint16_t bufsize, uint8_t ep_in, uint8_t ep_out)
 {
   if (!_desc_report_len) {
     return 0;
@@ -158,7 +158,7 @@ uint16_t Adafruit_USBD_HID::makeItfDesc(uint8_t itfnum, uint8_t ep_in, uint8_t e
 uint16_t Adafruit_USBD_HID::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
                                                    uint16_t bufsize) {
   // usb core will automatically update endpoint number
-  return makeItfDesc(itfnum, EPIN, EPOUT, buf, bufsize);
+  return makeItfDesc(itfnum, buf, bufsize, EPIN, EPOUT);
 }
 
 bool Adafruit_USBD_HID::begin(void) {
