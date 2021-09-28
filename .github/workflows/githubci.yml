@@ -9,6 +9,8 @@ jobs:
       fail-fast: false
       matrix:
         arduino-platform:
+           # ESP32S2
+           - 'metroesp32s2'
            # nRF52
            - 'cpb'
            - 'nrf52840'
