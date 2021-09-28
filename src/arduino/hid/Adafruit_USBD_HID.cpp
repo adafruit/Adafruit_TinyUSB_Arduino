@@ -47,6 +47,7 @@ static uint16_t hid_load_descriptor(uint8_t * dst, uint8_t * itf)
 
   uint8_t ep_in = tinyusb_get_free_in_endpoint();
   TU_VERIFY (ep_in != 0);
+  ep_in |= 0x80;
 
   uint8_t ep_out = 0;
   if (_hid_dev->isOutEndpointEnabled())
@@ -55,7 +56,7 @@ static uint16_t hid_load_descriptor(uint8_t * dst, uint8_t * itf)
     TU_VERIFY (ep_out != 0);
   }
 
-  uint16_t const desc_len = _hid_dev->makeItfDesc(*itf, dst, TUD_HID_INOUT_DESC_LEN, 0x80 | ep_in, ep_out);
+  uint16_t const desc_len = _hid_dev->makeItfDesc(*itf, dst, TUD_HID_INOUT_DESC_LEN, ep_in, ep_out);
 
   *itf+=1;
   return desc_len;

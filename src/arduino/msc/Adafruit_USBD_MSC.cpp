@@ -39,12 +39,15 @@ static uint16_t msc_load_descriptor(uint8_t * dst, uint8_t * itf)
 {
     // uint8_t str_index = tinyusb_add_string_descriptor("TinyUSB MSC");
     uint8_t str_index = 0;
-    uint8_t ep_num = tinyusb_get_free_duplex_endpoint();
-    TU_VERIFY (ep_num != 0);
+
+    uint8_t ep_in = tinyusb_get_free_in_endpoint();
+    uint8_t ep_out = tinyusb_get_free_out_endpoint();
+    TU_VERIFY (ep_in && ep_out);
+    ep_in |= 0x80;
 
     uint8_t const descriptor[TUD_MSC_DESC_LEN] = {
         // Interface number, string index, EP Out & EP In address, EP size
-        TUD_MSC_DESCRIPTOR(*itf, str_index, ep_num, (uint8_t)(0x80 | ep_num), EPSIZE)
+        TUD_MSC_DESCRIPTOR(*itf, str_index, ep_out, ep_in, EPSIZE)
     };
 
     *itf+=1;
