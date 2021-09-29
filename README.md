@@ -21,11 +21,14 @@ There are 2 type of supported cores: with and without built-in support for TinyU
 
 ### Cores with built-in support
 
-Following core has Tinyusb as either the primary usb stack or selectable via menu `Tools->USB Stack`. You only need to include `<Adafruit_TinyUSB.h>` in your sketch to use.
+Following core has TinyUSB as either the primary usb stack or selectable via menu `Tools->USB Stack`. You only need to include `<Adafruit_TinyUSB.h>` in your sketch to use.
 
-- [Adafruit_nRF52_Arduino](https://github.com/adafruit/Adafruit_nRF52_Arduino)
+- [adafruit/Adafruit_nRF52_Arduino](https://github.com/adafruit/Adafruit_nRF52_Arduino)
 - [adafruit/ArduinoCore-samd](https://github.com/adafruit/ArduinoCore-samd)
 - [earlephilhower/arduino-pico](https://github.com/earlephilhower/arduino-pico)
+- [espressif/arduino-esp32](https://github.com/espressif/arduino-esp32)
+
+  ESP32 port relies on Espressif's [esp32-hal-tinyusb.c](https://github.com/espressif/arduino-esp32/blob/master/cores/esp32/esp32-hal-tinyusb.c) for building usb descriptors which requires all descriptors must be specified in usb objects declaration i.e constructors. Therefore all descriptor-related fields must be part of object declaration and descriptor-related API have no effect afterwards for this port. 
 
 ### Cores without built-in support
 
