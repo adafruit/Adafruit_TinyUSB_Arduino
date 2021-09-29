@@ -1,5 +1,12 @@
 # Adafruit TinyUSB Arduino Library Changelog
 
+## 1.5.0 - 2021.09.29
+
+- Add support for ESP32-S2 core version 2.0.0
+  - ESP32 port relies on Espressif's [esp32-hal-tinyusb.c](https://github.com/espressif/arduino-esp32/blob/master/cores/esp32/esp32-hal-tinyusb.c) for building usb descriptors which requires all descriptors must be specified in usb objects declaration i.e constructors. Therefore all descriptor-related fields must be part of object declaration and descriptor-related API have no effect afterwards for this port.
+
+- Add new constructor for Adafruit_USBD_HID(desc_report, len, protocol, interval_ms, has_out_endpoint)
+
 ## 1.4.4 - 2021.08.18
 
 - Update tinyusb stack
