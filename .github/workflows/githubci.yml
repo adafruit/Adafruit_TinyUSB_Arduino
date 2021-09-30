@@ -10,6 +10,8 @@ jobs:
       matrix:
         arduino-platform:
            # ESP32S2
+           - 'funhouse'
+           - 'magtag'
            - 'metroesp32s2'
            # nRF52
            - 'cpb'
