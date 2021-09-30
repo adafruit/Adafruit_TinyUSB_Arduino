@@ -38,6 +38,7 @@
 
 enum { VENDOR_REQUEST_WEBUSB = 1, VENDOR_REQUEST_MICROSOFT = 2 };
 
+// TODO multiple instances
 static Adafruit_USBD_WebUSB *_webusb_dev = NULL;
 
 //--------------------------------------------------------------------+
@@ -74,8 +75,6 @@ uint8_t const desc_bos[] = {
 
     // Microsoft OS 2.0 descriptor
     TUD_BOS_MS_OS_20_DESCRIPTOR(MS_OS_20_DESC_LEN, VENDOR_REQUEST_MICROSOFT)};
-
-uint8_t const *tud_descriptor_bos_cb(void) { return desc_bos; }
 
 uint8_t desc_ms_os_20[] = {
     // Set header: length, type, windows version, total length
@@ -118,19 +117,53 @@ uint8_t desc_ms_os_20[] = {
 
 TU_VERIFY_STATIC(sizeof(desc_ms_os_20) == MS_OS_20_DESC_LEN, "Incorrect size");
 
-//------------- IMPLEMENTATION -------------//
+//--------------------------------------------------------------------+
+// IMPLEMENTATION
+//--------------------------------------------------------------------+
 
-Adafruit_USBD_WebUSB::Adafruit_USBD_WebUSB(void) {
+#ifdef ARDUINO_ARCH_ESP32
+static uint16_t webusb_load_descriptor(uint8_t *dst, uint8_t *itf) {
+  // uint8_t str_index = tinyusb_add_string_descriptor("TinyUSB MSC");
+  uint8_t str_index = 0;
+
+  uint8_t ep_in = tinyusb_get_free_in_endpoint();
+  uint8_t ep_out = tinyusb_get_free_out_endpoint();
+  TU_VERIFY(ep_in && ep_out);
+  ep_in |= 0x80;
+
+  uint16_t desc_len = _webusb_dev->getInterfaceDescriptor(0, NULL, 0);
+
+  desc_len = _webusb_dev->makeItfDesc(*itf, dst, desc_len, ep_in, ep_out);
+
+  *itf += 1;
+  return desc_len;
+}
+#endif
+
+Adafruit_USBD_WebUSB::Adafruit_USBD_WebUSB(const void *url) {
   _connected = false;
-  _url = NULL;
+  _url = (const uint8_t *)url;
   _linestate_cb = NULL;
+
+#ifdef ARDUINO_ARCH_ESP32
+  // ESP32 requires setup configuration descriptor within constructor
+
+  // WebUSB requires USB version at least 2.1 (or 3.x)
+  USB.usbVersion(0x0210);
+
+  _webusb_dev = this;
+  uint16_t const desc_len = getInterfaceDescriptor(0, NULL, 0);
+  tinyusb_enable_interface(USB_INTERFACE_VENDOR, desc_len,
+                           webusb_load_descriptor);
+#endif
 }
 
 bool Adafruit_USBD_WebUSB::begin(void) {
-  if (!TinyUSBDevice.addInterface(*this))
+  if (!TinyUSBDevice.addInterface(*this)) {
     return false;
+  }
 
-  // WebUSB requires to change USB version from 2.0 to 2.1
+  // WebUSB requires USB version at least 2.1 (or 3.x)
   TinyUSBDevice.setVersion(0x0210);
 
   _webusb_dev = this;
@@ -146,24 +179,33 @@ void Adafruit_USBD_WebUSB::setLineStateCallback(linestate_callback_t fp) {
   _linestate_cb = fp;
 }
 
+uint16_t Adafruit_USBD_WebUSB::makeItfDesc(uint8_t itfnum, uint8_t *buf,
+                                           uint16_t bufsize, uint8_t ep_in,
+                                           uint8_t ep_out) {
+  uint8_t desc[] = {TUD_VENDOR_DESCRIPTOR(itfnum, 0, ep_out, ep_in, EPSIZE)};
+  uint16_t const len = sizeof(desc);
+
+  // null buffer for length only
+  if (buf) {
+    if (bufsize < len) {
+      return 0;
+    }
+
+    memcpy(buf, desc, len);
+
+    // update the bFirstInterface in MS OS 2.0 descriptor
+    // that is binded to WinUSB driver
+    desc_ms_os_20[0x0a + 0x08 + 4] = itfnum;
+  }
+
+  return len;
+}
+
 uint16_t Adafruit_USBD_WebUSB::getInterfaceDescriptor(uint8_t itfnum,
                                                       uint8_t *buf,
                                                       uint16_t bufsize) {
   // usb core will automatically update endpoint number
-  uint8_t desc[] = {TUD_VENDOR_DESCRIPTOR(itfnum, 0, EPOUT, EPIN, 64)};
-  uint16_t const len = sizeof(desc);
-
-  if (bufsize < len) {
-    return 0;
-  }
-
-  memcpy(buf, desc, len);
-
-  // update the bFirstInterface in MS OS 2.0 descriptor
-  // that is binded to WinUSB driver
-  desc_ms_os_20[0x0a + 0x08 + 4] = itfnum;
-
-  return len;
+  return makeItfDesc(itfnum, buf, bufsize, EPIN, EPOUT);
 }
 
 bool Adafruit_USBD_WebUSB::connected(void) {
@@ -222,7 +264,12 @@ int Adafruit_USBD_WebUSB::peek(void) {
 
 void Adafruit_USBD_WebUSB::flush(void) {}
 
+//--------------------------------------------------------------------+
+// TinyUSB stack callbacks
+//--------------------------------------------------------------------+
 extern "C" {
+
+uint8_t const *tud_descriptor_bos_cb(void) { return desc_bos; }
 
 // Invoked when a control transfer occurred on an interface of this class
 // Driver response accordingly to the request and the transfer stage
@@ -291,16 +338,6 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
     return false;
   }
 
-  return true;
-}
-
-// Invoked when DATA Stage of VENDOR's request is complete
-bool tud_vendor_control_complete_cb(uint8_t rhport,
-                                    tusb_control_request_t const *request) {
-  (void)rhport;
-  (void)request;
-
-  // nothing to do
   return true;
 }
 }

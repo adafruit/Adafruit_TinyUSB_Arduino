@@ -24,7 +24,7 @@
 
 #include "tusb_option.h"
 
-#if TUSB_OPT_DEVICE_ENABLED && CFG_TUD_CDC
+#if TUSB_OPT_DEVICE_ENABLED && CFG_TUD_CDC && !defined(ARDUINO_ARCH_ESP32)
 
 #include "Arduino.h"
 

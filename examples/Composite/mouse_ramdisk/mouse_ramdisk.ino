@@ -16,10 +16,20 @@
 
 #include "Adafruit_TinyUSB.h"
 
+//--------------------------------------------------------------------+
+// MSC RAM Disk Config
+//--------------------------------------------------------------------+
+
 // 8KB is the smallest size that windows allow to mount
 #define DISK_BLOCK_NUM  16
 #define DISK_BLOCK_SIZE 512
 #include "ramdisk.h"
+
+Adafruit_USBD_MSC usb_msc;
+
+//--------------------------------------------------------------------+
+// HID Config
+//--------------------------------------------------------------------+
 
 // HID report descriptor using TinyUSB's template
 // Single Report (no ID) descriptor
@@ -28,11 +38,16 @@ uint8_t const desc_hid_report[] =
   TUD_HID_REPORT_DESC_MOUSE()
 };
 
-Adafruit_USBD_HID usb_hid;
-Adafruit_USBD_MSC usb_msc;
+// USB HID object. For ESP32 these values cannot be changed after this declaration
+// desc report, desc len, protocol, interval, use out endpoint
+Adafruit_USBD_HID usb_hid(desc_hid_report, sizeof(desc_hid_report), HID_ITF_PROTOCOL_NONE, 2, false);
 
-#if defined ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS || defined ARDUINO_NRF52840_CIRCUITPLAY
+#if defined(ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS) || defined(ARDUINO_NRF52840_CIRCUITPLAY)
   const int pin = 4; // Left Button
+  bool activeState = true;
+
+#elif defined(ARDUINO_FUNHOUSE_ESP32S2)
+  const int pin = BUTTON_DOWN;
   bool activeState = true;
 
 #elif defined PIN_BUTTON1
@@ -69,7 +84,9 @@ void setup()
   // Set up button
   pinMode(pin, activeState ? INPUT_PULLDOWN : INPUT_PULLUP);
 
-  usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
+  // Notes: following commented-out functions has no affect on ESP32
+  // usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
+
   usb_hid.begin();
 
   Serial.begin(115200);

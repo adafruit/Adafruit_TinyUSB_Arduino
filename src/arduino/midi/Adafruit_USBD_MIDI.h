@@ -30,7 +30,9 @@
 
 class Adafruit_USBD_MIDI : public Stream, public Adafruit_USBD_Interface {
 public:
-  Adafruit_USBD_MIDI(void);
+  Adafruit_USBD_MIDI(uint8_t n_cables = 1);
+
+  void setCables(uint8_t n_cables);
 
   bool begin(void);
 
@@ -57,7 +59,9 @@ public:
   virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
                                           uint16_t bufsize);
 
-  void setCables(uint8_t n_cables);
+  // internal use only
+  uint16_t makeItfDesc(uint8_t itfnum, uint8_t *buf, uint16_t bufsize,
+                       uint8_t ep_in, uint8_t ep_out);
 
 private:
   uint8_t _n_cables;

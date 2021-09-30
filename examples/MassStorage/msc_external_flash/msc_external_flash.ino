@@ -64,7 +64,7 @@ FatFile file;
 Adafruit_USBD_MSC usb_msc;
 
 // Set to true when PC write to flash
-bool changed;
+bool fs_changed;
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -94,17 +94,17 @@ void setup()
   //while ( !Serial ) delay(10);   // wait for native usb
 
   Serial.println("Adafruit TinyUSB Mass Storage External Flash example");
-  Serial.print("JEDEC ID: "); Serial.println(flash.getJEDECID(), HEX);
-  Serial.print("Flash size: "); Serial.println(flash.size());
+  Serial.print("JEDEC ID: 0x"); Serial.println(flash.getJEDECID(), HEX);
+  Serial.print("Flash size: "); Serial.print(flash.size() / 1024); Serial.println(" KB");
 
-  changed = true; // to print contents initially
+  fs_changed = true; // to print contents initially
 }
 
 void loop()
 {
-  if ( changed )
+  if ( fs_changed )
   {
-    changed = false;
+    fs_changed = false;
     
     if ( !root.open("/") )
     {
@@ -170,7 +170,7 @@ void msc_flush_cb (void)
   // clear file system's cache to force refresh
   fatfs.cacheClear();
 
-  changed = true;
+  fs_changed = true;
 
   digitalWrite(LED_BUILTIN, LOW);
 }

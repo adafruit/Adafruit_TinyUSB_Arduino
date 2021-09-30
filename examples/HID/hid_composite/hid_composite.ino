@@ -19,8 +19,12 @@
  * Depending on the board, the button pin
  * and its active state (when pressed) are different
  */
-#if defined ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS || defined ARDUINO_NRF52840_CIRCUITPLAY
+#if defined(ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS) || defined(ARDUINO_NRF52840_CIRCUITPLAY)
   const int pin = 4; // Left Button
+  bool activeState = true;
+
+#elif defined(ARDUINO_FUNHOUSE_ESP32S2)
+  const int pin = BUTTON_DOWN;
   bool activeState = true;
 
 #elif defined PIN_BUTTON1
@@ -49,15 +53,17 @@ uint8_t const desc_hid_report[] =
   TUD_HID_REPORT_DESC_CONSUMER( HID_REPORT_ID(RID_CONSUMER_CONTROL) )
 };
 
-// USB HID object
-Adafruit_USBD_HID usb_hid;
+// USB HID object. For ESP32 these values cannot be changed after this declaration
+// desc report, desc len, protocol, interval, use out endpoint
+Adafruit_USBD_HID usb_hid(desc_hid_report, sizeof(desc_hid_report), HID_ITF_PROTOCOL_NONE, 2, false);
 
 // the setup function runs once when you press reset or power the board
 void setup()
 {
-  usb_hid.setPollInterval(2);
-  usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
-  //usb_hid.setStringDescriptor("TinyUSB HID Composite");
+  // Notes: following commented-out functions has no affect on ESP32
+  // usb_hid.setPollInterval(2);
+  // usb_hid.setReportDescriptor();
+  // usb_hid.setStringDescriptor("TinyUSB HID Composite");
 
   usb_hid.begin();
 
@@ -65,10 +71,11 @@ void setup()
   pinMode(pin, activeState ? INPUT_PULLDOWN : INPUT_PULLUP);
 
   Serial.begin(115200);
-  Serial.println("Adafruit TinyUSB HID Composite example");
 
   // wait until device mounted
   while( !TinyUSBDevice.mounted() ) delay(1);
+
+  Serial.println("Adafruit TinyUSB HID Composite example");
 }
 
 void loop()
@@ -127,7 +134,7 @@ void loop()
   {
     // Consumer Control is used to control Media playback, Volume, Brightness etc ...
     // Consumer report is 2-byte containing the control code of the key
-    // For list of control check out https://github.com/hathach/tinyusb/blob/master/src/class/hid/hid.h#L544
+    // For list of control check out https://github.com/hathach/tinyusb/blob/master/src/class/hid/hid.h
 
     // use to send consumer release report
     static bool has_consumer_key = false;

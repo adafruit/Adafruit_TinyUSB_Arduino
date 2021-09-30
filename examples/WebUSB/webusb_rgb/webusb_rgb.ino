@@ -31,19 +31,20 @@
 // Which pin on the Arduino is connected to the NeoPixels?
 // On a Trinket or Gemma we suggest changing this to 1
 // use on-board neopixel PIN_NEOPIXEL if existed
-#ifdef PIN_NEOPIXEL
-  #define PIN      PIN_NEOPIXEL
-#else
-  #define PIN      8
+#ifndef PIN_NEOPIXEL
+  #define PIN_NEOPIXEL 8
 #endif
 
 // How many NeoPixels are attached to the Arduino?
-#define NUMPIXELS  10
+// use on-board defined NEOPIXEL_NUM if existed
+#ifndef NEOPIXEL_NUM
+  #define NEOPIXEL_NUM  10
+#endif
 
 // When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
 // Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
 // example for more information on possible values.
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NEOPIXEL_NUM, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
 
 // USB WebUSB object
 Adafruit_USBD_WebUSB usb_web;
@@ -62,6 +63,11 @@ void setup()
   Serial.begin(115200);
 
   // This initializes the NeoPixel with RED
+#ifdef NEOPIXEL_POWER
+  pinMode(NEOPIXEL_POWER, OUTPUT);
+  digitalWrite(NEOPIXEL_POWER, NEOPIXEL_POWER_ON);
+#endif
+
   pixels.begin();
   pixels.setBrightness(50);
   pixels.fill(0xff0000);

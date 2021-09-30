@@ -27,12 +27,14 @@ uint8_t const desc_hid_report[] =
   TUD_HID_REPORT_DESC_GAMEPAD()
 };
 
-// USB HID object
-Adafruit_USBD_HID usb_hid;
+// USB HID object. For ESP32 these values cannot be changed after this declaration
+// desc report, desc len, protocol, interval, use out endpoint
+Adafruit_USBD_HID usb_hid(desc_hid_report, sizeof(desc_hid_report), HID_ITF_PROTOCOL_NONE, 2, false);
 
-hid_gamepad_report_t    gp;     // defined in hid.h from Adafruit_TinyUSB_ArduinoCore
-// For Gamepad Button Bit Mask see  hid_gamepad_button_bm_t  typedef defined in hid.h from Adafruit_TinyUSB_ArduinoCore
-// For Gamepad Hat    Bit Mask see  hid_gamepad_hat_bm_t     typedef defined in hid.h from Adafruit_TinyUSB_ArduinoCore
+// Report payload defined in src/class/hid/hid.h
+// - For Gamepad Button Bit Mask see  hid_gamepad_button_bm_t
+// - For Gamepad Hat    Bit Mask see  hid_gamepad_hat_t
+hid_gamepad_report_t    gp;
 
 void setup() 
 {
@@ -43,8 +45,9 @@ void setup()
 
   Serial.begin(115200);
   
-  usb_hid.setPollInterval(2);
-  usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
+  // Notes: following commented-out functions has no affect on ESP32
+  // usb_hid.setPollInterval(2);
+  // usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
 
   usb_hid.begin();
 
@@ -65,7 +68,6 @@ void loop()
 //  }
 
   if ( !usb_hid.ready() ) return;
-
 
   // Reset buttons
   Serial.println("No pressing buttons");

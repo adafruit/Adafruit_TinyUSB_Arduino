@@ -36,7 +36,7 @@ public:
   Adafruit_USBD_Interface(void) { _desc_str = NULL; }
 
   // Get Interface Descriptor
-  // Device fill descriptor and return its length
+  // Fill the descriptor (if buf is not NULL) and return its length
   virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
                                           uint16_t bufsize) = 0;
 

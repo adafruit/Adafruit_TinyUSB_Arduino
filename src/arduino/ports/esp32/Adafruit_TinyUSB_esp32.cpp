@@ -26,6 +26,24 @@
 
 #if defined(ARDUINO_ARCH_ESP32) && TUSB_OPT_DEVICE_ENABLED
 
+#include <stdint.h>
+
+// ESP32 will use the arduino-esp32 core initialization
+// These port API is empty to prevent compilation error
+
+void TinyUSB_Port_EnterDFU(void) {}
+
+void TinyUSB_Port_InitDevice(uint8_t rhport) { (void)rhport; }
+
+uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]) {
+  (void)serial_id;
+  return 0;
+}
+
+#if 0
+
+// This port implemented is not needed and left here for reference only
+
 #include "sdkconfig.h"
 
 #include "soc/soc.h"
@@ -54,11 +72,8 @@
 #include "driver/gpio.h"
 #include "driver/periph_ctrl.h"
 
-#include "esp_efuse.h"
-#include "esp_efuse_table.h"
-#include "esp_rom_gpio.h"
-
 #include "esp32-hal.h"
+#include "esp_rom_gpio.h"
 
 #include "esp32s2/rom/usb/chip_usb_dw_wrapper.h"
 #include "esp32s2/rom/usb/usb_dc.h"
@@ -111,6 +126,7 @@ static void usb_device_task(void *param) {
     tud_task();
   }
 }
+
 
 void TinyUSB_Port_InitDevice(uint8_t rhport) {
   (void)rhport;
@@ -165,5 +181,6 @@ extern "C" void yield(void) {
   TinyUSB_Device_FlushCDC();
   vPortYield();
 }
+#endif // commented out
 
-#endif // USE_TINYUSB
+#endif

@@ -39,7 +39,7 @@
 class Adafruit_USBD_WebUSB : public Stream, public Adafruit_USBD_Interface {
 public:
   typedef void (*linestate_callback_t)(bool connected);
-  Adafruit_USBD_WebUSB(void);
+  Adafruit_USBD_WebUSB(const void *url = NULL);
 
   bool begin(void);
 
@@ -64,6 +64,10 @@ public:
   // from Adafruit_USBD_Interface
   virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
                                           uint16_t bufsize);
+
+  // internal use only
+  uint16_t makeItfDesc(uint8_t itfnum, uint8_t *buf, uint16_t bufsize,
+                       uint8_t ep_in, uint8_t ep_out);
 
 private:
   bool _connected;

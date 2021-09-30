@@ -24,7 +24,8 @@
 
 #include "tusb_option.h"
 
-#if TUSB_OPT_DEVICE_ENABLED
+// ESP32 will use the arduino-esp32 core initialization and Serial
+#if TUSB_OPT_DEVICE_ENABLED && !defined(ARDUINO_ARCH_ESP32)
 
 #include "Adafruit_TinyUSB.h"
 

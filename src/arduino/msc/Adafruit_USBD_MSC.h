@@ -91,7 +91,7 @@ private:
     uint16_t block_size;
     bool unit_ready;
 
-  } _lun[MAX_LUN];
+  } _lun_info[MAX_LUN];
 
   uint8_t _maxlun;
 

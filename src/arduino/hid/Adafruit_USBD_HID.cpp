@@ -33,21 +33,60 @@
 
 uint8_t const _ascii2keycode[128][2] = {HID_ASCII_TO_KEYCODE};
 
+// TODO multiple instances
 static Adafruit_USBD_HID *_hid_dev = NULL;
 
-//------------- IMPLEMENTATION -------------//
-Adafruit_USBD_HID::Adafruit_USBD_HID(void) {
-  _interval_ms = 10;
-  _protocol = HID_ITF_PROTOCOL_NONE;
+#ifdef ARDUINO_ARCH_ESP32
+static uint16_t hid_load_descriptor(uint8_t *dst, uint8_t *itf) {
+  // uint8_t str_index = tinyusb_add_string_descriptor("TinyUSB HID");
+  uint8_t str_index = 0;
 
-  _out_endpoint = false;
+  TU_VERIFY(_hid_dev);
+
+  uint8_t ep_in = tinyusb_get_free_in_endpoint();
+  TU_VERIFY(ep_in != 0);
+  ep_in |= 0x80;
+
+  uint8_t ep_out = 0;
+  if (_hid_dev->isOutEndpointEnabled()) {
+    ep_out = tinyusb_get_free_out_endpoint();
+    TU_VERIFY(ep_out != 0);
+  }
+
+  uint16_t const desc_len =
+      _hid_dev->makeItfDesc(*itf, dst, TUD_HID_INOUT_DESC_LEN, ep_in, ep_out);
+
+  *itf += 1;
+  return desc_len;
+}
+#endif
+
+//------------- IMPLEMENTATION -------------//
+
+Adafruit_USBD_HID::Adafruit_USBD_HID(void)
+    : Adafruit_USBD_HID(NULL, 0, HID_ITF_PROTOCOL_NONE, 4, false) {}
+
+Adafruit_USBD_HID::Adafruit_USBD_HID(uint8_t const *desc_report, uint16_t len,
+                                     uint8_t protocol, uint8_t interval_ms,
+                                     bool has_out_endpoint) {
+  _interval_ms = interval_ms;
+  _protocol = protocol;
+
+  _out_endpoint = has_out_endpoint;
   _mouse_button = 0;
 
-  _desc_report = NULL;
-  _desc_report_len = 0;
+  _desc_report = desc_report;
+  _desc_report_len = len;
 
   _get_report_cb = NULL;
   _set_report_cb = NULL;
+
+#ifdef ARDUINO_ARCH_ESP32
+  // ESP32 requires setup configuration descriptor within constructor
+  _hid_dev = this;
+  uint16_t const desc_len = getInterfaceDescriptor(0, NULL, 0);
+  tinyusb_enable_interface(USB_INTERFACE_HID, desc_len, hid_load_descriptor);
+#endif
 }
 
 void Adafruit_USBD_HID::setPollInterval(uint8_t interval_ms) {
@@ -57,6 +96,8 @@ void Adafruit_USBD_HID::setPollInterval(uint8_t interval_ms) {
 void Adafruit_USBD_HID::setBootProtocol(uint8_t protocol) {
   _protocol = protocol;
 }
+
+bool Adafruit_USBD_HID::isOutEndpointEnabled(void) { return _out_endpoint; }
 
 void Adafruit_USBD_HID::enableOutEndpoint(bool enable) {
   _out_endpoint = enable;
@@ -74,18 +115,18 @@ void Adafruit_USBD_HID::setReportCallback(get_report_callback_t get_report,
   _set_report_cb = set_report;
 }
 
-uint16_t Adafruit_USBD_HID::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
-                                                   uint16_t bufsize) {
+uint16_t Adafruit_USBD_HID::makeItfDesc(uint8_t itfnum, uint8_t *buf,
+                                        uint16_t bufsize, uint8_t ep_in,
+                                        uint8_t ep_out) {
   if (!_desc_report_len) {
     return 0;
   }
 
-  // usb core will automatically update endpoint number
   uint8_t const desc_inout[] = {
-      TUD_HID_INOUT_DESCRIPTOR(itfnum, 0, _protocol, _desc_report_len, EPIN,
-                               EPOUT, CFG_TUD_HID_EP_BUFSIZE, _interval_ms)};
+      TUD_HID_INOUT_DESCRIPTOR(itfnum, 0, _protocol, _desc_report_len, ep_in,
+                               ep_out, CFG_TUD_HID_EP_BUFSIZE, _interval_ms)};
   uint8_t const desc_in_only[] = {
-      TUD_HID_DESCRIPTOR(itfnum, 0, _protocol, _desc_report_len, EPIN,
+      TUD_HID_DESCRIPTOR(itfnum, 0, _protocol, _desc_report_len, ep_in,
                          CFG_TUD_HID_EP_BUFSIZE, _interval_ms)};
 
   uint8_t const *desc;
@@ -99,12 +140,22 @@ uint16_t Adafruit_USBD_HID::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
     len = sizeof(desc_in_only);
   }
 
-  if (bufsize < len) {
-    return 0;
+  // null buffer is used to get the length of descriptor only
+  if (buf) {
+    if (bufsize < len) {
+      return 0;
+    }
+
+    memcpy(buf, desc, len);
   }
 
-  memcpy(buf, desc, len);
   return len;
+}
+
+uint16_t Adafruit_USBD_HID::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
+                                                   uint16_t bufsize) {
+  // usb core will automatically update endpoint number
+  return makeItfDesc(itfnum, buf, bufsize, EPIN, EPOUT);
 }
 
 bool Adafruit_USBD_HID::begin(void) {

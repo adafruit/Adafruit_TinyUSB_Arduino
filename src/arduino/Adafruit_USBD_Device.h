@@ -28,6 +28,10 @@
 #include "Adafruit_USBD_Interface.h"
 #include "tusb.h"
 
+#ifdef ARDUINO_ARCH_ESP32
+#include "esp32-hal-tinyusb.h"
+#endif
+
 class Adafruit_USBD_Device {
 private:
   enum { STRING_DESCRIPTOR_MAX = 8 };
