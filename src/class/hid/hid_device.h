@@ -318,8 +318,8 @@ static inline bool  tud_hid_gamepad_report(uint8_t report_id, int8_t x, int8_t y
   HID_COLLECTION ( HID_COLLECTION_APPLICATION )                       ,\
     /* Report ID if any */                                             \
     __VA_ARGS__                                                        \
-    HID_USAGE (HID_USAGE_DESKTOP_POINTER)                             ,\
-      HID_COLLECTION ( HID_COLLECTION_PHYSICAL )                      ,\
+    HID_USAGE (HID_USAGE_DESKTOP_GAMEPAD)                             ,\
+      HID_COLLECTION ( HID_COLLECTION_LOGICAL  )                      ,\
         /* 8 bit X, Y, Z, Rz, Rx, Ry (min -127, max 127 ) */           \
         HID_USAGE_PAGE     ( HID_USAGE_PAGE_DESKTOP                 ) ,\
           HID_USAGE        ( HID_USAGE_DESKTOP_X                    ) ,\
