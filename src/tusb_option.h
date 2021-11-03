@@ -28,8 +28,8 @@
 #define _TUSB_OPTION_H_
 
 #define TUSB_VERSION_MAJOR     0
-#define TUSB_VERSION_MINOR     10
-#define TUSB_VERSION_REVISION  1
+#define TUSB_VERSION_MINOR     12
+#define TUSB_VERSION_REVISION  0
 #define TUSB_VERSION_STRING    TU_STRING(TUSB_VERSION_MAJOR) "." TU_STRING(TUSB_VERSION_MINOR) "." TU_STRING(TUSB_VERSION_REVISION)
 
 //--------------------------------------------------------------------+
@@ -108,6 +108,7 @@
 
 // NXP Kinetis
 #define OPT_MCU_MKL25ZXX         1200 ///< NXP MKL25Zxx
+#define OPT_MCU_K32L2BXX         1201 ///< NXP K32L2Bxx
 
 // Silabs
 #define OPT_MCU_EFM32GG          1300 ///< Silabs EFM32GG
@@ -202,12 +203,18 @@
   #define CFG_TUSB_MEM_SECTION
 #endif
 
+// alignment requirement of buffer used for endpoint transferring
 #ifndef CFG_TUSB_MEM_ALIGN
   #define CFG_TUSB_MEM_ALIGN      TU_ATTR_ALIGNED(4)
 #endif
 
+// OS selection
 #ifndef CFG_TUSB_OS
   #define CFG_TUSB_OS             OPT_OS_NONE
+#endif
+
+#ifndef CFG_TUSB_OS_INC_PATH
+  #define CFG_TUSB_OS_INC_PATH
 #endif
 
 //--------------------------------------------------------------------
@@ -234,6 +241,10 @@
   #define CFG_TUD_AUDIO           0
 #endif
 
+#ifndef CFG_TUD_VIDEO
+  #define CFG_TUD_VIDEO           0
+#endif
+
 #ifndef CFG_TUD_MIDI
   #define CFG_TUD_MIDI            0
 #endif
@@ -254,34 +265,61 @@
   #define CFG_TUD_DFU             0
 #endif
 
-#ifndef CFG_TUD_NET
-  #define CFG_TUD_NET             0
-#endif
-
 #ifndef CFG_TUD_BTH
   #define CFG_TUD_BTH             0
+#endif
+
+#ifndef CFG_TUD_ECM_RNDIS
+  #ifdef CFG_TUD_NET
+    #warning "CFG_TUD_NET is renamed to CFG_TUD_ECM_RNDIS"
+    #define CFG_TUD_ECM_RNDIS   CFG_TUD_NET
+  #else
+    #define CFG_TUD_ECM_RNDIS   0
+  #endif
+#endif
+
+#ifndef CFG_TUD_NCM
+  #define CFG_TUD_NCM         0
 #endif
 
 //--------------------------------------------------------------------
 // HOST OPTIONS
 //--------------------------------------------------------------------
 #if TUSB_OPT_HOST_ENABLED
-  #ifndef CFG_TUSB_HOST_DEVICE_MAX
-    #define CFG_TUSB_HOST_DEVICE_MAX 1
-    #warning CFG_TUSB_HOST_DEVICE_MAX is not defined, default value is 1
-  #endif
-
-  //------------- HUB CLASS -------------//
-  #if CFG_TUH_HUB && (CFG_TUSB_HOST_DEVICE_MAX == 1)
-    #error There is no benefit enable hub with max device is 1. Please disable hub or increase CFG_TUSB_HOST_DEVICE_MAX
+  #ifndef CFG_TUH_DEVICE_MAX
+    #define CFG_TUH_DEVICE_MAX 1
   #endif
 
   #ifndef CFG_TUH_ENUMERATION_BUFSIZE
     #define CFG_TUH_ENUMERATION_BUFSIZE 256
   #endif
-
-  //------------- CLASS -------------//
 #endif // TUSB_OPT_HOST_ENABLED
+
+//------------- CLASS -------------//
+
+#ifndef CFG_TUH_HUB
+#define CFG_TUH_HUB    0
+#endif
+
+#ifndef CFG_TUH_CDC
+#define CFG_TUH_CDC    0
+#endif
+
+#ifndef CFG_TUH_HID
+#define CFG_TUH_HID    0
+#endif
+
+#ifndef CFG_TUH_MIDI
+#define CFG_TUH_MIDI   0
+#endif
+
+#ifndef CFG_TUH_MSC
+#define CFG_TUH_MSC    0
+#endif
+
+#ifndef CFG_TUH_VENDOR
+#define CFG_TUH_VENDOR 0
+#endif
 
 //--------------------------------------------------------------------+
 // Port Specific
