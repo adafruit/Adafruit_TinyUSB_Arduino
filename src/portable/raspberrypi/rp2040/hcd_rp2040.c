@@ -39,7 +39,6 @@
 
 #include "host/hcd.h"
 #include "host/usbh.h"
-#include "host/usbh_hcd.h"
 
 #define ROOT_PORT 0
 
@@ -61,8 +60,8 @@ static struct hw_endpoint ep_pool[1 + PICO_USB_HOST_INTERRUPT_ENDPOINTS];
 
 // Flags we set by default in sie_ctrl (we add other bits on top)
 enum {
-  SIE_CTRL_BASE = USB_SIE_CTRL_SOF_EN_BITS        | USB_SIE_CTRL_KEEP_ALIVE_EN_BITS |
-                  USB_SIE_CTRL_PULLDOWN_EN_BITS   | USB_SIE_CTRL_EP0_INT_1BUF_BITS
+  SIE_CTRL_BASE = USB_SIE_CTRL_SOF_EN_BITS      | USB_SIE_CTRL_KEEP_ALIVE_EN_BITS |
+                  USB_SIE_CTRL_PULLDOWN_EN_BITS | USB_SIE_CTRL_EP0_INT_1BUF_BITS
 };
 
 static struct hw_endpoint *get_dev_ep(uint8_t dev_addr, uint8_t ep_addr)
@@ -88,7 +87,7 @@ static bool need_pre(uint8_t dev_addr)
 {
     // If this device is different to the speed of the root device
     // (i.e. is a low speed device on a full speed hub) then need pre
-    return hcd_port_speed_get(0) != tuh_device_get_speed(dev_addr);
+    return hcd_port_speed_get(0) != tuh_speed_get(dev_addr);
 }
 
 static void hw_xfer_complete(struct hw_endpoint *ep, xfer_result_t xfer_result)
@@ -202,7 +201,6 @@ static void hcd_rp2040_irq(void)
     {
         handled |= USB_INTS_BUFF_STATUS_BITS;
         TU_LOG(2, "Buffer complete\n");
-        // print_bufctrl32(*epx.buffer_control);
         hw_handle_buff_status();
     }
 
@@ -232,7 +230,7 @@ static void hcd_rp2040_irq(void)
     if (status & USB_INTS_ERROR_DATA_SEQ_BITS)
     {
         usb_hw_clear->sie_status = USB_SIE_STATUS_DATA_SEQ_ERROR_BITS;
-        print_bufctrl32(*epx.buffer_control);
+        TU_LOG(3, "  Seq Error: [0] = 0x%04u  [1] = 0x%04x\r\n", tu_u32_low16(*epx.buffer_control), tu_u32_high16(*epx.buffer_control));
         panic("Data Seq Error \n");
     }
 
@@ -360,6 +358,9 @@ bool hcd_init(uint8_t rhport)
     // Reset any previous state
     rp2040_usb_init();
 
+    // Force VBUS detect to always present, for now we assume vbus is always provided (without using VBUS En)
+    usb_hw->pwr = USB_USB_PWR_VBUS_DETECT_BITS | USB_USB_PWR_VBUS_DETECT_OVERRIDE_EN_BITS;
+
     irq_set_exclusive_handler(USBCTRL_IRQ, hcd_rp2040_irq);
 
     // clear epx and interrupt eps
@@ -453,7 +454,7 @@ bool hcd_edpt_open(uint8_t rhport, uint8_t dev_addr, tusb_desc_endpoint_t const 
     _hw_endpoint_init(ep,
         dev_addr,
         ep_desc->bEndpointAddress,
-        ep_desc->wMaxPacketSize.size,
+        tu_edpt_packet_size(ep_desc),
         ep_desc->bmAttributes.xfer,
         ep_desc->bInterval);
 
