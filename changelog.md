@@ -1,5 +1,11 @@
 # Adafruit TinyUSB Arduino Library Changelog
 
+## 1.6.0
+
+- Update TinyUSB to post 0.12.0 at commit https://github.com/hathach/tinyusb/commit/b4a0f0b273eee32ead7acbd44ca9554c58a2adfa
+- Fix build with ESP32S2 v2.0.1rc
+- Fix MIDI Control Change message sending is corrupted
+
 ## 1.5.0 - 2021.09.29
 
 - Add support for ESP32-S2 core version 2.0.0
