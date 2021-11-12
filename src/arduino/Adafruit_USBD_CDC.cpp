@@ -191,6 +191,15 @@ int Adafruit_USBD_CDC::read(void) {
   return (int)tud_cdc_n_read_char(_instance);
 }
 
+size_t Adafruit_USBD_CDC::read(uint8_t *buffer, size_t size)
+{
+  if (!isValid()) {
+    return 0;
+  }
+
+  return tud_cdc_n_read(_instance, buffer, size);
+}
+
 void Adafruit_USBD_CDC::flush(void) {
   if (!isValid()) {
     return;
