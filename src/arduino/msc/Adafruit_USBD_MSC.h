@@ -35,6 +35,7 @@ public:
                                       uint32_t bufsize);
   typedef void (*flush_callback_t)(void);
   typedef bool (*ready_callback_t)(void);
+  typedef bool (*startstop_callback_t)(uint8_t power_condition, bool start, bool load_eject);
 
   Adafruit_USBD_MSC(void);
 
@@ -51,6 +52,7 @@ public:
   void setReadWriteCallback(uint8_t lun, read_callback_t rd_cb,
                             write_callback_t wr_cb, flush_callback_t fl_cb);
   void setReadyCallback(uint8_t lun, ready_callback_t cb);
+  void setStartStopCallback(uint8_t lun, startstop_callback_t cb);
 
   //------------- Single LUN API -------------//
   void setID(const char *vendor_id, const char *product_id,
@@ -70,6 +72,8 @@ public:
   }
 
   void setReadyCallback(ready_callback_t cb) { setReadyCallback(0, cb); }
+
+  void setStartStopCallback(startstop_callback_t cb) { setStartStopCallback(0, cb); }
 
   // from Adafruit_USBD_Interface
   virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
