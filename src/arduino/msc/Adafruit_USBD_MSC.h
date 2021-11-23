@@ -86,6 +86,7 @@ private:
     write_callback_t wr_cb;
     flush_callback_t fl_cb;
     ready_callback_t ready_cb;
+    startstop_callback_t startstop_cb;
 
     const char *_inquiry_vid;
     const char *_inquiry_pid;
