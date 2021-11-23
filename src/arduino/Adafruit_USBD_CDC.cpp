@@ -33,6 +33,10 @@
 #include "Adafruit_USBD_CDC.h"
 #include "Adafruit_USBD_Device.h"
 
+#ifndef TINYUSB_API_VERSION
+#define TINYUSB_API_VERSION 0
+#endif
+
 // Starting endpoints; adjusted elsewhere as needed
 #define EPOUT 0x00
 #define EPIN 0x80
@@ -191,6 +195,7 @@ int Adafruit_USBD_CDC::read(void) {
   return (int)tud_cdc_n_read_char(_instance);
 }
 
+#if TINYUSB_API_VERSION >= 10700
 size_t Adafruit_USBD_CDC::read(uint8_t *buffer, size_t size)
 {
   if (!isValid()) {
@@ -199,6 +204,7 @@ size_t Adafruit_USBD_CDC::read(uint8_t *buffer, size_t size)
 
   return tud_cdc_n_read(_instance, buffer, size);
 }
+#endif
 
 void Adafruit_USBD_CDC::flush(void) {
   if (!isValid()) {

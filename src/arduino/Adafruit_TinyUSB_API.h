@@ -28,6 +28,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+// API Version, need to be updated when there is changes for
+// TinyUSB_API, USBD_CDC, USBD_Device, USBD_Interface,
+#define TINYUSB_API_VERSION     10700
+
 //--------------------------------------------------------------------+
 // Core API
 // Should be called by BSP Core to initialize, process task
