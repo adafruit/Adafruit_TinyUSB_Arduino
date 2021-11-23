@@ -196,8 +196,7 @@ int Adafruit_USBD_CDC::read(void) {
 }
 
 #if TINYUSB_API_VERSION >= 10700
-size_t Adafruit_USBD_CDC::read(uint8_t *buffer, size_t size)
-{
+size_t Adafruit_USBD_CDC::read(uint8_t *buffer, size_t size) {
   if (!isValid()) {
     return 0;
   }
