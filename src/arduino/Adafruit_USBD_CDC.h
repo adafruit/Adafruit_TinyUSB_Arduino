@@ -60,7 +60,10 @@ public:
   // Stream API
   virtual int available(void);
   virtual int peek(void);
+
   virtual int read(void);
+  size_t read(uint8_t *buffer, size_t size);
+
   virtual void flush(void);
   virtual size_t write(uint8_t);
 
