@@ -49,7 +49,9 @@
 #if CFG_TUD_MSC
   #include "arduino/msc/Adafruit_USBD_MSC.h"
 #endif
-#include "arduino/webusb/Adafruit_USBD_WebUSB.h"
+#if CFG_TUD_VENDOR
+  #include "arduino/webusb/Adafruit_USBD_WebUSB.h"
+#endif
 
 // Initialize device hardware, stack, also Serial as CDC
 // Wrapper for TinyUSBDevice.begin(rhport)
