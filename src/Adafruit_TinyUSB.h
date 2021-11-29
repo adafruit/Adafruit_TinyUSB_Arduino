@@ -36,12 +36,22 @@
 #if TUSB_OPT_DEVICE_ENABLED
 
 #include "arduino/Adafruit_USBD_Device.h"
-#include "arduino/Adafruit_USBD_CDC.h"
+#if CFG_TUD_CDC
+  #include "arduino/Adafruit_USBD_CDC.h"
+#endif
 
-#include "arduino/hid/Adafruit_USBD_HID.h"
-#include "arduino/midi/Adafruit_USBD_MIDI.h"
-#include "arduino/msc/Adafruit_USBD_MSC.h"
-#include "arduino/webusb/Adafruit_USBD_WebUSB.h"
+#if CFG_TUD_HID
+  #include "arduino/hid/Adafruit_USBD_HID.h"
+#endif
+#if CFG_TUD_MIDI
+  #include "arduino/midi/Adafruit_USBD_MIDI.h"
+#endif
+#if CFG_TUD_MSC
+  #include "arduino/msc/Adafruit_USBD_MSC.h"
+#endif
+#if CFG_TUD_VENDOR
+  #include "arduino/webusb/Adafruit_USBD_WebUSB.h"
+#endif
 
 // Initialize device hardware, stack, also Serial as CDC
 // Wrapper for TinyUSBDevice.begin(rhport)
