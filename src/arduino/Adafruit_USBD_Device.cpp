@@ -122,6 +122,10 @@ void Adafruit_USBD_Device::setProductDescriptor(const char *s) {
   _desc_str_arr[STRID_PRODUCT] = s;
 }
 
+void Adafruit_USBD_Device::setSerialDescriptor(const char *s) {
+  _desc_str_arr[STRID_SERIAL] = s;
+}
+
 void Adafruit_USBD_Device::task(void) { tud_task(); }
 
 bool Adafruit_USBD_Device::mounted(void) { return tud_mounted(); }
@@ -206,6 +210,7 @@ void Adafruit_USBD_Device::clearConfiguration(void) {
   _desc_str_arr[STRID_LANGUAGE] = (const char *)((uint32_t)USB_LANGUAGE);
   _desc_str_arr[STRID_MANUFACTURER] = USB_MANUFACTURER;
   _desc_str_arr[STRID_PRODUCT] = USB_PRODUCT;
+   _desc_str_arr[STRID_SERIAL] = nullptr;
   // STRID_SERIAL is platform dependent
 
   _desc_str_count = 4;
@@ -316,8 +321,11 @@ uint16_t const *Adafruit_USBD_Device::descriptor_string_cb(uint8_t index,
     break;
 
   case STRID_SERIAL:
-    chr_count = getSerialDescriptor(_desc_str);
-    break;
+        if (!_desc_str_arr[STRID_SERIAL]) {
+            chr_count = getSerialDescriptor(_desc_str);
+            break;
+        }
+        // else we have a serial string, treat as all others, fall through
 
   default:
     // Invalid index
