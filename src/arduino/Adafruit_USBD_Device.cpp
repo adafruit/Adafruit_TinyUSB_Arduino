@@ -321,11 +321,11 @@ uint16_t const *Adafruit_USBD_Device::descriptor_string_cb(uint8_t index,
     break;
 
   case STRID_SERIAL:
-        if (!_desc_str_arr[STRID_SERIAL]) {
-            chr_count = getSerialDescriptor(_desc_str);
-            break;
-        }
-        // else we have a serial string, treat as all others, fall through
+    if (!_desc_str_arr[STRID_SERIAL]) {
+        chr_count = getSerialDescriptor(_desc_str);
+        break;
+    }
+    // else we have a serial string, treat as all others, fall through
 
   default:
     // Invalid index
