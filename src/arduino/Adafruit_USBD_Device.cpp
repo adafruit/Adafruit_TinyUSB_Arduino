@@ -309,7 +309,7 @@ uint8_t Adafruit_USBD_Device::getSerialDescriptor(uint16_t *serial_utf16) {
     }
 
     return 2 * serial_len;
-  }else{
+  } else {
     return strcpy_utf16(_desc_str_arr[STRID_SERIAL], serial_utf16 + 1, 32);
   }
 }
