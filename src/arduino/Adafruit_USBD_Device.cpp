@@ -210,7 +210,7 @@ void Adafruit_USBD_Device::clearConfiguration(void) {
   _desc_str_arr[STRID_LANGUAGE] = (const char *)((uint32_t)USB_LANGUAGE);
   _desc_str_arr[STRID_MANUFACTURER] = USB_MANUFACTURER;
   _desc_str_arr[STRID_PRODUCT] = USB_PRODUCT;
-   _desc_str_arr[STRID_SERIAL] = nullptr;
+  _desc_str_arr[STRID_SERIAL] = nullptr;
   // STRID_SERIAL is platform dependent
 
   _desc_str_count = 4;
@@ -322,8 +322,8 @@ uint16_t const *Adafruit_USBD_Device::descriptor_string_cb(uint8_t index,
 
   case STRID_SERIAL:
     if (!_desc_str_arr[STRID_SERIAL]) {
-        chr_count = getSerialDescriptor(_desc_str);
-        break;
+      chr_count = getSerialDescriptor(_desc_str);
+      break;
     }
     // else we have a serial string, treat as all others, fall through
 

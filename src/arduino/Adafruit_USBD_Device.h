@@ -85,7 +85,7 @@ public:
   void setLanguageDescriptor(uint16_t language_id);
   void setManufacturerDescriptor(const char *s);
   void setProductDescriptor(const char *s);
-  void setSerialDescriptor(const char *s);  
+  void setSerialDescriptor(const char *s);
   uint8_t getSerialDescriptor(uint16_t *serial_utf16);
 
   //------------- Control -------------//
