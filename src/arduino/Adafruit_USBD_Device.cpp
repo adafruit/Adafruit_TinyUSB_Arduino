@@ -122,6 +122,10 @@ void Adafruit_USBD_Device::setProductDescriptor(const char *s) {
   _desc_str_arr[STRID_PRODUCT] = s;
 }
 
+void Adafruit_USBD_Device::setSerialDescriptor(const char *s) {
+  _desc_str_arr[STRID_SERIAL] = s;
+}
+
 void Adafruit_USBD_Device::task(void) { tud_task(); }
 
 bool Adafruit_USBD_Device::mounted(void) { return tud_mounted(); }
@@ -206,6 +210,7 @@ void Adafruit_USBD_Device::clearConfiguration(void) {
   _desc_str_arr[STRID_LANGUAGE] = (const char *)((uint32_t)USB_LANGUAGE);
   _desc_str_arr[STRID_MANUFACTURER] = USB_MANUFACTURER;
   _desc_str_arr[STRID_PRODUCT] = USB_PRODUCT;
+  _desc_str_arr[STRID_SERIAL] = nullptr;
   // STRID_SERIAL is platform dependent
 
   _desc_str_count = 4;
@@ -285,24 +290,30 @@ bool Adafruit_USBD_Device::begin(uint8_t rhport) {
   return true;
 }
 
+static int strcpy_utf16(const char *s, uint16_t *buf, int bufsize);
+
 uint8_t Adafruit_USBD_Device::getSerialDescriptor(uint16_t *serial_utf16) {
-  uint8_t serial_id[16] __attribute__((aligned(4)));
-  uint8_t const serial_len = TinyUSB_Port_GetSerialNumber(serial_id);
 
-  for (uint8_t i = 0; i < serial_len; i++) {
-    for (uint8_t j = 0; j < 2; j++) {
-      const char nibble_to_hex[16] = {'0', '1', '2', '3', '4', '5', '6', '7',
-                                      '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+  if (!_desc_str_arr[STRID_SERIAL]) {
+    uint8_t serial_id[16] __attribute__((aligned(4)));
+    uint8_t const serial_len = TinyUSB_Port_GetSerialNumber(serial_id);
 
-      uint8_t nibble = (serial_id[i] >> (j * 4)) & 0xf;
-      serial_utf16[1 + i * 2 + (1 - j)] = nibble_to_hex[nibble]; // UTF-16-LE
+    for (uint8_t i = 0; i < serial_len; i++) {
+      for (uint8_t j = 0; j < 2; j++) {
+        const char nibble_to_hex[16] = {'0', '1', '2', '3', '4', '5', '6', '7',
+                                        '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+
+        uint8_t nibble = (serial_id[i] >> (j * 4)) & 0xf;
+        serial_utf16[1 + i * 2 + (1 - j)] = nibble_to_hex[nibble]; // UTF-16-LE
+      }
     }
-  }
 
-  return 2 * serial_len;
+    return 2 * serial_len;
+  } else {
+    return strcpy_utf16(_desc_str_arr[STRID_SERIAL], serial_utf16 + 1, 32);
+  }
 }
 
-static int strcpy_utf16(const char *s, uint16_t *buf, int bufsize);
 uint16_t const *Adafruit_USBD_Device::descriptor_string_cb(uint8_t index,
                                                            uint16_t langid) {
   (void)langid;
