@@ -112,6 +112,11 @@ void Adafruit_USBD_MSC::setReadyCallback(uint8_t lun, ready_callback_t cb) {
   _lun_info[lun].ready_cb = cb;
 }
 
+void Adafruit_USBD_MSC::setStartStopCallback(uint8_t lun, startstop_callback_t cb)
+{
+  _lun_info[lun].startstop_cb = cb;
+}
+
 bool Adafruit_USBD_MSC::begin(void) {
   if (!TinyUSBDevice.addInterface(*this)) {
     return false;
