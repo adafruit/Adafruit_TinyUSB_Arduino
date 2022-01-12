@@ -137,7 +137,7 @@ void loop()
     root.close();
 
     Serial.println();
-    delay(1000); // refresh every 0.5 second
+    delay(1000); // refresh every 1 second
   }
 }
 
