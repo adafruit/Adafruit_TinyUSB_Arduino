@@ -35,6 +35,7 @@ public:
                                       uint32_t bufsize);
   typedef void (*flush_callback_t)(void);
   typedef bool (*ready_callback_t)(void);
+  typedef bool (*writable_callback_t)(void);
 
   Adafruit_USBD_MSC(void);
 
@@ -51,6 +52,7 @@ public:
   void setReadWriteCallback(uint8_t lun, read_callback_t rd_cb,
                             write_callback_t wr_cb, flush_callback_t fl_cb);
   void setReadyCallback(uint8_t lun, ready_callback_t cb);
+  void setWritableCallback(uint8_t lun, writable_callback_t cb);
 
   //------------- Single LUN API -------------//
   void setID(const char *vendor_id, const char *product_id,
@@ -70,18 +72,22 @@ public:
   }
 
   void setReadyCallback(ready_callback_t cb) { setReadyCallback(0, cb); }
+  void setWritableCallback(writable_callback_t cb) {
+    setWritableCallback(0, cb);
+  }
 
   // from Adafruit_USBD_Interface
   virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
                                           uint16_t bufsize);
 
 private:
-  enum { MAX_LUN = 2 };
+  enum { MAX_LUN = 2 }; // TODO make it configurable
   struct {
     read_callback_t rd_cb;
     write_callback_t wr_cb;
     flush_callback_t fl_cb;
     ready_callback_t ready_cb;
+    writable_callback_t writable_cb;
 
     const char *_inquiry_vid;
     const char *_inquiry_pid;
@@ -107,6 +113,7 @@ private:
   friend int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset,
                                     uint8_t *buffer, uint32_t bufsize);
   friend void tud_msc_write10_complete_cb(uint8_t lun);
+  friend bool tud_msc_is_writable_cb(uint8_t lun);
 };
 
 #endif /* ADAFRUIT_USBD_MSC_H_ */

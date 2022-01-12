@@ -112,6 +112,11 @@ void Adafruit_USBD_MSC::setReadyCallback(uint8_t lun, ready_callback_t cb) {
   _lun_info[lun].ready_cb = cb;
 }
 
+void Adafruit_USBD_MSC::setWritableCallback(uint8_t lun,
+                                            writable_callback_t cb) {
+  _lun_info[lun].writable_cb = cb;
+}
+
 bool Adafruit_USBD_MSC::begin(void) {
   if (!TinyUSBDevice.addInterface(*this)) {
     return false;
@@ -254,6 +259,16 @@ void tud_msc_write10_complete_cb(uint8_t lun) {
 
   // flush pending cache when write10 is complete
   return _msc_dev->_lun_info[lun].fl_cb();
+}
+
+// Invoked to check if device is writable as part of SCSI WRITE10
+// Default mode is writable
+bool tud_msc_is_writable_cb(uint8_t lun) {
+  if (!(_msc_dev && _msc_dev->_lun_info[lun].writable_cb)) {
+    return true;
+  }
+
+  return _msc_dev->_lun_info[lun].writable_cb();
 }
 
 } // extern "C"
