@@ -112,7 +112,8 @@ void Adafruit_USBD_MSC::setReadyCallback(uint8_t lun, ready_callback_t cb) {
   _lun_info[lun].ready_cb = cb;
 }
 
-void Adafruit_USBD_MSC::setWritableCallback(uint8_t lun, writable_callback_t cb) {
+void Adafruit_USBD_MSC::setWritableCallback(uint8_t lun,
+                                            writable_callback_t cb) {
   _lun_info[lun].writable_cb = cb;
 }
 
@@ -262,8 +263,7 @@ void tud_msc_write10_complete_cb(uint8_t lun) {
 
 // Invoked to check if device is writable as part of SCSI WRITE10
 // Default mode is writable
-bool tud_msc_is_writable_cb(uint8_t lun)
-{
+bool tud_msc_is_writable_cb(uint8_t lun) {
   if (!(_msc_dev && _msc_dev->_lun_info[lun].writable_cb)) {
     return true;
   }

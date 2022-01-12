@@ -72,7 +72,9 @@ public:
   }
 
   void setReadyCallback(ready_callback_t cb) { setReadyCallback(0, cb); }
-  void setWritableCallback(writable_callback_t cb) { setWritableCallback(0, cb); }
+  void setWritableCallback(writable_callback_t cb) {
+    setWritableCallback(0, cb);
+  }
 
   // from Adafruit_USBD_Interface
   virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
