@@ -146,7 +146,7 @@ void loop()
 // return number of copied bytes (must be multiple of block size) 
 int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 {
-  // Note: SPIFLash Bock API: readBlocks/writeBlocks/syncBlocks
+  // Note: SPIFLash Block API: readBlocks/writeBlocks/syncBlocks
   // already include 4K sector caching internally. We don't need to cache it, yahhhh!!
   return flash.readBlocks(lba, (uint8_t*) buffer, bufsize/512) ? bufsize : -1;
 }
@@ -158,7 +158,7 @@ int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 {
   digitalWrite(LED_BUILTIN, HIGH);
 
-  // Note: SPIFLash Bock API: readBlocks/writeBlocks/syncBlocks
+  // Note: SPIFLash Block API: readBlocks/writeBlocks/syncBlocks
   // already include 4K sector caching internally. We don't need to cache it, yahhhh!!
   return flash.writeBlocks(lba, buffer, bufsize/512) ? bufsize : -1;
 }
