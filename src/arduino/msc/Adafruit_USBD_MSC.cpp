@@ -173,7 +173,14 @@ bool tud_msc_test_unit_ready_cb(uint8_t lun) {
     _msc_dev->_lun_info[lun].unit_ready = _msc_dev->_lun_info[lun].ready_cb();
   }
 
-  return _msc_dev->_lun_info[lun].unit_ready;
+  bool const ret = _msc_dev->_lun_info[lun].unit_ready;
+
+  if (!ret) {
+    // Addition Sense: 3A-00 is NOT FOUND
+    tud_msc_set_sense(lun, SCSI_SENSE_NOT_READY, 0x3a, 0x00);
+  }
+
+  return ret;
 }
 
 // Callback invoked to determine disk's size
