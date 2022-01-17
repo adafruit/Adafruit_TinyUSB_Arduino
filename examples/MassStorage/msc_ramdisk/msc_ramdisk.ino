@@ -70,7 +70,7 @@ void setup()
 
 void loop()
 {
-
+  // nothing to do
 }
 
 // Callback invoked when received READ10 command.
