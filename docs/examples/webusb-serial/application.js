@@ -76,15 +76,20 @@
 
     let commandLine = document.getElementById("command_line");
 
-    commandLine.addEventListener("keypress", function(event) {
+    commandLine.addEventListener("keydown", function(event) {
+      let value;
+
       if (event.keyCode === 13) {
         if (commandLine.value.length > 0) {
           addLine('sender_lines', commandLine.value);
           commandLine.value = '';
         }
+        value = String.fromCharCode(event.keyCode);
+      } else {
+        value = event.key;
       }
 
-      port.send(new TextEncoder('utf-8').encode(String.fromCharCode(event.which || event.keyCode)));
+      port.send(new TextEncoder('utf-8').encode(value));
     });
   });
 })();
