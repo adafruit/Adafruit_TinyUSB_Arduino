@@ -18,6 +18,22 @@
 
 Adafruit_USBD_MSC usb_msc;
 
+// Eject button to demonstrate medium is not ready e.g SDCard is not present
+// whenever this button is pressed and hold, it will report to host as not ready
+#if defined(ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS) || defined(ARDUINO_NRF52840_CIRCUITPLAY)
+  #define BTN_EJECT   4   // Left Button
+  bool activeState = true;
+
+#elif defined(ARDUINO_FUNHOUSE_ESP32S2)
+  #define BTN_EJECT   BUTTON_DOWN
+  bool activeState = true;
+
+#elif defined PIN_BUTTON1
+  #define BTN_EJECT   PIN_BUTTON1
+  bool activeState = false;
+#endif
+
+
 // the setup function runs once when you press reset or power the board
 void setup()
 { 
@@ -39,6 +55,11 @@ void setup()
   // Set Lun ready (RAM disk is always ready)
   usb_msc.setUnitReady(true);
 
+#ifdef BTN_EJECT
+  pinMode(BTN_EJECT, activeState ? INPUT_PULLDOWN : INPUT_PULLUP);
+  usb_msc.setReadyCallback(msc_ready_callback);
+#endif
+
   usb_msc.begin();
 
   Serial.begin(115200);
@@ -50,8 +71,6 @@ void setup()
 void loop()
 {
   // nothing to do
-  Serial.println("Adafruit TinyUSB Mass Storage RAM Disk example");
-  delay(1000);
 }
 
 // Callback invoked when received READ10 command.
@@ -82,3 +101,14 @@ void msc_flush_callback (void)
 {
   // nothing to do
 }
+
+
+#ifdef BTN_EJECT
+// Invoked when received Test Unit Ready command.
+// return true allowing host to read/write this LUN e.g SD card inserted
+bool msc_ready_callback(void)
+{
+  // button not active --> medium ready
+  return digitalRead(BTN_EJECT) != activeState;
+}
+#endif
