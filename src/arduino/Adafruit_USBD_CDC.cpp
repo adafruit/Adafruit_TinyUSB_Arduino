@@ -94,6 +94,7 @@ void Adafruit_USBD_CDC::end(void) {
   // Reset configuration descriptor without Serial as CDC
   TinyUSBDevice.clearConfiguration();
   _instance_count = 0;
+  _instance = INVALID_INSTANCE;
 }
 
 uint32_t Adafruit_USBD_CDC::baud(void) {
