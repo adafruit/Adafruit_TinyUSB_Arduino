@@ -200,13 +200,9 @@ void tud_msc_capacity_cb(uint8_t lun, uint32_t *block_count,
 int32_t tud_msc_scsi_cb(uint8_t lun, const uint8_t scsi_cmd[16], void *buffer,
                         uint16_t bufsize) {
   const void *response = NULL;
-  uint16_t resplen = 0;
+  int32_t resplen = 0;
 
   switch (scsi_cmd[0]) {
-  case SCSI_CMD_PREVENT_ALLOW_MEDIUM_REMOVAL:
-    // Host is about to read/write etc ... better not to disconnect disk
-    resplen = 0;
-    break;
 
   default:
     // Set Sense = Invalid Command Operation
@@ -224,7 +220,7 @@ int32_t tud_msc_scsi_cb(uint8_t lun, const uint8_t scsi_cmd[16], void *buffer,
   }
 
   // copy response to stack's buffer if any
-  if (response && resplen) {
+  if (response && (resplen > 0) ) {
     memcpy(buffer, response, resplen);
   }
 
