@@ -138,7 +138,9 @@ bool init_sdcard(void)
 
   if ( !sd.begin(SDCARD_CS, SD_SCK_MHZ(50)) )
   {
-    Serial.print("Failed");
+    Serial.print("Failed ");
+    sd.errorPrint();
+
     return false;
   }
 
@@ -149,7 +151,7 @@ bool init_sdcard(void)
   sd_changed = true; // to print contents initially
 
   Serial.print("OK, Card size = ");
-  Serial.print(block_count * 512 / (1024*1024));
+  Serial.print((block_count / (1024*1024)) * 512);
   Serial.println(" MB");
 
   return true;
