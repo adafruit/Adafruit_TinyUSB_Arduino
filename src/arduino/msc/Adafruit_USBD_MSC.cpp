@@ -220,7 +220,7 @@ int32_t tud_msc_scsi_cb(uint8_t lun, const uint8_t scsi_cmd[16], void *buffer,
   }
 
   // copy response to stack's buffer if any
-  if (response && (resplen > 0) ) {
+  if (response && (resplen > 0)) {
     memcpy(buffer, response, resplen);
   }
 
