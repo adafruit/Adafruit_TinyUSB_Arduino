@@ -94,13 +94,14 @@ Adafruit_USBD_MSC usb_msc;
 // Set to true when PC write to flash
 bool sd_changed = false;
 bool sd_inited = false;
+
+bool flash_formatted = false;
 bool flash_changed = false;
 
 // the setup function runs once when you press reset or power the board
 void setup()
 {
   pinMode(LED_BUILTIN, OUTPUT);
-
   Serial.begin(115200);
 
   // MSC with 2 Logical Units: LUN0: External Flash, LUN1: SDCard
@@ -117,7 +118,7 @@ void setup()
 
   //------------- Lun 0 for external flash -------------//
   flash.begin();
-  fatfs.begin(&flash);
+  flash_formatted = fatfs.begin(&flash);
 
   usb_msc.setCapacity(0, flash.size()/512, 512);
   usb_msc.setReadWriteCallback(0, external_flash_read_cb, external_flash_write_cb, external_flash_flush_cb);
@@ -193,14 +194,23 @@ void loop()
 {
   if ( flash_changed )
   {
-    File root;
-    root = fatfs.open("/");
+    if (!flash_formatted)
+    {
+      flash_formatted = fatfs.begin(&flash);
+    }
 
-    Serial.println("Flash contents:");
-    print_rootdir(&root);
-    Serial.println();
+    // skip if still not formatted
+    if (flash_formatted)
+    {
+      File root;
+      root = fatfs.open("/");
 
-    root.close();
+      Serial.println("Flash contents:");
+      print_rootdir(&root);
+      Serial.println();
+
+      root.close();
+    }
 
     flash_changed = false;
   }
