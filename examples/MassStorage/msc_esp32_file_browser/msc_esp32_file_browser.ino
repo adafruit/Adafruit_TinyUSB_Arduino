@@ -61,15 +61,11 @@ Adafruit_SPIFlash flash(&flashTransport);
 // file system object from SdFat
 FatFileSystem fatfs;
 
-//FatFile root;
-//FatFile file;
-
 // USB Mass Storage object
 Adafruit_USBD_MSC usb_msc;
 
 bool fs_formatted;  // Check if flash is formatted
 bool fs_changed;    // Set to true when PC write to flash
-
 
 const char* host = "esp32fs";
 WebServer server(80);
@@ -330,7 +326,7 @@ void handleFileCreate() {
   if (exists(path)) {
     return server.send(500, "text/plain", "FILE EXISTS");
   }
-  File file = fatfs.open(path, O_WRITE);
+  File file = fatfs.open(path, O_WRITE | O_CREAT);
   if (file) {
     file.close();
   } else {
