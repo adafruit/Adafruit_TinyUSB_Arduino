@@ -22,8 +22,9 @@
  *     it using follow sketch "https://github.com/adafruit/Adafruit_SPIFlash/tree/master/examples/SdFat_format"
  *   - Copy all files in 'data/' folder of this example to the root directory of the MassStorage disk drive
  * 5. When prompted, open http://esp32fs.local/edit to access the file browser
- * 6. Try to modify USB drive then refresh your browser to see if the change is updated
- * 7.
+ * 6. Modify/Update USB drive then refresh your browser to see if the change is updated
+ * 7. Upload/Edit a file using web browser then see if the USB Drive is updated. Note: the usb drive could
+ * briefly disappear and reappear to force PC to refresh its cache
  *
  * NOTE: Following library is required
  *   - Adafruit_SPIFlash https://github.com/adafruit/Adafruit_SPIFlash
@@ -65,7 +66,7 @@ FatFileSystem fatfs;
 Adafruit_USBD_MSC usb_msc;
 
 bool fs_formatted;  // Check if flash is formatted
-bool fs_changed;    // Set to true when PC write to flash
+bool fs_changed;    // Set to true when browser write to flash
 
 const char* host = "esp32fs";
 WebServer server(80);
@@ -90,19 +91,23 @@ void setupMassStorage(void)
   usb_msc.setCapacity(flash.size()/512, 512);
 
   // MSC is ready for read/write
-  usb_msc.setUnitReady(true);
+  fs_changed = false;
+  usb_msc.setReadyCallback(0, msc_ready_callback);
 
   usb_msc.begin();
 
   // Init file system on the flash
   fs_formatted = fatfs.begin(&flash);
 
-  fs_changed = true; // to print contents initially
-
   if ( !fs_formatted )
   {
     DBG_SERIAL.println("Failed to init files system, flash may not be formatted");
   }
+}
+
+void refreshMassStorage(void)
+{
+  fs_changed = true;
 }
 
 void setupServer(void)
@@ -292,6 +297,7 @@ void handleFileUpload() {
   } else if (upload.status == UPLOAD_FILE_END) {
     if (fsUploadFile) {
       fsUploadFile.close();
+      refreshMassStorage();
     }
     DBG_SERIAL.print("handleFileUpload Size: "); DBG_SERIAL.println(upload.totalSize);
   }
@@ -310,6 +316,7 @@ void handleFileDelete() {
     return server.send(404, "text/plain", "FileNotFound");
   }
   fatfs.remove(path.c_str());
+  refreshMassStorage();
   server.send(200, "text/plain", "");
   path = String();
 }
@@ -378,52 +385,6 @@ void loop()
 {
   server.handleClient();
   delay(2);//allow the cpu to switch to other tasks
-
-  if ( fs_changed )
-  {
-    fs_changed = false;
-
-    // check if host formatted disk
-    if (!fs_formatted)
-    {
-      fs_formatted = fatfs.begin(&flash);
-    }
-
-    // skip if still not formatted
-    if (!fs_formatted) return;
-
-//    DBG_SERIAL.println("Opening root");
-
-//    if ( !root.open("/") )
-//    {
-//      DBG_SERIAL.println("open root failed");
-//      return;
-//    }
-//
-//    DBG_SERIAL.println("Flash contents:");
-//
-//    // Open next file in root.
-//    // Warning, openNext starts at the current directory position
-//    // so a rewind of the directory may be required.
-//    while ( file.openNext(&root, O_READ) )
-//    {
-//      file.printFileSize(&DBG_SERIAL);
-//      DBG_SERIAL.write(' ');
-//      file.printName(&DBG_SERIAL);
-//      if ( file.isDir() )
-//      {
-//        // Indicate a directory.
-//        DBG_SERIAL.write('/');
-//      }
-//      DBG_SERIAL.println();
-//      file.close();
-//    }
-//
-//    root.close();
-
-//    DBG_SERIAL.println();
-//    delay(1000);
-  }
 }
 
 // Callback invoked when received READ10 command.
@@ -460,9 +421,17 @@ void msc_flush_cb (void)
   // clear file system's cache to force refresh
   fatfs.cacheClear();
 
-  fs_changed = true;
-
 #ifdef LED_BUILTIN
   digitalWrite(LED_BUILTIN, LOW);
 #endif
+}
+
+// Invoked when received Test Unit Ready command.
+// return true allowing host to read/write this LUN e.g SD card inserted
+bool msc_ready_callback(void)
+{
+  // if fs has changed, mark unit as not ready temporarily to force PC to flush cache
+  bool ret = !fs_changed;
+  fs_changed = false;
+  return ret;
 }
