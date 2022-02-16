@@ -23,17 +23,28 @@
 // MSC External Flash Config
 //--------------------------------------------------------------------+
 
-// Uncomment to run example with FRAM
-// #define FRAM_CS   A5
-// #define FRAM_SPI  SPI
+// Un-comment to run example with custom SPI SPI and SS e.g with FRAM breakout
+// #define CUSTOM_CS   A5
+// #define CUSTOM_SPI  SPI
 
-#if defined(FRAM_CS) && defined(FRAM_SPI)
-  Adafruit_FlashTransport_SPI flashTransport(FRAM_CS, FRAM_SPI);
+#if defined(CUSTOM_CS) && defined(CUSTOM_SPI)
+  Adafruit_FlashTransport_SPI flashTransport(CUSTOM_CS, CUSTOM_SPI);
 
 #elif defined(ARDUINO_ARCH_ESP32)
   // ESP32 use same flash device that store code.
   // Therefore there is no need to specify the SPI and SS
   Adafruit_FlashTransport_ESP32 flashTransport;
+
+#elif defined(ARDUINO_ARCH_RP2040)
+  // RP2040 use same flash device that store code.
+  // Therefore there is no need to specify the SPI and SS
+  // Use default (no-args) constructor to be compatible with CircuitPython partition scheme
+  Adafruit_FlashTransport_RP2040 flashTransport;
+
+  // For generic usage:
+  //    Adafruit_FlashTransport_RP2040 flashTransport(start_address, size)
+  // If start_address and size are both 0, value that match filesystem setting in
+  // 'Tools->Flash Size' menu selection will be used
 
 #else
   // On-board external flash (QSPI or SPI) macros should already
