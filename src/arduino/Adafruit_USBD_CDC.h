@@ -50,8 +50,6 @@ public:
   void begin(uint32_t baud, uint8_t config);
   void end(void);
 
-  void setDebugOutput(bool en) {}
-
   // return line coding set by host
   uint32_t baud(void);
   uint8_t stopbits(void);
