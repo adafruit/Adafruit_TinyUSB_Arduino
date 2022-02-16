@@ -168,7 +168,10 @@ void setupServer(void)
 
 void setup()
 {
+#ifdef LED_BUILTIN
   pinMode(LED_BUILTIN, OUTPUT);
+#endif
+
   DBG_SERIAL.begin(115200);
 
   setupMassStorage();
@@ -428,7 +431,9 @@ int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 // return number of written bytes (must be multiple of block size)
 int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 {
+#ifdef LED_BUILTIN
   digitalWrite(LED_BUILTIN, HIGH);
+#endif
 
   // Note: SPIFLash Bock API: readBlocks/writeBlocks/syncBlocks
   // already include 4K sector caching internally. We don't need to cache it, yahhhh!!
@@ -447,5 +452,7 @@ void msc_flush_cb (void)
 
   fs_changed = true;
 
+#ifdef LED_BUILTIN
   digitalWrite(LED_BUILTIN, LOW);
+#endif
 }
