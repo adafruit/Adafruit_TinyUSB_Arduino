@@ -9,14 +9,25 @@
  any redistribution
 *********************************************************************/
 
-/* This example demo how to expose on-board external Flash as USB Mass Storage.
- * Following library is required
+/* This example is based on "arduino-esp32/libraries/WebServer/examples/FSBrowser"
+ * to expose on-board external Flash as USB Mass Storage and webserver. Both interfaces
+ * can make changes to file system
+ *
+ * How to run this example
+ * 1. Create secrets.h and define your "SECRET_SSID" and "SECRET_PASSWORD"
+ * 2. Compile and upload this sketch
+ * 3. Your ESP will be expose as MassStorage device.
+ * 4. If it is your first run (otherwise skip this step):
+ *   - you may need to format the drive as FAT. Note: If your PC failed to format, you could format
+ *     it using follow sketch "https://github.com/adafruit/Adafruit_SPIFlash/tree/master/examples/SdFat_format"
+ *   - Copy all files in 'data/' folder of this example to the root directory of the MassStorage disk drive
+ * 5. When prompted, open http://esp32fs.local/edit to access the file browser
+ * 6. Try to modify USB drive then refresh your browser to see if the change is updated
+ * 7.
+ *
+ * NOTE: Following library is required
  *   - Adafruit_SPIFlash https://github.com/adafruit/Adafruit_SPIFlash
  *   - SdFat https://github.com/adafruit/SdFat
- *
- * Note: Adafruit fork of SdFat enabled ENABLE_EXTENDED_TRANSFER_CLASS and FAT12_SUPPORT
- * in SdFatConfig.h, which is needed to run SdFat on external flash. You can use original
- * SdFat library and manually change those macros
  */
 
 #include "SPI.h"
@@ -118,7 +129,7 @@ void setupServer(void)
   MDNS.begin(host);
   DBG_SERIAL.print("Open http://");
   DBG_SERIAL.print(host);
-  DBG_SERIAL.println(".local/edit to see the file browser");
+  DBG_SERIAL.println(".local/edit to access the file browser");
 
   //SERVER INIT
 
@@ -272,12 +283,15 @@ void handleFileUpload() {
       filename = "/" + filename;
     }
     DBG_SERIAL.print("handleFileUpload Name: "); DBG_SERIAL.println(filename);
-    fsUploadFile = fatfs.open(filename, O_WRITE);
+    fsUploadFile = fatfs.open(filename, O_WRITE | O_CREAT | O_TRUNC);
     filename = String();
   } else if (upload.status == UPLOAD_FILE_WRITE) {
-    //DBG_SERIAL.print("handleFileUpload Data: "); DBG_SERIAL.println(upload.currentSize);
+    DBG_SERIAL.print("handleFileUpload Data: "); DBG_SERIAL.println(upload.currentSize);
     if (fsUploadFile) {
       fsUploadFile.write(upload.buf, upload.currentSize);
+    }else
+    {
+      DBG_SERIAL.print("handleFileUpload file is not opened !!!");
     }
   } else if (upload.status == UPLOAD_FILE_END) {
     if (fsUploadFile) {
