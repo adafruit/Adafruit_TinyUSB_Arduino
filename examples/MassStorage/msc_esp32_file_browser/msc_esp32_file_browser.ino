@@ -31,12 +31,12 @@
 
 // check if secrets.h is includable, if not please
 // create one with SSDI & PASSWORD macro as following example:
-// #define SECRET_SSID      "your-ssid"
-// #define SECRET_PASSWORD  "your-password"
 #if __has_include("secrets.h")
   #include "secrets.h"
 #else
-  #error "Please create secrets.h with SSID & PASSWORD defined"
+  #warning "Please create secrets.h with SSID & PASSWORD defined"
+  #define SECRET_SSID      "your-ssid"
+  #define SECRET_PASSWORD  "your-password"
 #endif
 
 // Debug with FTDI (Serial0) or USBCDC (Serial)
