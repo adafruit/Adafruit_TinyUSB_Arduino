@@ -77,6 +77,9 @@ FatFile file;
 // USB Mass Storage object
 Adafruit_USBD_MSC usb_msc;
 
+// Check if flash is formatted
+bool fs_formatted;
+
 // Set to true when PC write to flash
 bool fs_changed;
 
@@ -98,14 +101,19 @@ void setup()
 
   // MSC is ready for read/write
   usb_msc.setUnitReady(true);
-  
+
   usb_msc.begin();
 
   // Init file system on the flash
-  fatfs.begin(&flash);
+  fs_formatted = fatfs.begin(&flash);
 
   Serial.begin(115200);
   //while ( !Serial ) delay(10);   // wait for native usb
+
+  if ( !fs_formatted )
+  {
+    Serial.println("Failed to init files system, flash may not be formatted");
+  }
 
   Serial.println("Adafruit TinyUSB Mass Storage External Flash example");
   Serial.print("JEDEC ID: 0x"); Serial.println(flash.getJEDECID(), HEX);
@@ -119,7 +127,18 @@ void loop()
   if ( fs_changed )
   {
     fs_changed = false;
-    
+
+    // check if host formatted disk
+    if (!fs_formatted)
+    {
+      fs_formatted = fatfs.begin(&flash);
+    }
+
+    // skip if still not formatted
+    if (!fs_formatted) return;
+
+    Serial.println("Opening root");
+
     if ( !root.open("/") )
     {
       Serial.println("open root failed");
