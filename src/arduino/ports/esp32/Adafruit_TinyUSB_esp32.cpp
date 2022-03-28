@@ -183,4 +183,4 @@ extern "C" void yield(void) {
 }
 #endif // commented out
 
-#endif
+#endif // defined(ARDUINO_ARCH_ESP32) && TUSB_OPT_DEVICE_ENABLED

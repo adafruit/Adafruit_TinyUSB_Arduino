@@ -34,7 +34,7 @@ extern "C" {
 //--------------------------------------------------------------------
 #define CFG_TUSB_MCU OPT_MCU_NRF5X
 
-#ifdef USE_TINYUSB
+#ifdef USE_TINYUSB || !defined(USBCON)
 #define CFG_TUSB_RHPORT0_MODE OPT_MODE_DEVICE
 #else
 #define CFG_TUSB_RHPORT0_MODE OPT_MODE_NONE

@@ -38,7 +38,7 @@ extern "C" {
 #define CFG_TUSB_MCU OPT_MCU_SAMD21
 #endif
 
-#ifdef USE_TINYUSB
+#if defined(USE_TINYUSB) || !defined(USBCON)
 #define CFG_TUSB_RHPORT0_MODE OPT_MODE_DEVICE
 #else
 #define CFG_TUSB_RHPORT0_MODE OPT_MODE_NONE

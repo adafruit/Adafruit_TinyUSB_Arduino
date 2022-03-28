@@ -24,7 +24,7 @@
 
 #include "tusb_option.h"
 
-#if defined ARDUINO_NRF52_ADAFRUIT && TUSB_OPT_DEVICE_ENABLED
+#if defined(ARDUINO_NRF52_ADAFRUIT) && TUSB_OPT_DEVICE_ENABLED
 
 #include "nrfx.h"
 #include "nrfx_power.h"
@@ -134,4 +134,4 @@ static void usb_hardware_init(void) {
   }
 }
 
-#endif // USE_TINYUSB
+#endif // defined(ARDUINO_NRF52_ADAFRUIT) && TUSB_OPT_DEVICE_ENABLED

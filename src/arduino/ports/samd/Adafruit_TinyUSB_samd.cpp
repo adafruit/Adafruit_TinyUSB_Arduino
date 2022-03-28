@@ -24,7 +24,7 @@
 
 #include "tusb_option.h"
 
-#if defined ARDUINO_ARCH_SAMD && TUSB_OPT_DEVICE_ENABLED
+#if defined(ARDUINO_ARCH_SAMD) && TUSB_OPT_DEVICE_ENABLED
 
 #include "Arduino.h"
 #include <Reset.h> // Needed for auto-reset with 1200bps port touch
@@ -156,4 +156,4 @@ uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]) {
   return 16;
 }
 
-#endif
+#endif //  defined(ARDUINO_ARCH_SAMD) && TUSB_OPT_DEVICE_ENABLED

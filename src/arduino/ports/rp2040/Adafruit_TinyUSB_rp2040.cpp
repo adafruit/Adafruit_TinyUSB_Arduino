@@ -24,7 +24,7 @@
 
 #include "tusb_option.h"
 
-#if defined ARDUINO_ARCH_RP2040 && TUSB_OPT_DEVICE_ENABLED
+#if defined(ARDUINO_ARCH_RP2040) && TUSB_OPT_DEVICE_ENABLED
 
 #include "Arduino.h"
 
@@ -151,4 +151,4 @@ void TinyUSB_Device_Task(void) {
 }
 }
 
-#endif
+#endif // defined(ARDUINO_ARCH_RP2040) && TUSB_OPT_DEVICE_ENABLED
