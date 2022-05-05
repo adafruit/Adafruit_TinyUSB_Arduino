@@ -58,8 +58,12 @@ void rp2040_usb_init(void)
   unreset_block_wait(RESETS_RESET_USBCTRL_BITS);
 
   // Clear any previous state just in case
+  // TODO Suppress warning array-bounds with gcc11
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
   memset(usb_hw, 0, sizeof(*usb_hw));
   memset(usb_dpram, 0, sizeof(*usb_dpram));
+#pragma GCC diagnostic pop
 
   // Mux the controller to the onboard usb phy
   usb_hw->muxing = USB_USB_MUXING_TO_PHY_BITS | USB_USB_MUXING_SOFTCON_BITS;
@@ -87,7 +91,7 @@ void _hw_endpoint_buffer_control_update32(struct hw_endpoint *ep, uint32_t and_m
             *ep->buffer_control = value & ~USB_BUF_CTRL_AVAIL;
             // 12 cycle delay.. (should be good for 48*12Mhz = 576Mhz)
             // Don't need delay in host mode as host is in charge
-#if !TUSB_OPT_HOST_ENABLED
+#if !CFG_TUH_ENABLED
             __asm volatile (
                     "b 1f\n"
                     "1: b 1f\n"
