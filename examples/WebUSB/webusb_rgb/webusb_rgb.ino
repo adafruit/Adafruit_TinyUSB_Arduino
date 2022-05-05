@@ -55,6 +55,10 @@ WEBUSB_URL_DEF(landingPage, 1 /*https*/, "adafruit.github.io/Adafruit_TinyUSB_Ar
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+#if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
+  // Manual begin() is required on core without built-in support for TinyUSB such as mbed rp2040
+  TinyUSB_Device_Init(0);
+#endif
   //usb_web.setStringDescriptor("TinyUSB WebUSB");
   usb_web.setLandingPage(&landingPage);
   usb_web.setLineStateCallback(line_state_callback);
