@@ -1,6 +1,7 @@
 /* 
  * The MIT License (MIT)
  *
+ * Copyright (c) 2021 Tian Yunhao (t123yh)
  * Copyright (c) 2019 Ha Thach (tinyusb.org)
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -24,14 +25,10 @@
  * This file is part of the TinyUSB stack.
  */
 
-#ifndef _TUSB_OSAL_FREERTOS_H_
-#define _TUSB_OSAL_FREERTOS_H_
+#ifndef _TUSB_OSAL_RTX4_H_
+#define _TUSB_OSAL_RTX4_H_
 
-// FreeRTOS Headers
-#include TU_INCLUDE_PATH(CFG_TUSB_OS_INC_PATH,FreeRTOS.h)
-#include TU_INCLUDE_PATH(CFG_TUSB_OS_INC_PATH,semphr.h)
-#include TU_INCLUDE_PATH(CFG_TUSB_OS_INC_PATH,queue.h)
-#include TU_INCLUDE_PATH(CFG_TUSB_OS_INC_PATH,task.h)
+#include <rtl.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,72 +39,71 @@ extern "C" {
 //--------------------------------------------------------------------+
 static inline void osal_task_delay(uint32_t msec)
 {
-  vTaskDelay( pdMS_TO_TICKS(msec) );
+  uint16_t hi = msec >> 16;
+  uint16_t lo = msec;
+  while (hi--) {
+    os_dly_wait(0xFFFE);
+  }
+  os_dly_wait(lo);
+}
+
+static inline uint16_t msec2wait(uint32_t msec) {
+  if (msec == OSAL_TIMEOUT_WAIT_FOREVER)
+    return 0xFFFF;
+  else if (msec >= 0xFFFE)
+    return 0xFFFE;
+  else
+    return msec;
 }
 
 //--------------------------------------------------------------------+
 // Semaphore API
 //--------------------------------------------------------------------+
-typedef StaticSemaphore_t osal_semaphore_def_t;
-typedef SemaphoreHandle_t osal_semaphore_t;
+typedef OS_SEM osal_semaphore_def_t;
+typedef OS_ID osal_semaphore_t;
 
-static inline osal_semaphore_t osal_semaphore_create(osal_semaphore_def_t* semdef)
-{
-  return xSemaphoreCreateBinaryStatic(semdef);
+static inline OS_ID osal_semaphore_create(osal_semaphore_def_t* semdef) {
+  os_sem_init(semdef, 0);
+  return semdef;
 }
 
-static inline bool osal_semaphore_post(osal_semaphore_t sem_hdl, bool in_isr)
-{
-  if ( !in_isr )
-  {
-    return xSemaphoreGive(sem_hdl) != 0;
+static inline bool osal_semaphore_post(osal_semaphore_t sem_hdl, bool in_isr) {
+  if ( !in_isr ) {
+    os_sem_send(sem_hdl);
+  } else {
+    isr_sem_send(sem_hdl);
   }
-  else
-  {
-    BaseType_t xHigherPriorityTaskWoken;
-    BaseType_t res = xSemaphoreGiveFromISR(sem_hdl, &xHigherPriorityTaskWoken);
-
-#if CFG_TUSB_MCU == OPT_MCU_ESP32S2 || CFG_TUSB_MCU == OPT_MCU_ESP32S3
-    // not needed after https://github.com/espressif/esp-idf/commit/c5fd79547ac9b7bae06fa660e9f814d18d3390b7
-    if ( xHigherPriorityTaskWoken ) portYIELD_FROM_ISR();
-#else
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-#endif
-
-    return res != 0;
-  }
+	return true;
 }
 
-static inline bool osal_semaphore_wait (osal_semaphore_t sem_hdl, uint32_t msec)
-{
-  uint32_t const ticks = (msec == OSAL_TIMEOUT_WAIT_FOREVER) ? portMAX_DELAY : pdMS_TO_TICKS(msec);
-  return xSemaphoreTake(sem_hdl, ticks);
+static inline bool osal_semaphore_wait (osal_semaphore_t sem_hdl, uint32_t msec) {
+  return os_sem_wait(sem_hdl, msec2wait(msec)) != OS_R_TMO;
 }
 
-static inline void osal_semaphore_reset(osal_semaphore_t const sem_hdl)
-{
-  xQueueReset(sem_hdl);
+static inline void osal_semaphore_reset(osal_semaphore_t const sem_hdl) {
+  // TODO: implement
 }
 
 //--------------------------------------------------------------------+
 // MUTEX API (priority inheritance)
 //--------------------------------------------------------------------+
-typedef StaticSemaphore_t osal_mutex_def_t;
-typedef SemaphoreHandle_t osal_mutex_t;
+typedef OS_MUT osal_mutex_def_t;
+typedef OS_ID osal_mutex_t;
 
 static inline osal_mutex_t osal_mutex_create(osal_mutex_def_t* mdef)
 {
-  return xSemaphoreCreateMutexStatic(mdef);
+  os_mut_init(mdef);
+  return mdef;
 }
 
 static inline bool osal_mutex_lock (osal_mutex_t mutex_hdl, uint32_t msec)
 {
-  return osal_semaphore_wait(mutex_hdl, msec);
+  return os_mut_wait(mutex_hdl, msec2wait(msec)) != OS_R_TMO;
 }
 
 static inline bool osal_mutex_unlock(osal_mutex_t mutex_hdl)
 {
-  return xSemaphoreGive(mutex_hdl);
+  return os_mut_release(mutex_hdl) == OS_R_OK;
 }
 
 //--------------------------------------------------------------------+
@@ -115,56 +111,56 @@ static inline bool osal_mutex_unlock(osal_mutex_t mutex_hdl)
 //--------------------------------------------------------------------+
 
 // role device/host is used by OS NONE for mutex (disable usb isr) only
-#define OSAL_QUEUE_DEF(_int_set, _name, _depth, _type) \
-  static _type _name##_##buf[_depth];\
-  osal_queue_def_t _name = { .depth = _depth, .item_sz = sizeof(_type), .buf = _name##_##buf };
+#define OSAL_QUEUE_DEF(_int_set, _name, _depth, _type)   \
+  os_mbx_declare(_name##__mbox, _depth);              \
+  _declare_box(_name##__pool, sizeof(_type), _depth); \
+  osal_queue_def_t _name = { .depth = _depth, .item_sz = sizeof(_type), .pool = _name##__pool, .mbox = _name##__mbox };
+  
 
 typedef struct
 {
   uint16_t depth;
   uint16_t item_sz;
-  void*    buf;
-
-  StaticQueue_t sq;
+  U32* pool;
+  U32* mbox;
 }osal_queue_def_t;
 
-typedef QueueHandle_t osal_queue_t;
+typedef osal_queue_def_t* osal_queue_t;
 
 static inline osal_queue_t osal_queue_create(osal_queue_def_t* qdef)
 {
-  return xQueueCreateStatic(qdef->depth, qdef->item_sz, (uint8_t*) qdef->buf, &qdef->sq);
+  os_mbx_init(qdef->mbox, (qdef->depth + 4) * 4);
+  _init_box(qdef->pool, ((qdef->item_sz+3)/4)*(qdef->depth) + 3, qdef->item_sz);
+  return qdef;
 }
 
 static inline bool osal_queue_receive(osal_queue_t qhdl, void* data)
 {
-  return xQueueReceive(qhdl, data, portMAX_DELAY);
+  void* buf;
+  os_mbx_wait(qhdl->mbox, &buf, 0xFFFF);
+  memcpy(data, buf, qhdl->item_sz);
+  _free_box(qhdl->pool, buf);
+  return true;
 }
 
 static inline bool osal_queue_send(osal_queue_t qhdl, void const * data, bool in_isr)
 {
+  void* buf = _alloc_box(qhdl->pool);
+  memcpy(buf, data, qhdl->item_sz);
   if ( !in_isr )
   {
-    return xQueueSendToBack(qhdl, data, OSAL_TIMEOUT_WAIT_FOREVER) != 0;
+    os_mbx_send(qhdl->mbox, buf, 0xFFFF);
   }
   else
   {
-    BaseType_t xHigherPriorityTaskWoken;
-    BaseType_t res = xQueueSendToBackFromISR(qhdl, data, &xHigherPriorityTaskWoken);
-
-#if CFG_TUSB_MCU == OPT_MCU_ESP32S2 || CFG_TUSB_MCU == OPT_MCU_ESP32S3
-    // not needed after https://github.com/espressif/esp-idf/commit/c5fd79547ac9b7bae06fa660e9f814d18d3390b7
-    if ( xHigherPriorityTaskWoken ) portYIELD_FROM_ISR();
-#else
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-#endif
-
-    return res != 0;
+    isr_mbx_send(qhdl->mbox, buf);
   }
+  return true;
 }
 
 static inline bool osal_queue_empty(osal_queue_t qhdl)
 {
-  return uxQueueMessagesWaiting(qhdl) == 0;
+  return os_mbx_check(qhdl->mbox) == qhdl->depth;
 }
 
 #ifdef __cplusplus
