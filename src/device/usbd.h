@@ -33,6 +33,8 @@
 extern "C" {
 #endif
 
+// typedef void (*tud_sof_isr_t) (uint32_t frame_count);
+
 //--------------------------------------------------------------------+
 // Application API
 //--------------------------------------------------------------------+
@@ -43,10 +45,19 @@ bool tud_init (uint8_t rhport);
 // Check if device stack is already initialized
 bool tud_inited(void);
 
-// Task function should be called in main/rtos loop
-void tud_task (void);
+// Task function should be called in main/rtos loop, extended version of tud_task()
+// - timeout_ms: millisecond to wait, zero = no wait, 0xFFFFFFFF = wait forever
+// - in_isr: if function is called in ISR
+void tud_task_ext(uint32_t timeout_ms, bool in_isr);
 
-// Check if there is pending events need proccessing by tud_task()
+// Task function should be called in main/rtos loop
+TU_ATTR_ALWAYS_INLINE static inline
+void tud_task (void)
+{
+  tud_task_ext(UINT32_MAX, false);
+}
+
+// Check if there is pending events need processing by tud_task()
 bool tud_task_event_ready(void);
 
 // Interrupt handler, name alias to DCD
@@ -83,6 +94,10 @@ bool tud_disconnect(void);
 // Disable pull-up resistor on D+ D-
 // Return false on unsupported MCUs
 bool tud_connect(void);
+
+// Set Start-of-frame (1ms interval) IRQ handler
+// NULL means disabled, frame_count may not be supported on mcus
+// void tud_sof_isr_set(tud_sof_isr_t sof_isr);
 
 // Carry out Data and Status stage of control transfer
 // - If len = 0, it is equivalent to sending status only
