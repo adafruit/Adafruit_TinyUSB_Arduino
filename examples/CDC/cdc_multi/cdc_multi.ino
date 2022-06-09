@@ -13,8 +13,9 @@
     The example creates three virtual serial ports.  Text entered on
     any of the ports will be echoed to the all ports.
 
-    The max number of CDC ports (CFG_TUD_CDC) has to be changed to at
-    least 2, changed in the core tusb_config.h file.
+    The max number of CDC ports (CFG_TUD_CDC) has to be changed to at least 2.
+    Config file is located in Adafruit_TinyUSB_Arduino/src/arduino/ports/platform/tusb_config_platform.h
+    where platform is esp32, nrf, rp2040, samd
 */
 
 #include <Adafruit_TinyUSB.h>
