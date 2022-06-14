@@ -22,49 +22,46 @@
  * THE SOFTWARE.
  */
 
-#ifndef ADAFRUIT_TINYUSB_H_
-#define ADAFRUIT_TINYUSB_H_
+#ifndef ADAFRUIT_USBH_HOST_H_
+#define ADAFRUIT_USBH_HOST_H_
 
-// Error message for Core that must select TinyUSB via menu
-#if !defined(USE_TINYUSB) && ( defined(ARDUINO_ARCH_SAMD) || \
-                               (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)) )
-#error TinyUSB is not selected, please select it in "Tools->Menu->USB Stack"
+#include "Adafruit_USBD_Interface.h"
+#include "tusb.h"
+
+#ifdef ARDUINO_ARCH_ESP32
+#include "esp32-hal-tinyusb.h"
 #endif
 
-#include "tusb_option.h"
+class Adafruit_USBH_Host {
+private:
 
-// Device
-#if TUSB_OPT_DEVICE_ENABLED
+public:
+  Adafruit_USBH_Host(void);
 
-#include "arduino/Adafruit_USBD_Device.h"
-#if CFG_TUD_CDC
-  #include "arduino/Adafruit_USBD_CDC.h"
+  bool configure(uint8_t rhport, uint32_t cfg_id, const void* cfg_param);
+
+#ifdef ARDUINO_ARCH_RP2040
+  bool configure_pio_usb(uint8_t rhport, const void* cfg_param);
 #endif
 
-#if CFG_TUD_HID
-  #include "arduino/hid/Adafruit_USBD_HID.h"
-#endif
-#if CFG_TUD_MIDI
-  #include "arduino/midi/Adafruit_USBD_MIDI.h"
-#endif
-#if CFG_TUD_MSC
-  #include "arduino/msc/Adafruit_USBD_MSC.h"
-#endif
-#if CFG_TUD_VENDOR
-  #include "arduino/webusb/Adafruit_USBD_WebUSB.h"
-#endif
+  bool begin(uint8_t rhport);
+  void task(void);
 
-// Initialize device hardware, stack, also Serial as CDC
-// Wrapper for TinyUSBDevice.begin(rhport)
-void TinyUSB_Device_Init(uint8_t rhport);
+private:
+//  uint16_t const *descrip`tor_string_cb(uint8_t index, uint16_t langid);
+//
+//  friend uint8_t const *tud_descriptor_device_cb(void);
+//  friend uint8_t const *tud_descriptor_configuration_cb(uint8_t index);
+//  friend uint16_t const *tud_descriptor_string_cb(uint8_t index,
+//                                                  uint16_t langid);
+};
 
-#endif
+//extern Adafruit_USBH_Host TinyUSBHost;
+//
+//// USBHost has a high chance to conflict with other usb stack
+//// only define if supported BSP
+//#ifdef USE_TINYUSB
+//#define USBHost TinyUSBHost
+//#endif
 
-// Host
-#if CFG_TUH_ENABLED
-
-#include "arduino/Adafruit_USBH_Host.h"
-
-#endif
-
-#endif /* ADAFRUIT_TINYUSB_H_ */
+#endif /* ADAFRUIT_USBH_HOST_H_ */
