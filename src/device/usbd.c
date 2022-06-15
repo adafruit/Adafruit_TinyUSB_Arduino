@@ -26,7 +26,7 @@
 
 #include "tusb_option.h"
 
-#if CFG_TUD_ENABLED
+#if CFG_TUD_ENABLED && !defined(ARDUINO_ARCH_ESP32)
 
 #include "tusb.h"
 #include "common/tusb_private.h"
