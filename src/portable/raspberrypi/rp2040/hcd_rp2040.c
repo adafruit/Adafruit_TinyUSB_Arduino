@@ -27,7 +27,7 @@
 
 #include "tusb_option.h"
 
-#if CFG_TUH_ENABLED && CFG_TUSB_MCU == OPT_MCU_RP2040
+#if CFG_TUH_ENABLED && (CFG_TUSB_MCU == OPT_MCU_RP2040) && !CFG_TUH_RPI_PIO_USB
 
 #include "pico.h"
 #include "rp2040_usb.h"
@@ -40,7 +40,8 @@
 #include "host/hcd.h"
 #include "host/usbh.h"
 
-#define ROOT_PORT 0
+// port 0 is native USB port, other is counted as software PIO
+#define RHPORT_NATIVE 0
 
 //--------------------------------------------------------------------+
 // Low level rp2040 controller functions
@@ -78,7 +79,7 @@ static struct hw_endpoint *get_dev_ep(uint8_t dev_addr, uint8_t ep_addr)
   return NULL;
 }
 
-static inline uint8_t dev_speed(void)
+TU_ATTR_ALWAYS_INLINE static inline uint8_t dev_speed(void)
 {
     return (usb_hw->sie_status & USB_SIE_STATUS_SPEED_BITS) >> USB_SIE_STATUS_SPEED_LSB;
 }
@@ -90,7 +91,7 @@ static bool need_pre(uint8_t dev_addr)
     return hcd_port_speed_get(0) != tuh_speed_get(dev_addr);
 }
 
-static void hw_xfer_complete(struct hw_endpoint *ep, xfer_result_t xfer_result)
+static void __no_inline_not_in_flash_func(hw_xfer_complete)(struct hw_endpoint *ep, xfer_result_t xfer_result)
 {
     // Mark transfer as done before we tell the tinyusb stack
     uint8_t dev_addr = ep->dev_addr;
@@ -100,7 +101,7 @@ static void hw_xfer_complete(struct hw_endpoint *ep, xfer_result_t xfer_result)
     hcd_event_xfer_complete(dev_addr, ep_addr, xferred_len, xfer_result, true);
 }
 
-static void _handle_buff_status_bit(uint bit, struct hw_endpoint *ep)
+static void __no_inline_not_in_flash_func(_handle_buff_status_bit)(uint bit, struct hw_endpoint *ep)
 {
     usb_hw_clear->buf_status = bit;
     bool done = hw_endpoint_xfer_continue(ep);
@@ -110,7 +111,7 @@ static void _handle_buff_status_bit(uint bit, struct hw_endpoint *ep)
     }
 }
 
-static void hw_handle_buff_status(void)
+static void __no_inline_not_in_flash_func(hw_handle_buff_status)(void)
 {
     uint32_t remaining_buffers = usb_hw->buf_status;
     pico_trace("buf_status 0x%08x\n", remaining_buffers);
@@ -158,7 +159,7 @@ static void hw_handle_buff_status(void)
     }
 }
 
-static void hw_trans_complete(void)
+static void __no_inline_not_in_flash_func(hw_trans_complete)(void)
 {
   if (usb_hw->sie_ctrl & USB_SIE_CTRL_SEND_SETUP_BITS)
   {
@@ -174,7 +175,7 @@ static void hw_trans_complete(void)
   }
 }
 
-static void hcd_rp2040_irq(void)
+static void __no_inline_not_in_flash_func(hcd_rp2040_irq)(void)
 {
     uint32_t status = usb_hw->ints;
     uint32_t handled = 0;
@@ -185,11 +186,11 @@ static void hcd_rp2040_irq(void)
         
         if (dev_speed())
         {
-            hcd_event_device_attach(ROOT_PORT, true);
+            hcd_event_device_attach(RHPORT_NATIVE, true);
         }
         else
         {
-            hcd_event_device_remove(ROOT_PORT, true);
+            hcd_event_device_remove(RHPORT_NATIVE, true);
         }
 
         // Clear speed change interrupt
@@ -237,6 +238,12 @@ static void hcd_rp2040_irq(void)
     {
         panic("Unhandled IRQ 0x%x\n", (uint) (status ^ handled));
     }
+}
+
+void __no_inline_not_in_flash_func(hcd_int_handler)(uint8_t rhport)
+{
+  (void) rhport;
+  hcd_rp2040_irq();
 }
 
 static struct hw_endpoint *_next_free_interrupt_ep(void)
@@ -388,6 +395,11 @@ void hcd_port_reset(uint8_t rhport)
     // TODO: Nothing to do here yet. Perhaps need to reset some state?
 }
 
+void hcd_port_reset_end(uint8_t rhport)
+{
+  (void) rhport;
+}
+
 bool hcd_port_connect_status(uint8_t rhport)
 {
     pico_trace("hcd_port_connect_status\n");
@@ -531,7 +543,11 @@ bool hcd_setup_send(uint8_t rhport, uint8_t dev_addr, uint8_t const setup_packet
     (void) rhport;
 
     // Copy data into setup packet buffer
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
     memcpy((void*)&usbh_dpram->setup_packet[0], setup_packet, 8);
+#pragma GCC diagnostic pop
 
     // Configure EP0 struct with setup info for the trans complete
     struct hw_endpoint *ep = _hw_endpoint_allocate(0);
