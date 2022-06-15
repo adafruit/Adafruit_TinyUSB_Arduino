@@ -1,21 +1,20 @@
 /*
     This example demonstrates the use of multiple USB CDC/ACM "Virtual
-    Serial" ports, using Ha Thach's TinyUSB library, and the port of
-    that library to the Arduino environment
-
-    https://github.com/hathach/tinyusb
-    https://github.com/adafruit/Adafruit_TinyUSB_Arduino
+    Serial" ports
 
     Written by Bill Westfield (aka WestfW), June 2021.
     Copyright 2021 by Bill Westfield
     MIT license, check LICENSE for more information
+*/
 
-    The example creates three virtual serial ports.  Text entered on
-    any of the ports will be echoed to the all ports.
+/* The example creates two virtual serial ports. Text entered on
+   any of the ports will be echoed to the all ports with
+   - all lower case in port0 (Serial)
+   - all upper case in port1
 
-    The max number of CDC ports (CFG_TUD_CDC) has to be changed to at least 2.
-    Config file is located in Adafruit_TinyUSB_Arduino/src/arduino/ports/platform/tusb_config_platform.h
-    where platform is esp32, nrf, rp2040, samd
+   The max number of CDC ports (CFG_TUD_CDC) has to be changed to at least 2.
+   Config file is located in Adafruit_TinyUSB_Arduino/src/arduino/ports/platform/tusb_config_platform.h
+   where platform is one of: esp32, nrf, rp2040, samd
 */
 
 #include <Adafruit_TinyUSB.h>
