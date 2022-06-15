@@ -48,7 +48,7 @@ extern "C" {
 #endif
 #define CFG_TUSB_OS OPT_OS_PICO
 
-#define CFG_TUSB_DEBUG 2
+#define CFG_TUSB_DEBUG 0
 #if CFG_TUSB_DEBUG
   #define CFG_TUSB_DEBUG_PRINTF    serial1_printf
   extern int serial1_printf(const char *__restrict __format, ...);

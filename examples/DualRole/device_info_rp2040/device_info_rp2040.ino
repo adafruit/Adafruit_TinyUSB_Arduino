@@ -112,12 +112,10 @@ void print_device_descriptor(tuh_xfer_t* xfer)
 
   // Get String descriptor using Sync API
   uint16_t temp_buf[128];
-  uint8_t result;
 
   Serial.printf("  iManufacturer       %u     "     , desc_device.iManufacturer);
   if (XFER_RESULT_SUCCESS == tuh_descriptor_get_manufacturer_string_sync(daddr, LANGUAGE_ID, temp_buf, sizeof(temp_buf)) )
   {
-    TU_LOG2_ARR(temp_buf, sizeof(temp_buf));
     print_utf16(temp_buf, TU_ARRAY_SIZE(temp_buf));
   }
   Serial.printf("\r\n");
