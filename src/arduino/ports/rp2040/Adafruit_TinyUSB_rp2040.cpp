@@ -163,7 +163,6 @@ int serial1_printf(const char *__restrict format, ...) {
   return len;
 }
 #endif
-
 }
 
 #endif

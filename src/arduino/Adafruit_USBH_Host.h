@@ -34,29 +34,28 @@
 
 class Adafruit_USBH_Host {
 private:
-
 public:
   Adafruit_USBH_Host(void);
 
-  bool configure(uint8_t rhport, uint32_t cfg_id, const void* cfg_param);
+  bool configure(uint8_t rhport, uint32_t cfg_id, const void *cfg_param);
 
 #ifdef ARDUINO_ARCH_RP2040
-  bool configure_pio_usb(uint8_t rhport, const void* cfg_param);
+  bool configure_pio_usb(uint8_t rhport, const void *cfg_param);
 #endif
 
   bool begin(uint8_t rhport);
   void task(void);
 
 private:
-//  uint16_t const *descrip`tor_string_cb(uint8_t index, uint16_t langid);
-//
-//  friend uint8_t const *tud_descriptor_device_cb(void);
-//  friend uint8_t const *tud_descriptor_configuration_cb(uint8_t index);
-//  friend uint16_t const *tud_descriptor_string_cb(uint8_t index,
-//                                                  uint16_t langid);
+  //  uint16_t const *descrip`tor_string_cb(uint8_t index, uint16_t langid);
+  //
+  //  friend uint8_t const *tud_descriptor_device_cb(void);
+  //  friend uint8_t const *tud_descriptor_configuration_cb(uint8_t index);
+  //  friend uint16_t const *tud_descriptor_string_cb(uint8_t index,
+  //                                                  uint16_t langid);
 };
 
-//extern Adafruit_USBH_Host TinyUSBHost;
+// extern Adafruit_USBH_Host TinyUSBHost;
 //
 //// USBHost has a high chance to conflict with other usb stack
 //// only define if supported BSP
