@@ -7,13 +7,19 @@ It is designed with structure and APIs that are easily integrated to an Arduino 
 
 ## Features
 
-Currently only support device mode only, supported class drivers are:
+### Device Stack
+
+Supported device class drivers are:
 
 - Communication (CDC): which is used to implement `Serial` monitor
 - Human Interface Device (HID): Generic (In & Out), Keyboard, Mouse, Gamepad etc ...
 - Mass Storage Class (MSC): with multiple LUNs
 - Musical Instrument Digital Interface (MIDI)
 - WebUSB with vendor specific class
+
+### Host Stack
+
+There is a initial (WIP) host support for rp2040 core (require [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB))
 
 ## Supported Cores
 
