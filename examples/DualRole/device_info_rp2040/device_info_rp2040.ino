@@ -18,6 +18,7 @@
  * - [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB) library
  * - 2 consecutive GPIOs: D+ is defined by HOST_PIN_DP (gpio2), D- = D+ +1 (gpio3)
  * - Provide VBus (5v) and GND for peripheral
+ * - CPU Speed must be either 120 or 240 Mhz. Selected via "Menu -> CPU Speed"
  *
  * RP2040 host stack will get device descriptors of attached devices and print it out via
  * device cdc (Serial) as follows:
