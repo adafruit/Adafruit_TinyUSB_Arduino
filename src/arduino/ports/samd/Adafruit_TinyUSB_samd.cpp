@@ -52,11 +52,9 @@ void USB_Handler(void) { tud_int_handler(0); }
 
 #endif
 
-} // extern C
-
 // Debug log with Serial1
 #if CFG_TUSB_DEBUG
-extern "C" int serial1_printf(const char *__restrict format, ...) {
+int serial1_printf(const char *__restrict format, ...) {
   char buf[256];
   int len;
   va_list ap;
@@ -67,6 +65,8 @@ extern "C" int serial1_printf(const char *__restrict format, ...) {
   return len;
 }
 #endif
+
+} // extern C
 
 //--------------------------------------------------------------------+
 // Porting API
