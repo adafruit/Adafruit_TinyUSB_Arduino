@@ -7,15 +7,17 @@
     MIT license, check LICENSE for more information
 */
 
-/* The example creates two virtual serial ports. Text entered on
-   any of the ports will be echoed to the all ports with
-   - all lower case in port0 (Serial)
-   - all upper case in port1
 
-   The max number of CDC ports (CFG_TUD_CDC) has to be changed to at least 2.
-   Config file is located in Adafruit_TinyUSB_Arduino/src/arduino/ports/platform/tusb_config_platform.h
-   where platform is one of: esp32, nrf, rp2040, samd
-*/
+/* The example creates two virtual serial ports. Text entered on
+ * any of the ports will be echoed to the all ports with
+ *  - all lower case in port0 (Serial)
+ *  - all upper case in port1
+ *
+ * Requirement:
+ *  The max number of CDC ports (CFG_TUD_CDC) has to be changed to at least 2.
+ *  Config file is located in Adafruit_TinyUSB_Arduino/src/arduino/ports/platform/tusb_config_platform.h
+ *  where platform is one of: esp32, nrf, rp2040, samd
+ */
 
 #include <Adafruit_TinyUSB.h>
 

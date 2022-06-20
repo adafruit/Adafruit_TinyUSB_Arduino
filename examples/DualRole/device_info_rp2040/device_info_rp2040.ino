@@ -9,6 +9,37 @@
  any redistribution
 *********************************************************************/
 
+
+/* This example demonstrates use of both device and host, where
+ * - Device run on native usb controller (controller0)
+ * - Host run on bit-banging 2 GPIOs with the help of Pico-PIO-USB library (controller1)
+ *
+ * Requirements:
+ * - [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB) library
+ * - 2 consecutive GPIOs: D+ is defined by HOST_PIN_DP (gpio2), D- = D+ +1 (gpio3)
+ * - Provide VBus (5v) and GND for peripheral
+ *
+ * RP2040 host stack will get device descriptors of attached devices and print it out via
+ * device cdc (Serial) as follows:
+ *    Device 1: ID 046d:c52f
+      Device Descriptor:
+        bLength             18
+        bDescriptorType     1
+        bcdUSB              0200
+        bDeviceClass        0
+        bDeviceSubClass     0
+        bDeviceProtocol     0
+        bMaxPacketSize0     8
+        idVendor            0x046d
+        idProduct           0xc52f
+        bcdDevice           2200
+        iManufacturer       1     Logitech
+        iProduct            2     USB Receiver
+        iSerialNumber       0
+        bNumConfigurations  1
+ *
+ */
+
 // pio-usb is required for rp2040 host
 #include "pio_usb.h"
 #define HOST_PIN_DP   2   // Pin used as D+ for host, D- = D+ + 1
