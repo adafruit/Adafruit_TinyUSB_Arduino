@@ -108,6 +108,10 @@ void Adafruit_USBD_MSC::setReadWriteCallback(uint8_t lun, read_callback_t rd_cb,
   _lun_info[lun].fl_cb = fl_cb;
 }
 
+void Adafruit_USBD_MSC::setStartStopCallback(uint8_t lun, start_stop_callback_t cb) {
+  _lun_info[lun].start_stop_cb = cb;
+}
+
 void Adafruit_USBD_MSC::setReadyCallback(uint8_t lun, ready_callback_t cb) {
   _lun_info[lun].ready_cb = cb;
 }
@@ -225,6 +229,16 @@ int32_t tud_msc_scsi_cb(uint8_t lun, const uint8_t scsi_cmd[16], void *buffer,
   }
 
   return resplen;
+}
+
+// Callback invoked on start/stop
+bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start, bool load_eject)
+{
+  if (!(_msc_dev && _msc_dev->_lun_info[lun].start_stop_cb)) {
+    return true;
+  }
+
+  return _msc_dev->_lun_info[lun].start_stop_cb(power_condition, start, load_eject);
 }
 
 // Callback invoked when received READ10 command.
