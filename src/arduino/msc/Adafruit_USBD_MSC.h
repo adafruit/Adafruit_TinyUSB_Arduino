@@ -36,7 +36,8 @@ public:
   typedef void (*flush_callback_t)(void);
   typedef bool (*ready_callback_t)(void);
   typedef bool (*writable_callback_t)(void);
-  typedef bool (*start_stop_callback_t)(uint8_t power_condition, bool start, bool load_eject);
+  typedef bool (*start_stop_callback_t)(uint8_t power_condition, bool start,
+                                        bool load_eject);
 
   Adafruit_USBD_MSC(void);
 
@@ -120,7 +121,8 @@ private:
                                     uint8_t *buffer, uint32_t bufsize);
   friend void tud_msc_write10_complete_cb(uint8_t lun);
   friend bool tud_msc_is_writable_cb(uint8_t lun);
-  friend bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start, bool load_eject);
+  friend bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition,
+                                    bool start, bool load_eject);
 };
 
 #endif /* ADAFRUIT_USBD_MSC_H_ */
