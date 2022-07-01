@@ -239,6 +239,10 @@ int Adafruit_USBD_WebUSB::read(void) {
   return tud_vendor_read(&ch, 1) ? (int)ch : -1;
 }
 
+size_t Adafruit_USBD_WebUSB::read(uint8_t *buffer, size_t size) {
+  return tud_vendor_read(buffer, size);
+}
+
 size_t Adafruit_USBD_WebUSB::write(uint8_t b) { return this->write(&b, 1); }
 
 size_t Adafruit_USBD_WebUSB::write(const uint8_t *buffer, size_t size) {
@@ -262,7 +266,7 @@ int Adafruit_USBD_WebUSB::peek(void) {
   return tud_vendor_peek(&ch) ? (int)ch : -1;
 }
 
-void Adafruit_USBD_WebUSB::flush(void) {}
+void Adafruit_USBD_WebUSB::flush(void) { tud_vendor_flush(); }
 
 //--------------------------------------------------------------------+
 // TinyUSB stack callbacks

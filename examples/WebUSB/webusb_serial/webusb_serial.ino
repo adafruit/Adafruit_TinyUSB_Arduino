@@ -31,7 +31,8 @@
 Adafruit_USBD_WebUSB usb_web;
 
 // Landing Page: scheme (0: http, 1: https), url
-WEBUSB_URL_DEF(landingPage, 1 /*https*/, "adafruit.github.io/Adafruit_TinyUSB_Arduino/examples/webusb-serial/index.html");
+// Page source can be found at https://github.com/hathach/tinyusb-webusb-page/tree/main/webusb-serial
+WEBUSB_URL_DEF(landingPage, 1 /*https*/, "example.tinyusb.org/webusb-serial/index.html");
 
 int led_pin = LED_BUILTIN;
 
@@ -60,27 +61,52 @@ void setup()
 }
 
 // function to echo to both Serial and WebUSB
-void echo_all(char chr)
+void echo_all(uint8_t buf[], uint32_t count)
 {
-  Serial.write(chr);
-  // print extra newline for Serial
-  if ( chr == '\r' ) Serial.write('\n');
-  
-  usb_web.write(chr);
+  if (usb_web.connected())
+  {
+    usb_web.write(buf, count);
+    usb_web.flush();
+  }
+
+  if ( Serial )
+  {
+    for(uint32_t i=0; i<count; i++)
+    {
+      Serial.write(buf[i]);
+      if ( buf[i] == '\r' ) Serial.write('\n');
+    }
+    Serial.flush();
+  }
 }
 
 void loop()
 {
-  // from WebUSB to both Serial & webUSB
-  if (usb_web.available()) echo_all(usb_web.read());
+  uint8_t buf[64];
+  uint32_t count;
 
   // From Serial to both Serial & webUSB
-  if (Serial.available())   echo_all(Serial.read());  
+  if (Serial.available())
+  {
+    count = Serial.read(buf, 64);
+    echo_all(buf, count);
+  }
+
+  // from WebUSB to both Serial & webUSB
+  if (usb_web.available())
+  {
+    count = usb_web.read(buf, 64);
+    echo_all(buf, count);
+  }
 }
 
 void line_state_callback(bool connected)
 {
   digitalWrite(led_pin, connected);
 
-  if ( connected ) usb_web.println("TinyUSB WebUSB Serial example");
+  if ( connected )
+  {
+    usb_web.println("WebUSB interface connected !!");
+    usb_web.flush();
+  }
 }

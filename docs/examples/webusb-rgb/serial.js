@@ -11,9 +11,11 @@ var serial = {};
 
   serial.requestPort = function() {
     const filters = [
-      { 'vendorId': 0x239A }, // Adafruit boards
-      { 'vendorId': 0xcafe }, // TinyUSB example
-      { 'vendorId': 0x2341 }, // Arduino Nano RP2040 Connect
+      { 'vendorId': 0xcafe }, // TinyUSB
+      { 'vendorId': 0x239a }, // Adafruit
+      { 'vendorId': 0x2e8a }, // Raspberry Pi
+      { 'vendorId': 0x303a }, // Espressif
+      { 'vendorId': 0x2341 }, // Arduino
     ];
     return navigator.usb.requestDevice({ 'filters': filters }).then(
       device => new serial.Port(device)

@@ -17,11 +17,17 @@
 
     let currentReceiverLine;
 
-    function appendLine(linesId, text) {
+    function appendLines(linesId, text) {
+      const lines = text.split('\r');
       if (currentReceiverLine) {
-        currentReceiverLine.innerHTML =  currentReceiverLine.innerHTML + text;
+        currentReceiverLine.innerHTML =  currentReceiverLine.innerHTML + lines[0];
+        for (let i = 1; i < lines.length; i++) {
+          currentReceiverLine = addLine(linesId, lines[i]);
+        }
       } else {
-        currentReceiverLine = addLine(linesId, text);
+        for (let i = 0; i < lines.length; i++) {
+          currentReceiverLine = addLine(linesId, lines[i]);
+        }
       }
     }
 
@@ -36,7 +42,7 @@
           if (data.getInt8() === 13) {
             currentReceiverLine = null;
           } else {
-            appendLine('receiver_lines', textDecoder.decode(data));
+            appendLines('receiver_lines', textDecoder.decode(data));
           }
         };
         port.onReceiveError = error => {

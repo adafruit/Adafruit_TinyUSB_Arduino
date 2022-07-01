@@ -46,10 +46,13 @@ public:
   bool setLandingPage(const void *url);
   void setLineStateCallback(linestate_callback_t fp);
 
-  // Stream interface to use with MIDI Library
-  virtual int read(void);
+  // Stream API
   virtual int available(void);
   virtual int peek(void);
+
+  virtual int read(void);
+  size_t read(uint8_t *buffer, size_t size);
+
   virtual void flush(void);
   virtual size_t write(uint8_t b);
 
