@@ -41,7 +41,6 @@ static Adafruit_USBD_MIDI *_midi_dev = NULL;
 #ifdef ARDUINO_ARCH_ESP32
 static uint16_t midi_load_descriptor(uint8_t *dst, uint8_t *itf) {
   // uint8_t str_index = tinyusb_add_string_descriptor("TinyUSB HID");
-  uint8_t str_index = 0;
 
   uint8_t ep_in = tinyusb_get_free_in_endpoint();
   uint8_t ep_out = tinyusb_get_free_out_endpoint();

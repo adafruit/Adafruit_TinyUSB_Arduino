@@ -39,7 +39,6 @@ static Adafruit_USBD_HID *_hid_dev = NULL;
 #ifdef ARDUINO_ARCH_ESP32
 static uint16_t hid_load_descriptor(uint8_t *dst, uint8_t *itf) {
   // uint8_t str_index = tinyusb_add_string_descriptor("TinyUSB HID");
-  uint8_t str_index = 0;
 
   TU_VERIFY(_hid_dev);
 
