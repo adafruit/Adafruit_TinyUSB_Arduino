@@ -45,9 +45,9 @@ extern "C" {
 
 // SDK >= 1.4.0 need to dynamically request the IRQ to avoid conflicts
 #if (PICO_SDK_VERSION_MAJOR * 100 + PICO_SDK_VERSION_MINOR) < 104
-    #define USB_TASK_IRQ 31
+#define USB_TASK_IRQ 31
 #else
-    static unsigned int USB_TASK_IRQ;
+static unsigned int USB_TASK_IRQ;
 #endif
 
 //--------------------------------------------------------------------+
