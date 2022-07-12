@@ -42,7 +42,13 @@ extern "C" {
 
 // USB processing will be a periodic timer task
 #define USB_TASK_INTERVAL 1000
+
+// SDK >= 1.4.0 need to dynamically request the IRQ to avoid conflicts
+#if (PICO_SDK_VERSION_MAJOR * 100 + PICO_SDK_VERSION_MINOR) < 104
 #define USB_TASK_IRQ 31
+#else
+static unsigned int USB_TASK_IRQ;
+#endif
 
 //--------------------------------------------------------------------+
 // Forward USB interrupt events to TinyUSB IRQ Handler
@@ -118,6 +124,9 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
   tusb_init();
 
   // soft irq for periodically task runner
+#if (PICO_SDK_VERSION_MAJOR * 100 + PICO_SDK_VERSION_MINOR) >= 104
+  USB_TASK_IRQ = user_irq_claim_unused(true);
+#endif
   irq_set_exclusive_handler(USB_TASK_IRQ, usb_irq);
   irq_set_enabled(USB_TASK_IRQ, true);
   setup_periodic_usb_hanlder(USB_TASK_INTERVAL);
