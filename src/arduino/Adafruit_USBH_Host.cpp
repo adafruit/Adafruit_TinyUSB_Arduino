@@ -53,7 +53,8 @@ void Adafruit_USBH_Host::task(void) { tuh_task(); }
 // descriptor. Note: if report descriptor length > CFG_TUH_ENUMERATION_BUFSIZE,
 // it will be skipped therefore report_desc = NULL, desc_len = 0
 TU_ATTR_WEAK void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
-                      uint8_t const *desc_report, uint16_t desc_len) {
+                                   uint8_t const *desc_report,
+                                   uint16_t desc_len) {
   (void)dev_addr;
   (void)instance;
   (void)desc_report;
@@ -68,7 +69,8 @@ TU_ATTR_WEAK void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance) {
 
 // Invoked when received report from device via interrupt endpoint
 TU_ATTR_WEAK void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
-                                uint8_t const *report, uint16_t len) {
+                                             uint8_t const *report,
+                                             uint16_t len) {
   (void)dev_addr;
   (void)instance;
   (void)report;
