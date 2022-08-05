@@ -29,11 +29,10 @@
 
 #if defined(__cplusplus)
 
-
 #if defined(ARDUINO_ARCH_ESP32)
 
 // For ESP32 use USBCDC as it is compatible
-#define Adafruit_USBD_CDC   USBCDC
+#define Adafruit_USBD_CDC USBCDC
 
 #else
 
