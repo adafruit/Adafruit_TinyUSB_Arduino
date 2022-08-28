@@ -30,7 +30,7 @@
 #include "Arduino.h"
 
 #ifdef ARDUINO_ARCH_ESP32
-#include "USB.h" 
+#include "USB.h"
 #endif
 
 //--------------------------------------------------------------------+
