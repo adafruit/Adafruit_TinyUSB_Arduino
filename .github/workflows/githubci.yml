@@ -9,6 +9,8 @@ jobs:
       fail-fast: false
       matrix:
         arduino-platform:
+           # ESP32S3
+           - 'esp32-s3-devkitc-1'
            # ESP32S2
            - 'funhouse'
            - 'magtag'
