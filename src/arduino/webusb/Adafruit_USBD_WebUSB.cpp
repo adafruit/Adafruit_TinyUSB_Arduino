@@ -29,6 +29,10 @@
 #include "Adafruit_USBD_WebUSB.h"
 #include "Arduino.h"
 
+#ifdef ARDUINO_ARCH_ESP32
+#include "USB.h"
+#endif
+
 //--------------------------------------------------------------------+
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
 //--------------------------------------------------------------------+
