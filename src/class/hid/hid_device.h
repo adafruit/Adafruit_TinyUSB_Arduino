@@ -377,6 +377,42 @@ static inline bool  tud_hid_gamepad_report(uint8_t report_id, int8_t x, int8_t y
       HID_OUTPUT      ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE  ),\
     HID_COLLECTION_END \
 
+// NKROKeyboard Descriptor Template
+// with 8 keyboard modifiers, 104 ordinary keys, 1 custom keybaord key
+// | Keyboard Modifiers (1 Byte) | 104 Keys Bitmap (13 Bytes) | 1 Custom Keyboard Key (1 Byte) |
+#define TUD_HID_REPORT_DESC_NKROKEYBOARD(...) \
+  HID_USAGE_PAGE ( HID_USAGE_PAGE_DESKTOP ),\
+  HID_USAGE (HID_USAGE_DESKTOP_KEYBOARD),\
+  HID_COLLECTION (HID_COLLECTION_APPLICATION),\
+    /* Report ID if any */\
+    __VA_ARGS__ \
+    HID_USAGE_PAGE ( HID_USAGE_PAGE_KEYBOARD )                     ,\
+      /* 8 bits Modifier Keys (Shfit, Control, Alt) */ \
+      HID_USAGE_MIN    ( 224                                    )  ,\
+      HID_USAGE_MAX    ( 231                                    )  ,\
+      HID_LOGICAL_MIN  ( 0                                      )  ,\
+      HID_LOGICAL_MAX  ( 1                                      )  ,\
+      HID_REPORT_COUNT ( 8                                      )  ,\
+      HID_REPORT_SIZE  ( 1                                      )  ,\
+      HID_INPUT        ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE )  ,\
+      /* 104 Keys as bitmap */ \
+      HID_USAGE_MIN    ( 0                                      )  ,\
+      HID_USAGE_MAX    ( 103                                    )  ,\
+      HID_LOGICAL_MIN  ( 0                                      )  ,\
+      HID_LOGICAL_MAX  ( 1                                      )  ,\
+      HID_REPORT_SIZE  ( 1                                      )  ,\
+      HID_REPORT_COUNT ( 104                                    )  ,\
+      HID_INPUT        ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE )  ,\
+      /* 1 Custom Keyboard Key */ \
+      HID_REPORT_COUNT ( 1                                   )  ,\
+      HID_REPORT_SIZE  ( 8                                   )  ,\
+      HID_LOGICAL_MIN  ( 0                                   )  ,\
+      HID_LOGICAL_MAX  ( 231                                 )  ,\
+      HID_USAGE_MIN    ( 0                                   )  ,\
+      HID_USAGE_MAX    ( 231                                 )  ,\
+      HID_INPUT        ( HID_DATA | HID_ARRAY | HID_ABSOLUTE )  ,\
+  HID_COLLECTION_END \
+
 //--------------------------------------------------------------------+
 // Internal Class Driver API
 //--------------------------------------------------------------------+
