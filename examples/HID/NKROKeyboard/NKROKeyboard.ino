@@ -70,7 +70,7 @@
    kb.custom = 0;
    for (int i = 0; i < 13; i++)
    {
-     kb.keys = 0;
+     kb.keys[i] = 0;
    }
  }
 
