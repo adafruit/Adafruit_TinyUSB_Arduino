@@ -70,7 +70,7 @@
 Adafruit_SPIFlash flash(&flashTransport);
 
 // External Flash File system
-FatFileSystem fatfs;
+FatVolume fatfs;
 
 //--------------------------------------------------------------------+
 // SDCard Config
@@ -150,12 +150,20 @@ bool init_sdcard(void)
   if ( !sd.begin(SDCARD_CS, SD_SCK_MHZ(50)) )
   {
     Serial.print("Failed ");
-    sd.errorPrint();
+    sd.errorPrint("sd.begin() failed");
 
     return false;
   }
 
-  uint32_t block_count = sd.card()->cardSize();
+  uint32_t block_count;
+
+#if SD_FAT_VERSION >= 20000
+  block_count = sd.card()->sectorCount();
+#else
+  block_count = sd.card()->cardSize();
+#endif
+
+
   usb_msc.setCapacity(1, block_count, 512);
   usb_msc.setReadWriteCallback(1, sdcard_read_cb, sdcard_write_cb, sdcard_flush_cb);
 
@@ -239,7 +247,15 @@ void loop()
 
 int32_t sdcard_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 {
-  return sd.card()->readBlocks(lba, (uint8_t*) buffer, bufsize/512) ? bufsize : -1;
+  bool rc;
+
+#if SD_FAT_VERSION >= 20000
+  rc = sd.card()->readSectors(lba, (uint8_t*) buffer, bufsize/512);
+#else
+  rc = sd.card()->readBlocks(lba, (uint8_t*) buffer, bufsize/512);
+#endif
+
+  return rc ? bufsize : -1;
 }
 
 // Callback invoked when received WRITE10 command.
@@ -247,16 +263,28 @@ int32_t sdcard_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 // return number of written bytes (must be multiple of block size)
 int32_t sdcard_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 {
+  bool rc;
+
   digitalWrite(LED_BUILTIN, HIGH);
 
-  return sd.card()->writeBlocks(lba, buffer, bufsize/512) ? bufsize : -1;
+#if SD_FAT_VERSION >= 20000
+  rc = sd.card()->writeSectors(lba, buffer, bufsize/512);
+#else
+  rc = sd.card()->writeBlocks(lba, buffer, bufsize/512);
+#endif
+
+  return rc ? bufsize : -1;
 }
 
 // Callback invoked when WRITE10 command is completed (status received and accepted by host).
 // used to flush any pending cache.
 void sdcard_flush_cb (void)
 {
+#if SD_FAT_VERSION >= 20000
+  sd.card()->syncDevice();
+#else
   sd.card()->syncBlocks();
+#endif
 
   // clear file system's cache to force refresh
   sd.cacheClear();

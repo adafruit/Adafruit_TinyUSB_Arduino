@@ -60,7 +60,7 @@ Adafruit_FlashTransport_ESP32 flashTransport;
 Adafruit_SPIFlash flash(&flashTransport);
 
 // file system object from SdFat
-FatFileSystem fatfs;
+FatVolume fatfs;
 
 // USB Mass Storage object
 Adafruit_USBD_MSC usb_msc;
