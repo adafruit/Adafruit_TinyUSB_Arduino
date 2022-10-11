@@ -71,7 +71,7 @@ bool fs_changed;    // Set to true when browser write to flash
 const char* host = "esp32fs";
 WebServer server(80);
 //holds the current upload
-File fsUploadFile;
+File32 fsUploadFile;
 
 //--------------------------------------------------------------------+
 // Setup
@@ -246,7 +246,7 @@ String getContentType(String filename) {
 
 bool exists(String path){
   bool yes = false;
-  File file = fatfs.open(path, O_READ);
+  File32 file = fatfs.open(path, O_READ);
   if(file && !file.isDirectory()){
     yes = true;
   }
@@ -265,7 +265,7 @@ bool handleFileRead(String path) {
 //    if (exists(pathWithGz)) {
 //      path += ".gz";
 //    }
-    File file = fatfs.open(path, O_READ);
+    File32 file = fatfs.open(path, O_READ);
     server.streamFile(file, contentType);
     file.close();
     return true;
@@ -333,7 +333,7 @@ void handleFileCreate() {
   if (exists(path)) {
     return server.send(500, "text/plain", "FILE EXISTS");
   }
-  File file = fatfs.open(path, O_WRITE | O_CREAT);
+  File32 file = fatfs.open(path, O_WRITE | O_CREAT);
   if (file) {
     file.close();
   } else {
@@ -352,12 +352,12 @@ void handleFileList() {
   String path = server.arg("dir");
   DBG_SERIAL.println("handleFileList: " + path);
 
-  File root = fatfs.open(path);
+  File32 root = fatfs.open(path);
   path = String();
 
   String output = "[";
   if(root.isDirectory()){
-      File file = root.openNextFile();
+      File32 file = root.openNextFile();
       char fname[256];
       while(file){
           if (output != "[") {
