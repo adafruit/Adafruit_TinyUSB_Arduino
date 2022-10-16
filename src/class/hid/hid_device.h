@@ -386,8 +386,8 @@ static inline bool  tud_hid_gamepad_report(uint8_t report_id, int8_t x, int8_t y
   HID_COLLECTION (HID_COLLECTION_APPLICATION),\
     /* Report ID if any */\
     __VA_ARGS__ \
+    /* 8 bits Modifier Keys (Shfit, Control, Alt) */ \
     HID_USAGE_PAGE ( HID_USAGE_PAGE_KEYBOARD )                     ,\
-      /* 8 bits Modifier Keys (Shfit, Control, Alt) */ \
       HID_USAGE_MIN    ( 224                                    )  ,\
       HID_USAGE_MAX    ( 231                                    )  ,\
       HID_LOGICAL_MIN  ( 0                                      )  ,\
@@ -395,22 +395,26 @@ static inline bool  tud_hid_gamepad_report(uint8_t report_id, int8_t x, int8_t y
       HID_REPORT_COUNT ( 8                                      )  ,\
       HID_REPORT_SIZE  ( 1                                      )  ,\
       HID_INPUT        ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE )  ,\
-      /* 104 Keys as bitmap */ \
+    /* Output 5-bit LED Indicator Kana | Compose | ScrollLock | CapsLock | NumLock */ \
+    HID_USAGE_PAGE  ( HID_USAGE_PAGE_LED                   )       ,\
+      HID_USAGE_MIN    ( 1                                       ) ,\
+      HID_USAGE_MAX    ( 5                                       ) ,\
+      HID_REPORT_COUNT ( 5                                       ) ,\
+      HID_REPORT_SIZE  ( 1                                       ) ,\
+      HID_OUTPUT       ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE  ) ,\
+      /* led padding */ \
+      HID_REPORT_COUNT ( 1                                       ) ,\
+      HID_REPORT_SIZE  ( 3                                       ) ,\
+      HID_OUTPUT       ( HID_CONSTANT                            ) ,\
+    /* 256 Keys as bitmap */ \
+    HID_USAGE_PAGE ( HID_USAGE_PAGE_KEYBOARD )                     ,\
       HID_USAGE_MIN    ( 0                                      )  ,\
-      HID_USAGE_MAX    ( 103                                    )  ,\
+      HID_USAGE_MAX_N  ( 255, 2                                 )  ,\
       HID_LOGICAL_MIN  ( 0                                      )  ,\
       HID_LOGICAL_MAX  ( 1                                      )  ,\
       HID_REPORT_SIZE  ( 1                                      )  ,\
-      HID_REPORT_COUNT ( 104                                    )  ,\
+      HID_REPORT_COUNT ( 256                                    )  ,\
       HID_INPUT        ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE )  ,\
-      /* 1 Custom Keyboard Key */ \
-      HID_REPORT_COUNT ( 1                                   )  ,\
-      HID_REPORT_SIZE  ( 8                                   )  ,\
-      HID_LOGICAL_MIN  ( 0                                   )  ,\
-      HID_LOGICAL_MAX  ( 231                                 )  ,\
-      HID_USAGE_MIN    ( 0                                   )  ,\
-      HID_USAGE_MAX    ( 231                                 )  ,\
-      HID_INPUT        ( HID_DATA | HID_ARRAY | HID_ABSOLUTE )  ,\
   HID_COLLECTION_END \
 
 //--------------------------------------------------------------------+
