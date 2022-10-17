@@ -28,49 +28,13 @@
 // External Flash Config
 //--------------------------------------------------------------------+
 
-// Un-comment to run example with custom SPI SPI and SS e.g with FRAM breakout
-// #define CUSTOM_CS   A5
-// #define CUSTOM_SPI  SPI
-
-#if defined(CUSTOM_CS) && defined(CUSTOM_SPI)
-  Adafruit_FlashTransport_SPI flashTransport(CUSTOM_CS, CUSTOM_SPI);
-
-#elif defined(ARDUINO_ARCH_ESP32)
-  // ESP32 use same flash device that store code.
-  // Therefore there is no need to specify the SPI and SS
-  Adafruit_FlashTransport_ESP32 flashTransport;
-
-#elif defined(ARDUINO_ARCH_RP2040)
-  // RP2040 use same flash device that store code.
-  // Therefore there is no need to specify the SPI and SS
-  // Use default (no-args) constructor to be compatible with CircuitPython partition scheme
-  Adafruit_FlashTransport_RP2040 flashTransport;
-
-  // For generic usage: Adafruit_FlashTransport_RP2040(start_address, size)
-  // If start_address and size are both 0, value that match filesystem setting in
-  // 'Tools->Flash Size' menu selection will be used
-
-#else
-  // On-board external flash (QSPI or SPI) macros should already
-  // defined in your board variant if supported
-  // - EXTERNAL_FLASH_USE_QSPI
-  // - EXTERNAL_FLASH_USE_CS/EXTERNAL_FLASH_USE_SPI
-  #if defined(EXTERNAL_FLASH_USE_QSPI)
-    Adafruit_FlashTransport_QSPI flashTransport;
-
-  #elif defined(EXTERNAL_FLASH_USE_SPI)
-    Adafruit_FlashTransport_SPI flashTransport(EXTERNAL_FLASH_USE_CS, EXTERNAL_FLASH_USE_SPI);
-
-  #else
-    #error No QSPI/SPI flash are defined on your board variant.h !
-  #endif
-#endif
-
+// for flashTransport definition
+#include "flash_config.h"
 
 Adafruit_SPIFlash flash(&flashTransport);
 
 // External Flash File system
-FatFileSystem fatfs;
+FatVolume fatfs;
 
 //--------------------------------------------------------------------+
 // SDCard Config
@@ -150,12 +114,20 @@ bool init_sdcard(void)
   if ( !sd.begin(SDCARD_CS, SD_SCK_MHZ(50)) )
   {
     Serial.print("Failed ");
-    sd.errorPrint();
+    sd.errorPrint("sd.begin() failed");
 
     return false;
   }
 
-  uint32_t block_count = sd.card()->cardSize();
+  uint32_t block_count;
+
+#if SD_FAT_VERSION >= 20000
+  block_count = sd.card()->sectorCount();
+#else
+  block_count = sd.card()->cardSize();
+#endif
+
+
   usb_msc.setCapacity(1, block_count, 512);
   usb_msc.setReadWriteCallback(1, sdcard_read_cb, sdcard_write_cb, sdcard_flush_cb);
 
@@ -168,9 +140,9 @@ bool init_sdcard(void)
   return true;
 }
 
-void print_rootdir(File* rdir)
+void print_rootdir(File32* rdir)
 {
-  File file;
+  File32 file;
 
   // Open next file in root.
   // Warning, openNext starts at the current directory position
@@ -202,7 +174,7 @@ void loop()
     // skip if still not formatted
     if (flash_formatted)
     {
-      File root;
+      File32 root;
       root = fatfs.open("/");
 
       Serial.println("Flash contents:");
@@ -217,7 +189,7 @@ void loop()
 
   if ( sd_changed )
   {
-    File root;
+    File32 root;
     root = sd.open("/");
 
     Serial.println("SD contents:");
@@ -239,7 +211,15 @@ void loop()
 
 int32_t sdcard_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 {
-  return sd.card()->readBlocks(lba, (uint8_t*) buffer, bufsize/512) ? bufsize : -1;
+  bool rc;
+
+#if SD_FAT_VERSION >= 20000
+  rc = sd.card()->readSectors(lba, (uint8_t*) buffer, bufsize/512);
+#else
+  rc = sd.card()->readBlocks(lba, (uint8_t*) buffer, bufsize/512);
+#endif
+
+  return rc ? bufsize : -1;
 }
 
 // Callback invoked when received WRITE10 command.
@@ -247,16 +227,28 @@ int32_t sdcard_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 // return number of written bytes (must be multiple of block size)
 int32_t sdcard_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 {
+  bool rc;
+
   digitalWrite(LED_BUILTIN, HIGH);
 
-  return sd.card()->writeBlocks(lba, buffer, bufsize/512) ? bufsize : -1;
+#if SD_FAT_VERSION >= 20000
+  rc = sd.card()->writeSectors(lba, buffer, bufsize/512);
+#else
+  rc = sd.card()->writeBlocks(lba, buffer, bufsize/512);
+#endif
+
+  return rc ? bufsize : -1;
 }
 
 // Callback invoked when WRITE10 command is completed (status received and accepted by host).
 // used to flush any pending cache.
 void sdcard_flush_cb (void)
 {
+#if SD_FAT_VERSION >= 20000
+  sd.card()->syncDevice();
+#else
   sd.card()->syncBlocks();
+#endif
 
   // clear file system's cache to force refresh
   sd.cacheClear();
