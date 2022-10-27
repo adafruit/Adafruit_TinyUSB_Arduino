@@ -23,7 +23,7 @@
 Adafruit_InternalFlash flash(INTERNAL_FLASH_FILESYSTEM_START_ADDR, INTERNAL_FLASH_FILESYSTEM_SIZE);
 
 // file system object from SdFat
-FatFileSystem fatfs;
+FatVolume fatfs;
 
 FatFile root;
 FatFile file;
