@@ -104,6 +104,7 @@ extern int serial1_printf(const char *__restrict __format, ...);
 // Enable tuh_edpt_xfer() API
 //#define CFG_TUH_API_EDPT_XFER       1
 
+#define CFG_TUH_MSC 1
 #define CFG_TUH_HID 4
 
 #ifdef __cplusplus

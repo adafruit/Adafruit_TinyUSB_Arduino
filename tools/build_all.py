@@ -20,8 +20,8 @@ all_boards = [
     ['metro_m4_tinyusb', 'adafruit:samd:adafruit_metro_m4:speed=120,usbstack=tinyusb'],
     ['nrf52840', 'adafruit:nrf52:feather52840'],
     ['feather_rp2040_tinyusb', 'rp2040:rp2040:adafruit_feather:flash=8388608_0,freq=125,dbgport=Disabled,dbglvl=None,usbstack=tinyusb'],
-    ['metroesp32s2', 'esp32:esp32:adafruit_metro_esp32s2:CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=cdc,PSRAM=enabled,PartitionScheme=tinyuf2'],
-    #[' ', 'esp32:esp32:adafruit_feather_esp32s3:FlashMode=qio,LoopCore=1,EventsCore=1,USBMode=default,CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=cdc,PartitionScheme=tinyuf2'],
+    ['metroesp32s2', 'espressif:esp32:adafruit_metro_esp32s2:CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=cdc,PSRAM=enabled,PartitionScheme=tinyuf2'],
+    #[' ', 'espressif:esp32:adafruit_feather_esp32s3:FlashMode=qio,LoopCore=1,EventsCore=1,USBMode=default,CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=cdc,PartitionScheme=tinyuf2'],
 ]
 
 # return [succeeded, failed, skipped]
