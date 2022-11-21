@@ -40,9 +40,6 @@ extern "C" {
 #include "arduino/Adafruit_TinyUSB_API.h"
 #include "tusb.h"
 
-// USB processing will be a periodic timer task
-#define USB_TASK_INTERVAL 1000
-
 // SDK >= 1.4.0 need to dynamically request the IRQ to avoid conflicts
 #if (PICO_SDK_VERSION_MAJOR * 100 + PICO_SDK_VERSION_MINOR) < 104
 #define USB_TASK_IRQ 31
@@ -63,34 +60,15 @@ static unsigned int USB_TASK_IRQ;
 // mbed use old pico-sdk does not have unique_id
 #ifdef ARDUINO_ARCH_MBED
 
-#include "mbed.h"
-static mbed::Ticker _usb_ticker;
-
 #define get_unique_id(_serial) flash_get_unique_id(_serial)
-
-static void ticker_task(void) { irq_set_pending(USB_TASK_IRQ); }
-
-static void setup_periodic_usb_hanlder(uint64_t us) {
-  _usb_ticker.attach(ticker_task, (std::chrono::microseconds)us);
-}
 
 #else
 
 #include "pico/unique_id.h"
-
 #define get_unique_id(_serial)                                                 \
   pico_get_unique_board_id((pico_unique_board_id_t *)_serial);
 
-static int64_t timer_task(__unused alarm_id_t id, __unused void *user_data) {
-  irq_set_pending(USB_TASK_IRQ);
-  return USB_TASK_INTERVAL;
-}
-
-static void setup_periodic_usb_hanlder(uint64_t us) {
-  add_alarm_in_us(us, timer_task, NULL, true);
-}
-
-#endif // mbed
+#endif
 
 //--------------------------------------------------------------------+
 // Porting API
@@ -100,7 +78,7 @@ static void setup_periodic_usb_hanlder(uint64_t us) {
 // have multiple cores updating the TUSB state in parallel
 mutex_t __usb_mutex;
 
-static void usb_irq() {
+static void usb_task_irq(void) {
   // if the mutex is already owned, then we are in user code
   // in this file which will do a tud_task itself, so we'll just do nothing
   // until the next tick; we won't starve
@@ -110,26 +88,25 @@ static void usb_irq() {
   }
 }
 
-void TinyUSB_Port_InitDevice(uint8_t rhport) {
-  (void)rhport;
+// invoked when there is hardware usb irq, trigger task runner later
+static void usb_task_trigger_irq(void) {
+  irq_set_pending(USB_TASK_IRQ);
+}
 
+void TinyUSB_Port_InitDevice(uint8_t rhport) {
   mutex_init(&__usb_mutex);
 
-  irq_set_enabled(USBCTRL_IRQ, false);
-  irq_handler_t current_handler = irq_get_exclusive_handler(USBCTRL_IRQ);
-  if (current_handler) {
-    irq_remove_handler(USBCTRL_IRQ, current_handler);
-  }
+  tud_init(rhport);
 
-  tusb_init();
-
-  // soft irq for periodically task runner
+  // soft irq for task runner
 #if (PICO_SDK_VERSION_MAJOR * 100 + PICO_SDK_VERSION_MINOR) >= 104
   USB_TASK_IRQ = user_irq_claim_unused(true);
 #endif
-  irq_set_exclusive_handler(USB_TASK_IRQ, usb_irq);
+  irq_set_exclusive_handler(USB_TASK_IRQ, usb_task_irq);
   irq_set_enabled(USB_TASK_IRQ, true);
-  setup_periodic_usb_hanlder(USB_TASK_INTERVAL);
+
+  // add shared irq to trigger task runner
+  irq_add_shared_handler(USBCTRL_IRQ, usb_task_trigger_irq, PICO_SHARED_IRQ_HANDLER_LOWEST_ORDER_PRIORITY);
 }
 
 void TinyUSB_Port_EnterDFU(void) {
