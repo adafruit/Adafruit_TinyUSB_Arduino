@@ -32,7 +32,6 @@
 #endif
 
 #include "common/tusb_common.h"
-#include "hcd.h"
 
 //--------------------------------------------------------------------+
 // MACRO CONSTANT TYPEDEF
@@ -72,7 +71,7 @@ struct tuh_xfer_s
 // ConfigID for tuh_config()
 enum
 {
-  TUH_CFGID_RPI_PIO_USB_CONFIGURATION = OPT_MCU_RP2040 // cfg_param: pio_usb_configuration_t
+  TUH_CFGID_RPI_PIO_USB_CONFIGURATION = OPT_MCU_RP2040 << 8 // cfg_param: pio_usb_configuration_t
 };
 
 //--------------------------------------------------------------------+
@@ -115,8 +114,11 @@ void tuh_task(void)
   tuh_task_ext(UINT32_MAX, false);
 }
 
-// Interrupt handler, name alias to HCD
+#ifndef _TUSB_HCD_H_
 extern void hcd_int_handler(uint8_t rhport);
+#endif
+
+// Interrupt handler, name alias to HCD
 #define tuh_int_handler   hcd_int_handler
 
 bool tuh_vid_pid_get(uint8_t daddr, uint16_t* vid, uint16_t* pid);
