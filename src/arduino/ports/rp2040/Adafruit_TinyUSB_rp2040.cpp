@@ -89,9 +89,7 @@ static void usb_task_irq(void) {
 }
 
 // invoked when there is hardware usb irq, trigger task runner later
-static void usb_task_trigger_irq(void) {
-  irq_set_pending(USB_TASK_IRQ);
-}
+static void usb_task_trigger_irq(void) { irq_set_pending(USB_TASK_IRQ); }
 
 void TinyUSB_Port_InitDevice(uint8_t rhport) {
   mutex_init(&__usb_mutex);
@@ -106,7 +104,8 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
   irq_set_enabled(USB_TASK_IRQ, true);
 
   // add shared irq to trigger task runner
-  irq_add_shared_handler(USBCTRL_IRQ, usb_task_trigger_irq, PICO_SHARED_IRQ_HANDLER_LOWEST_ORDER_PRIORITY);
+  irq_add_shared_handler(USBCTRL_IRQ, usb_task_trigger_irq,
+                         PICO_SHARED_IRQ_HANDLER_LOWEST_ORDER_PRIORITY);
 }
 
 void TinyUSB_Port_EnterDFU(void) {
