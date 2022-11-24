@@ -1,4 +1,4 @@
-/* 
+/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2022 Ha Thach (tinyusb.org) for Adafruit Industries
@@ -34,37 +34,39 @@
 
 class Adafruit_USBH_MSC_BlockDevice : public FsBlockDeviceInterface {
 public:
-    Adafruit_USBH_MSC_BlockDevice();
+  Adafruit_USBH_MSC_BlockDevice();
 
-    bool begin(uint8_t dev_addr);
-    void end(void);
+  bool begin(uint8_t dev_addr);
+  void end(void);
 
-    // Set active LUN
-    bool setActiveLUN(uint8_t lun);
+  // Set active LUN
+  bool setActiveLUN(uint8_t lun);
 
-    bool mounted(void);
+  bool mounted(void);
 
-    //------------- SdFat v2 FsBlockDeviceInterface API -------------//
-    virtual bool isBusy();
-    virtual uint32_t sectorCount();
-    virtual bool syncDevice();
+  //------------- SdFat v2 FsBlockDeviceInterface API -------------//
+  virtual bool isBusy();
+  virtual uint32_t sectorCount();
+  virtual bool syncDevice();
 
-    virtual bool readSector(uint32_t block, uint8_t *dst);
-    virtual bool readSectors(uint32_t block, uint8_t *dst, size_t ns);
-    virtual bool writeSector(uint32_t block, const uint8_t *src);
-    virtual bool writeSectors(uint32_t block, const uint8_t *src, size_t ns);
+  virtual bool readSector(uint32_t block, uint8_t *dst);
+  virtual bool readSectors(uint32_t block, uint8_t *dst, size_t ns);
+  virtual bool writeSector(uint32_t block, const uint8_t *src);
+  virtual bool writeSectors(uint32_t block, const uint8_t *src, size_t ns);
 
-    //------------- Internal APIs -------------//
-    bool _io_complete_cb(uint8_t dev_addr, tuh_msc_complete_data_t const* cb_data);
+  //------------- Internal APIs -------------//
+  bool _io_complete_cb(uint8_t dev_addr,
+                       tuh_msc_complete_data_t const *cb_data);
 
 private:
-    uint8_t _daddr;
-    uint8_t _lun;
+  uint8_t _daddr;
+  uint8_t _lun;
 
-    // TODO use mutex to prevent race condition or atomic for better implementation
-    volatile bool _busy;
+  // TODO use mutex to prevent race condition or atomic for better
+  // implementation
+  volatile bool _busy;
 
-    bool wait_for_io(void);
+  bool wait_for_io(void);
 };
 
 #endif

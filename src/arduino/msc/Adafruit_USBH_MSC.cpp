@@ -1,4 +1,4 @@
-/* 
+/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2022 Ha Thach (tinyusb.org) for Adafruit Industries
@@ -26,8 +26,8 @@
 
 #if CFG_TUH_ENABLED && CFG_TUH_MSC
 
-#include "tusb.h"
 #include "Adafruit_USBH_MSC.h"
+#include "tusb.h"
 
 #if __has_include("SdFat.h")
 
@@ -46,17 +46,11 @@ bool Adafruit_USBH_MSC_BlockDevice::setActiveLUN(uint8_t lun) {
   return true;
 }
 
-void Adafruit_USBH_MSC_BlockDevice::end(void) {
-  _daddr = _lun = 0;
-}
+void Adafruit_USBH_MSC_BlockDevice::end(void) { _daddr = _lun = 0; }
 
-bool Adafruit_USBH_MSC_BlockDevice::mounted(void) {
-  return _daddr > 0;
-}
+bool Adafruit_USBH_MSC_BlockDevice::mounted(void) { return _daddr > 0; }
 
-bool Adafruit_USBH_MSC_BlockDevice::isBusy(void) {
-  return _busy;
-}
+bool Adafruit_USBH_MSC_BlockDevice::isBusy(void) { return _busy; }
 
 bool Adafruit_USBH_MSC_BlockDevice::wait_for_io(void) {
   while (_busy) {
@@ -66,7 +60,8 @@ bool Adafruit_USBH_MSC_BlockDevice::wait_for_io(void) {
   return true;
 }
 
-bool Adafruit_USBH_MSC_BlockDevice::_io_complete_cb(uint8_t dev_addr, tuh_msc_complete_data_t const* cb_data) {
+bool Adafruit_USBH_MSC_BlockDevice::_io_complete_cb(
+    uint8_t dev_addr, tuh_msc_complete_data_t const *cb_data) {
   if (dev_addr != _daddr) {
     // something wrong occurred, maybe device removed while transferring
     return false;
@@ -77,8 +72,10 @@ bool Adafruit_USBH_MSC_BlockDevice::_io_complete_cb(uint8_t dev_addr, tuh_msc_co
   return true;
 }
 
-static bool _msc_io_complete_cb(uint8_t dev_addr, tuh_msc_complete_data_t const* cb_data) {
-  Adafruit_USBH_MSC_BlockDevice* sdfat_dev = (Adafruit_USBH_MSC_BlockDevice*) cb_data->user_arg;
+static bool _msc_io_complete_cb(uint8_t dev_addr,
+                                tuh_msc_complete_data_t const *cb_data) {
+  Adafruit_USBH_MSC_BlockDevice *sdfat_dev =
+      (Adafruit_USBH_MSC_BlockDevice *)cb_data->user_arg;
   sdfat_dev->_io_complete_cb(dev_addr, cb_data);
   return true;
 }
@@ -92,23 +89,28 @@ bool Adafruit_USBH_MSC_BlockDevice::syncDevice(void) {
   return true;
 }
 
-bool Adafruit_USBH_MSC_BlockDevice::readSectors(uint32_t block, uint8_t *dst, size_t ns) {
+bool Adafruit_USBH_MSC_BlockDevice::readSectors(uint32_t block, uint8_t *dst,
+                                                size_t ns) {
   _busy = true;
-  if( tuh_msc_read10(_daddr, _lun, dst, block, (uint16_t) ns, _msc_io_complete_cb, (uintptr_t) this) ) {
+  if (tuh_msc_read10(_daddr, _lun, dst, block, (uint16_t)ns,
+                     _msc_io_complete_cb, (uintptr_t)this)) {
     wait_for_io();
     return true;
-  }else {
+  } else {
     _busy = false;
     return false;
   }
 }
 
-bool Adafruit_USBH_MSC_BlockDevice::writeSectors(uint32_t block, const uint8_t *src, size_t ns) {
+bool Adafruit_USBH_MSC_BlockDevice::writeSectors(uint32_t block,
+                                                 const uint8_t *src,
+                                                 size_t ns) {
   _busy = true;
-  if( tuh_msc_write10(_daddr, _lun, src, block, (uint16_t) ns, _msc_io_complete_cb, (uintptr_t) this) ) {
+  if (tuh_msc_write10(_daddr, _lun, src, block, (uint16_t)ns,
+                      _msc_io_complete_cb, (uintptr_t)this)) {
     wait_for_io();
     return true;
-  }else {
+  } else {
     _busy = false;
     return false;
   }
@@ -118,7 +120,8 @@ bool Adafruit_USBH_MSC_BlockDevice::readSector(uint32_t block, uint8_t *dst) {
   return readSectors(block, dst, 1);
 }
 
-bool Adafruit_USBH_MSC_BlockDevice::writeSector(uint32_t block, const uint8_t *src) {
+bool Adafruit_USBH_MSC_BlockDevice::writeSector(uint32_t block,
+                                                const uint8_t *src) {
   return writeSectors(block, src, 1);
 }
 
@@ -128,8 +131,6 @@ bool Adafruit_USBH_MSC_BlockDevice::writeSector(uint32_t block, const uint8_t *s
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
 //--------------------------------------------------------------------+
 
-
 //------------- IMPLEMENTATION -------------//
-
 
 #endif
