@@ -16,7 +16,7 @@
  *
  * Requirements:
  * - [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB) library
- * - 2 consecutive GPIOs: D+ is defined by HOST_PIN_DP (gpio2), D- = D+ +1 (gpio3)
+ * - 2 consecutive GPIOs: D+ is defined by HOST_PIN_DP (gpio20), D- = D+ +1 (gpio21)
  * - Provide VBus (5v) and GND for peripheral
  * - CPU Speed must be either 120 or 240 Mhz. Selected via "Menu -> CPU Speed"
  *
@@ -43,17 +43,27 @@
 
 // pio-usb is required for rp2040 host
 #include "pio_usb.h"
-#define HOST_PIN_DP   2   // Pin used as D+ for host, D- = D+ + 1
-
 #include "Adafruit_TinyUSB.h"
 
-#define LANGUAGE_ID 0x0409  // English
+// Pin D+ for host, D- = D+ + 1
+#define HOST_PIN_DP       20
+
+// Pin for enabling Host VBUS. comment out if not used
+#define HOST_PIN_VBUS_EN        22
+#define HOST_PIN_VBUS_EN_STATE  1
+
+// Language ID: English
+#define LANGUAGE_ID 0x0409
 
 // USB Host object
 Adafruit_USBH_Host USBHost;
 
 // holding device descriptor
 tusb_desc_device_t desc_device;
+
+//--------------------------------------------------------------------+
+// Setup and Loop on Core0
+//--------------------------------------------------------------------+
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -70,7 +80,10 @@ void loop()
 {
 }
 
-// core1's setup
+//--------------------------------------------------------------------+
+// Setup and Loop on Core1
+//--------------------------------------------------------------------+
+
 void setup1() {
   //while ( !Serial ) delay(10);   // wait for native usb
   Serial.println("Core1 setup to run TinyUSB host with pio-usb");
@@ -78,11 +91,20 @@ void setup1() {
   // Check for CPU frequency, must be multiple of 120Mhz for bit-banging USB
   uint32_t cpu_hz = clock_get_hz(clk_sys);
   if ( cpu_hz != 120000000UL && cpu_hz != 240000000UL ) {
-    while ( !Serial ) delay(10);   // wait for native usb
+    while ( !Serial ) {
+      delay(10);   // wait for native usb
+    }
     Serial.printf("Error: CPU Clock = %u, PIO USB require CPU clock must be multiple of 120 Mhz\r\n", cpu_hz);
     Serial.printf("Change your CPU Clock to either 120 or 240 Mhz in Menu->CPU Speed \r\n", cpu_hz);
-    while(1) delay(1);
+    while(1) {
+      delay(1);
+    }
   }
+
+#ifdef HOST_PIN_VBUS_EN
+  pinMode(HOST_PIN_VBUS_EN, OUTPUT);
+  digitalWrite(HOST_PIN_VBUS_EN, HOST_PIN_VBUS_EN_STATE);
+#endif
 
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
   pio_cfg.pin_dp = HOST_PIN_DP;
@@ -94,7 +116,6 @@ void setup1() {
   USBHost.begin(1);
 }
 
-// core1's loop
 void loop1()
 {
   USBHost.task();

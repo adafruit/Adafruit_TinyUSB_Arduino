@@ -16,46 +16,32 @@
  *
  * Requirements:
  * - [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB) library
- * - 2 consecutive GPIOs: D+ is defined by HOST_PIN_DP (gpio2), D- = D+ +1 (gpio3)
+ * - 2 consecutive GPIOs: D+ is defined by HOST_PIN_DP (gpio20), D- = D+ +1 (gpio21)
  * - Provide VBus (5v) and GND for peripheral
  * - CPU Speed must be either 120 or 240 Mhz. Selected via "Menu -> CPU Speed"
- *
- * RP2040 host stack will get device descriptors of attached devices and print it out via
- * device cdc (Serial) as follows:
- *    Device 1: ID 046d:c52f
-      Device Descriptor:
-        bLength             18
-        bDescriptorType     1
-        bcdUSB              0200
-        bDeviceClass        0
-        bDeviceSubClass     0
-        bDeviceProtocol     0
-        bMaxPacketSize0     8
-        idVendor            0x046d
-        idProduct           0xc52f
-        bcdDevice           2200
-        iManufacturer       1     Logitech
-        iProduct            2     USB Receiver
-        iSerialNumber       0
-        bNumConfigurations  1
- *
  */
 
 // pio-usb is required for rp2040 host
 #include "pio_usb.h"
-#define HOST_PIN_DP   2   // Pin used as D+ for host, D- = D+ + 1
-
 #include "Adafruit_TinyUSB.h"
 
-#define LANGUAGE_ID 0x0409  // English
+// Pin D+ for host, D- = D+ + 1
+#define HOST_PIN_DP       20
+
+// Pin for enabling Host VBUS. comment out if not used
+#define HOST_PIN_VBUS_EN        22
+#define HOST_PIN_VBUS_EN_STATE  1
+
+// Language ID: English
+#define LANGUAGE_ID 0x0409
 
 // USB Host object
 Adafruit_USBH_Host USBHost;
 
-// holding device descriptor
-tusb_desc_device_t desc_device;
+//--------------------------------------------------------------------+
+// Setup and Loop on Core0
+//--------------------------------------------------------------------+
 
-// the setup function runs once when you press reset or power the board
 void setup()
 {
   Serial1.begin(115200);
@@ -70,7 +56,10 @@ void loop()
 {
 }
 
-// core1's setup
+//--------------------------------------------------------------------+
+// Setup and Loop on Core1
+//--------------------------------------------------------------------+
+
 void setup1() {
   //while ( !Serial ) delay(10);   // wait for native usb
   Serial.println("Core1 setup to run TinyUSB host with pio-usb");
@@ -84,6 +73,11 @@ void setup1() {
     while(1) delay(1);
   }
 
+#ifdef HOST_PIN_VBUS_EN
+  pinMode(HOST_PIN_VBUS_EN, OUTPUT);
+  digitalWrite(HOST_PIN_VBUS_EN, HOST_PIN_VBUS_EN_STATE);
+#endif
+
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
   pio_cfg.pin_dp = HOST_PIN_DP;
   USBHost.configure_pio_usb(1, &pio_cfg);
@@ -94,7 +88,6 @@ void setup1() {
   USBHost.begin(1);
 }
 
-// core1's loop
 void loop1()
 {
   USBHost.task();
