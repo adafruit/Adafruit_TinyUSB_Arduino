@@ -62,7 +62,7 @@ bool Adafruit_USBH_MSC_BlockDevice::wait_for_io(void) {
 
 bool Adafruit_USBH_MSC_BlockDevice::_io_complete_cb(
     uint8_t dev_addr, tuh_msc_complete_data_t const *cb_data) {
-  (void) cb_data;
+  (void)cb_data;
   if (dev_addr != _daddr) {
     // something wrong occurred, maybe device removed while transferring
     return false;
