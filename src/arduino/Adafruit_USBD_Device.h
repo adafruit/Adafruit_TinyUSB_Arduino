@@ -87,6 +87,7 @@ public:
   void setProductDescriptor(const char *s);
   void setSerialDescriptor(const char *s);
   uint8_t getSerialDescriptor(uint16_t *serial_utf16);
+  uint8_t addStringToIndex(const char *s);
 
   //------------- Control -------------//
 

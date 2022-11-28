@@ -34,6 +34,12 @@ public:
 
   void setCables(uint8_t n_cables);
 
+  // Register the index number of a USB device descriptor string, which was
+  // added with Adafruit_USBD_Device::addStringToIndex().
+  void setCableNameStringIndex(uint8_t index, uint8_t string_index) {
+    _cable_name_strings[index] = string_index;
+  }
+
   bool begin(void);
 
   // for MIDI library
@@ -65,6 +71,7 @@ public:
 
 private:
   uint8_t _n_cables;
+  uint8_t _cable_name_strings[16]{};
 };
 
 #endif /* ADAFRUIT_USBD_MIDI_H_ */

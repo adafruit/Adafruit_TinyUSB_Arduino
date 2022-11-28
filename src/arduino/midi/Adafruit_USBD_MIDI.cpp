@@ -105,7 +105,7 @@ uint16_t Adafruit_USBD_MIDI::makeItfDesc(uint8_t itfnum, uint8_t *buf,
 
   // Jack
   for (uint8_t i = 1; i <= _n_cables; i++) {
-    uint8_t jack[] = {TUD_MIDI_DESC_JACK(i)};
+    uint8_t jack[] = {TUD_MIDI_DESC_JACK_DESC(i, _cable_name_strings[i])};
     memcpy(buf + len, jack, sizeof(jack));
     len += sizeof(jack);
   }

@@ -126,6 +126,15 @@ void Adafruit_USBD_Device::setSerialDescriptor(const char *s) {
   _desc_str_arr[STRID_SERIAL] = s;
 }
 
+uint8_t Adafruit_USBD_Device::addStringToIndex(const char *s) {
+  if (_desc_str_count >= STRING_DESCRIPTOR_MAX)
+    return 0;
+
+  uint8_t index = _desc_str_count++;
+  _desc_str_arr[index] = s;
+  return index;
+}
+
 void Adafruit_USBD_Device::task(void) { tud_task(); }
 
 bool Adafruit_USBD_Device::mounted(void) { return tud_mounted(); }
