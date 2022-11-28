@@ -64,6 +64,9 @@ void TinyUSB_Device_Init(uint8_t rhport);
 #if CFG_TUH_ENABLED
 
 #include "arduino/Adafruit_USBH_Host.h"
+#if CFG_TUH_MSC
+  #include "arduino/msc/Adafruit_USBH_MSC.h"
+#endif
 
 #endif
 
