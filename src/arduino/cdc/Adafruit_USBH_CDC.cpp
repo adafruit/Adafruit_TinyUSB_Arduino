@@ -40,7 +40,7 @@ bool Adafruit_USBH_CDC::connected(void) {
   return (_idx != TUSB_INDEX_INVALID) && tuh_cdc_connected(_idx);
 }
 
-Adafruit_USBH_CDC::operator bool() {
+bool Adafruit_USBH_CDC::mounted(void) {
   return (_idx != TUSB_INDEX_INVALID) && tuh_cdc_mounted(_idx);
 }
 

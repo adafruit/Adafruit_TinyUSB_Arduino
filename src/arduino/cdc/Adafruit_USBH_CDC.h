@@ -41,7 +41,8 @@ public:
   uint8_t getIndex(void) { return _idx; }
 
   // If cdc is mounted
-  operator bool();
+  bool mounted(void);
+  operator bool() { return mounted(); }
 
   // if cdc's DTR is asserted
   bool connected(void);
