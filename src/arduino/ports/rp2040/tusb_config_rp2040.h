@@ -115,6 +115,11 @@ extern int serial1_printf(const char *__restrict __format, ...);
 // Number of CDC interfaces
 #define CFG_TUH_CDC 1
 
+// RX & TX fifo size
+#define CFG_TUH_CDC_RX_BUFSIZE    128
+#define CFG_TUH_CDC_TX_BUFSIZE    128
+
+
 // Set Line Control state on enumeration/mounted:
 // DTR ( bit 0), RTS (bit 1)
 #define CFG_TUH_CDC_LINE_CONTROL_ON_ENUM    0x03
