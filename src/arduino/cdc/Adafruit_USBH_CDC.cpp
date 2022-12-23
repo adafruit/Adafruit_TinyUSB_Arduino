@@ -30,17 +30,11 @@
 
 #include "Adafruit_USBH_CDC.h"
 
-Adafruit_USBH_CDC::Adafruit_USBH_CDC(void) {
-  _idx = TUSB_INDEX_INVALID;
-}
+Adafruit_USBH_CDC::Adafruit_USBH_CDC(void) { _idx = TUSB_INDEX_INVALID; }
 
-void Adafruit_USBH_CDC::begin(uint8_t idx) {
-  _idx = idx;
-}
+void Adafruit_USBH_CDC::begin(uint8_t idx) { _idx = idx; }
 
-void Adafruit_USBH_CDC::end(void) {
-  _idx = TUSB_INDEX_INVALID;
-}
+void Adafruit_USBH_CDC::end(void) { _idx = TUSB_INDEX_INVALID; }
 
 bool Adafruit_USBH_CDC::connected(void) {
   return (_idx != TUSB_INDEX_INVALID) && tuh_cdc_connected(_idx);
@@ -51,7 +45,7 @@ Adafruit_USBH_CDC::operator bool() {
 }
 
 int Adafruit_USBH_CDC::available(void) {
-  return (int) tuh_cdc_read_available(_idx);
+  return (int)tuh_cdc_read_available(_idx);
 }
 
 int Adafruit_USBH_CDC::peek(void) {
@@ -61,20 +55,16 @@ int Adafruit_USBH_CDC::peek(void) {
 
 int Adafruit_USBH_CDC::read(void) {
   uint8_t ch;
-  return read(&ch, 1) ? (int) ch : -1;
+  return read(&ch, 1) ? (int)ch : -1;
 }
 
 size_t Adafruit_USBH_CDC::read(uint8_t *buffer, size_t size) {
   return tuh_cdc_read(_idx, buffer, size);
 }
 
-void Adafruit_USBH_CDC::flush(void) {
-  (void) tuh_cdc_write_flush(_idx);
-}
+void Adafruit_USBH_CDC::flush(void) { (void)tuh_cdc_write_flush(_idx); }
 
-size_t Adafruit_USBH_CDC::write(uint8_t ch) {
-  return write(&ch, 1);
-}
+size_t Adafruit_USBH_CDC::write(uint8_t ch) { return write(&ch, 1); }
 
 size_t Adafruit_USBH_CDC::write(const uint8_t *buffer, size_t size) {
   size_t remain = size;
@@ -95,7 +85,7 @@ size_t Adafruit_USBH_CDC::write(const uint8_t *buffer, size_t size) {
 }
 
 int Adafruit_USBH_CDC::availableForWrite(void) {
-  return (int) tuh_cdc_write_available(_idx);
+  return (int)tuh_cdc_write_available(_idx);
 }
 
 #endif

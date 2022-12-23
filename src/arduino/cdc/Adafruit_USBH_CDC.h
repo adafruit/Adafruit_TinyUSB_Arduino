@@ -1,4 +1,4 @@
-/* 
+/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2022 Ha Thach (tinyusb.org) for Adafruit Industries
@@ -29,43 +29,43 @@
 
 class Adafruit_USBH_CDC : public Stream {
 public:
-    Adafruit_USBH_CDC(void);
+  Adafruit_USBH_CDC(void);
 
-    // Init/Bind to an specific cdc interface
-    void begin(uint8_t idx = 0);
+  // Init/Bind to an specific cdc interface
+  void begin(uint8_t idx = 0);
 
-    // unbind cdc interface
-    void end(void);
+  // unbind cdc interface
+  void end(void);
 
-    // Get index of cdc interface
-    uint8_t getIndex(void) { return _idx; }
+  // Get index of cdc interface
+  uint8_t getIndex(void) { return _idx; }
 
-    // If cdc is mounted
-    operator bool();
+  // If cdc is mounted
+  operator bool();
 
-    // if cdc's DTR is asserted
-    bool connected(void);
+  // if cdc's DTR is asserted
+  bool connected(void);
 
-    //------------- Stream API -------------//
-    virtual int available(void);
-    virtual int peek(void);
+  //------------- Stream API -------------//
+  virtual int available(void);
+  virtual int peek(void);
 
-    virtual int read(void);
-    size_t read(uint8_t *buffer, size_t size);
+  virtual int read(void);
+  size_t read(uint8_t *buffer, size_t size);
 
-    virtual void flush(void);
-    virtual size_t write(uint8_t ch);
+  virtual void flush(void);
+  virtual size_t write(uint8_t ch);
 
-    virtual size_t write(const uint8_t *buffer, size_t size);
-    size_t write(const char *buffer, size_t size) {
-      return write((const uint8_t *)buffer, size);
-    }
+  virtual size_t write(const uint8_t *buffer, size_t size);
+  size_t write(const char *buffer, size_t size) {
+    return write((const uint8_t *)buffer, size);
+  }
 
-    virtual int availableForWrite(void);
-    using Print::write; // pull in write(str) from Print
+  virtual int availableForWrite(void);
+  using Print::write; // pull in write(str) from Print
 
 private:
-    uint8_t _idx; // TinyUSB CDC Interface Index
+  uint8_t _idx; // TinyUSB CDC Interface Index
 };
 
 #endif
