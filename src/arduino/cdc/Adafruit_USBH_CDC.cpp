@@ -49,8 +49,8 @@ int Adafruit_USBH_CDC::available(void) {
 }
 
 int Adafruit_USBH_CDC::peek(void) {
-  // TODO support later
-  return -1;
+  uint8_t ch;
+  return tuh_cdc_peek(_idx, &ch) ? (int)ch : -1;
 }
 
 int Adafruit_USBH_CDC::read(void) {
