@@ -19,7 +19,10 @@ Supported device class drivers are:
 
 ### Host Stack
 
-There is a initial (WIP) host support for rp2040 core (require [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB))
+Host support is still work-in-progress but currently available with rp2040 core thanks to Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB). Supported class driver are:
+
+- Communication (CDC)
+- MassStorage class
 
 ## Supported Cores
 
