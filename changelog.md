@@ -135,7 +135,7 @@ uint8_t const desc_hid_report[] =
 ## 0.6.0 - 2019.08.05
 
 - Added webUSB support with 2 example: webusb-serial, webusb-rgb
-- Alligned mouse examples, added newer hid in/out example from main repo, added new composite example for ramdisk and hid in/out. PR #19 thanks to @PTS93
+- Aligned mouse examples, added newer hid in/out example from main repo, added new composite example for ramdisk and hid in/out. PR #19 thanks to @PTS93
 
 ## 0.5.0 - 2019.07.17
 
