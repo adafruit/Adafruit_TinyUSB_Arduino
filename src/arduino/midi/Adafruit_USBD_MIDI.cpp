@@ -162,12 +162,12 @@ size_t Adafruit_USBD_MIDI::write(uint8_t b) {
 int Adafruit_USBD_MIDI::available(void) { return tud_midi_available(); }
 
 int Adafruit_USBD_MIDI::peek(void) {
-  // MIDI Library doen't use peek
+  // MIDI Library does not use peek
   return -1;
 }
 
 void Adafruit_USBD_MIDI::flush(void) {
-  // MIDI Library doen't use flush
+  // MIDI Library does not use flush
 }
 
 bool Adafruit_USBD_MIDI::writePacket(const uint8_t packet[4]) {

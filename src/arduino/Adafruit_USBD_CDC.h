@@ -45,7 +45,7 @@ public:
 
   static uint8_t getInstanceCount(void);
 
-  // fron Adafruit_USBD_Interface
+  // from Adafruit_USBD_Interface
   virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
                                           uint16_t bufsize);
 
