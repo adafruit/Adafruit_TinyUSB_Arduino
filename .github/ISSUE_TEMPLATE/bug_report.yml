@@ -56,7 +56,7 @@ body:
       placeholder: |
         e.g examples/MassStorage/msc_ramdisk.
         If it is custom sketch, please provide it as **ATTACHED** files or link to it.
-        Compiled output must be attached as txt files for readibility
+        Compiled output must be attached as txt files for readability
     validations:
       required: true
 
