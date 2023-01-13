@@ -58,6 +58,7 @@ static uint16_t midi_load_descriptor(uint8_t *dst, uint8_t *itf) {
 
 Adafruit_USBD_MIDI::Adafruit_USBD_MIDI(uint8_t n_cables) {
   _n_cables = n_cables;
+  memcpy(_cable_name_strid, 0, sizeof(_cable_name_strid));
 
 #ifdef ARDUINO_ARCH_ESP32
   // ESP32 requires setup configuration descriptor within constructor
@@ -68,6 +69,17 @@ Adafruit_USBD_MIDI::Adafruit_USBD_MIDI(uint8_t n_cables) {
 }
 
 void Adafruit_USBD_MIDI::setCables(uint8_t n_cables) { _n_cables = n_cables; }
+
+bool Adafruit_USBD_MIDI::setCableName(uint8_t cable_id, const char *str) {
+  if (cable_id == 0 || cable_id > sizeof(_cable_name_strid)) {
+    return false;
+  }
+
+  uint8_t strid = TinyUSBDevice.addStringDescriptor(str);
+  _cable_name_strid[cable_id] = strid;
+
+  return strid > 0;
+}
 
 bool Adafruit_USBD_MIDI::begin(void) {
   if (!TinyUSBDevice.addInterface(*this)) {
@@ -105,7 +117,7 @@ uint16_t Adafruit_USBD_MIDI::makeItfDesc(uint8_t itfnum, uint8_t *buf,
 
   // Jack
   for (uint8_t i = 1; i <= _n_cables; i++) {
-    uint8_t jack[] = {TUD_MIDI_DESC_JACK_DESC(i, _cable_name_strings[i])};
+    uint8_t jack[] = {TUD_MIDI_DESC_JACK_DESC(i, _cable_name_strid[i])};
     memcpy(buf + len, jack, sizeof(jack));
     len += sizeof(jack);
   }
