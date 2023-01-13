@@ -127,7 +127,7 @@ void Adafruit_USBD_Device::setSerialDescriptor(const char *s) {
 }
 
 uint8_t Adafruit_USBD_Device::addStringDescriptor(const char *s) {
-  if (_desc_str_count >= STRING_DESCRIPTOR_MAX) {
+  if (_desc_str_count >= STRING_DESCRIPTOR_MAX || s == NULL) {
     return 0;
   }
 
