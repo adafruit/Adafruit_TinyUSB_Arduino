@@ -58,7 +58,7 @@ static uint16_t midi_load_descriptor(uint8_t *dst, uint8_t *itf) {
 
 Adafruit_USBD_MIDI::Adafruit_USBD_MIDI(uint8_t n_cables) {
   _n_cables = n_cables;
-  memcpy(_cable_name_strid, 0, sizeof(_cable_name_strid));
+  memset(_cable_name_strid, 0, sizeof(_cable_name_strid));
 
 #ifdef ARDUINO_ARCH_ESP32
   // ESP32 requires setup configuration descriptor within constructor
