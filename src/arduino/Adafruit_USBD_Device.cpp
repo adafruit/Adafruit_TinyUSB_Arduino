@@ -126,6 +126,8 @@ void Adafruit_USBD_Device::setSerialDescriptor(const char *s) {
   _desc_str_arr[STRID_SERIAL] = s;
 }
 
+// Add a string descriptor to the device's pool
+// Return string index
 uint8_t Adafruit_USBD_Device::addStringDescriptor(const char *s) {
   if (_desc_str_count >= STRING_DESCRIPTOR_MAX || s == NULL) {
     return 0;
