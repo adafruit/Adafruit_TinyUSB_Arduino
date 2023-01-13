@@ -34,6 +34,10 @@ public:
 
   void setCables(uint8_t n_cables);
 
+  // Set the cable number with a USB device descriptor string
+  // Note: per MIDI specs cable_id (or jackid/elementid) starting from 1. 0 is
+  // reserved for undefined ID.
+  bool setCableName(uint8_t cable_id, const char *str);
   bool begin(void);
 
   // for MIDI library
@@ -65,6 +69,7 @@ public:
 
 private:
   uint8_t _n_cables;
+  uint8_t _cable_name_strid[8];
 };
 
 #endif /* ADAFRUIT_USBD_MIDI_H_ */

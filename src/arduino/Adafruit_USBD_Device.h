@@ -34,7 +34,7 @@
 
 class Adafruit_USBD_Device {
 private:
-  enum { STRING_DESCRIPTOR_MAX = 8 };
+  enum { STRING_DESCRIPTOR_MAX = 12 };
 
   // Device descriptor
   tusb_desc_device_t _desc_device __attribute__((aligned(4)));
@@ -87,6 +87,8 @@ public:
   void setProductDescriptor(const char *s);
   void setSerialDescriptor(const char *s);
   uint8_t getSerialDescriptor(uint16_t *serial_utf16);
+
+  uint8_t addStringDescriptor(const char *s);
 
   //------------- Control -------------//
 
