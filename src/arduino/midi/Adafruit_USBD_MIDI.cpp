@@ -76,7 +76,7 @@ bool Adafruit_USBD_MIDI::setCableName(uint8_t cable_id, const char *str) {
   }
 
   uint8_t strid = TinyUSBDevice.addStringDescriptor(str);
-  _cable_name_strid[cable_id] = strid;
+  _cable_name_strid[cable_id-1] = strid;
 
   return strid > 0;
 }
@@ -117,7 +117,7 @@ uint16_t Adafruit_USBD_MIDI::makeItfDesc(uint8_t itfnum, uint8_t *buf,
 
   // Jack
   for (uint8_t i = 1; i <= _n_cables; i++) {
-    uint8_t jack[] = {TUD_MIDI_DESC_JACK_DESC(i, _cable_name_strid[i])};
+    uint8_t jack[] = {TUD_MIDI_DESC_JACK_DESC(i, _cable_name_strid[i-1])};
     memcpy(buf + len, jack, sizeof(jack));
     len += sizeof(jack);
   }
