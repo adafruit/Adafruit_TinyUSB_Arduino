@@ -69,7 +69,7 @@ public:
 
 private:
   uint8_t _n_cables;
-  uint8_t _cable_name_strid[8];
+  uint8_t _cable_name_strid[16];
 };
 
 #endif /* ADAFRUIT_USBD_MIDI_H_ */
