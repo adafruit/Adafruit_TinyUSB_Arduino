@@ -90,8 +90,14 @@ uint8_t msc_disk[DISK_BLOCK_NUM][DISK_BLOCK_SIZE] = {
 
     //------------- Block1: FAT12 Table -------------//
     {
-        0xF8, 0xFF, 0xFF, 0xFF, 0x0F // // first 2 entries must be F8FF, third
-                                     // entry is cluster end of readme file
+        0xF8, 0xFF, 0x00,   // The first 2 12bit entries of the FAT linked list are reserved. Therefore the first 3 bytes are reserved.
+                            // The 2 12 bit values must be 0xF8 and 0xFF
+
+//     [Entry2  | Entry3]   
+        0xFF, 0x0F, 0x00    // <<< These 3 bytes represents the 12 bit entries 2 and 3 of the FAT linked list.
+                            // The README.TXT file first block is 2 (see line 112), therefore to find the next block, we go to this section Entry[2]  
+                            // to read the address of the next block. Since the size of the README.TXT is 65 bytes and less then one sector (512) byte.
+                            // There is no next block to read therefore the Entry[2] contains the value 0xFFF, which is the EOF.
     },
 
     //------------- Block2: Root Directory -------------//
