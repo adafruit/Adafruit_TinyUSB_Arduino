@@ -25,7 +25,6 @@
 #define DISK_BLOCK_SIZE 512
 #include "ramdisk.h"
 
-bool _authorizedMode = true;
 Adafruit_USBD_MSC usb_msc;
 
 /*
