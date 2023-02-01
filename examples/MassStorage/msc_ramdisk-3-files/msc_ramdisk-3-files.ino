@@ -18,7 +18,7 @@
 
 #include "Adafruit_TinyUSB.h"
 
-// 16*512b == 8Kb of allocated space. in ramdisk.h the disk is set to 128 Kb of total space
+// 16*512b == 8Kb of allocated space. In ramdisk.h file, the disk is set to 128 Kb of total space
 #define DISK_BLOCK_NUM (1 /* BootSector*/ +2 /* Fatlinkedlist*/ +1 /* RootDirectory*/  +1/*readme.txt*/  +1/* writeme.txt*/ +10/*viewme.jpg*/ )
 
 #define DISK_BLOCK_SIZE 512
