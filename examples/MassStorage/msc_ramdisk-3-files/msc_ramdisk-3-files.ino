@@ -1,19 +1,12 @@
 /*********************************************************************
- (C) Frederic Torres - MadeInTheUsb - 2023/01 ~ Finally
-
  Adafruit invests time and resources providing this open source code,
- please support Adafruit and open-source hardware by purchasing products from Adafruit!
-
+ please support Adafruit and open-source hardware by purchasing
+ products from Adafruit!
  MIT license, check LICENSE for more information
  Copyright (c) 2019 Ha Thach for Adafruit Industries
  All text above, and the splash screen below must be included in
  any redistribution
- C:\Users\ftorres\OneDrive - Brainshark, Inc\Documents\Arduino\libraries\Adafruit_TinyUSB_Arduino\examples\MassStorage
 *********************************************************************/
-
-void setupGpios() {
-  
-}
 
 #include "Adafruit_TinyUSB.h"
 
