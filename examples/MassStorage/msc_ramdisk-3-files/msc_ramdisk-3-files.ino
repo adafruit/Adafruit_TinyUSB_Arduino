@@ -4,6 +4,7 @@
  products from Adafruit!
  MIT license, check LICENSE for more information
  Copyright (c) 2019 Ha Thach for Adafruit Industries
+ Copyright (c) 2023 Frederic Torres
  All text above, and the splash screen below must be included in
  any redistribution
 *********************************************************************/
