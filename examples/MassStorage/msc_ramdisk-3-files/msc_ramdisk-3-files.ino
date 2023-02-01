@@ -7,6 +7,14 @@
  All text above, and the splash screen below must be included in
  any redistribution
 *********************************************************************/
+ /*
+  ramdisk-3-files.ino
+  Ram disk which expose 3 files
+  - README.TXT  / ReadOnly 
+  - WRITEME.TXT
+  - VIEWME.JPG  / ReadOnly 
+  Example written by Frederic Torres - 2023/02
+  */
 
 #include "Adafruit_TinyUSB.h"
 
