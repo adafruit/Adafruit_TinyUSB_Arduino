@@ -49,7 +49,6 @@
 
 #define README_CONTENTS "This is TinyUSB MassStorage device demo on RAM disk with multiple files."
 #define WRITE_CONTENTS "Write me. You can update this content with any text editor.\rDo not exceed 512 characters.\rChanges are kept in memory."
-// #define README_CONTENTS_SIZE (sizeof(README_CONTENTS))
 
 // Physical memory allocation for the disk data structure, may not represent the virtual size of the disk
 
