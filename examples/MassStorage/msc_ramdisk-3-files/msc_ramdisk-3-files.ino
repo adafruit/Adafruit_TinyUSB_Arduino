@@ -66,9 +66,6 @@ void loop()
   
 }
 
-// 
-// uint8_t tmp_disk[DISK_BLOCK_SIZE];
-
 // Callback invoked when received READ10 command.
 // Copy disk's data to buffer (up to bufsize) and
 // return number of copied bytes (must be multiple of block size)
