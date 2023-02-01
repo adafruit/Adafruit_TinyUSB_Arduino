@@ -185,7 +185,7 @@ uint8_t msc_disk[DISK_BLOCK_NUM][DISK_BLOCK_SIZE] = {
 
     // ------------- Block3: Root Directory -------------
     {
-        // The root directory is limited to 512 => 512 / 32 = 15 Files + VOLUMN
+        // The root directory is limited to 512 => 512 / 32 = 15 Files + VOLUME
 
         // First entry is volume label
         'f', 'r', 'e', 'd', 'd', 'y', ' ', ' ', // Filename
