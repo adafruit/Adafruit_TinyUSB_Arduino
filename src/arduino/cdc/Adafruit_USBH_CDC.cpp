@@ -32,7 +32,23 @@
 
 Adafruit_USBH_CDC::Adafruit_USBH_CDC(void) { _idx = TUSB_INDEX_INVALID; }
 
-void Adafruit_USBH_CDC::begin(uint8_t idx) { _idx = idx; }
+void Adafruit_USBH_CDC::begin(unsigned long baud) {
+
+  // default to index 0 when begin
+  if (_idx == TUSB_INDEX_INVALID) {
+    _idx = 0;
+  }
+
+  _baud = baud;
+  if (_baud == 0) {
+    _baud = 115200; // default, backward compatible with previous API begin(0)
+  }
+}
+
+void Adafruit_USBH_CDC::begin(unsigned long baudrate, uint16_t config) {
+  (void)config; // TODO support line coding later
+  begin(115200);
+}
 
 void Adafruit_USBH_CDC::end(void) { _idx = TUSB_INDEX_INVALID; }
 

@@ -25,20 +25,21 @@
 #ifndef ADAFRUIT_USBH_CDC_H_
 #define ADAFRUIT_USBH_CDC_H_
 
-#include "Stream.h"
+#include "HardwareSerial.h"
 
-class Adafruit_USBH_CDC : public Stream {
+class Adafruit_USBH_CDC : public HardwareSerial {
 public:
   Adafruit_USBH_CDC(void);
 
-  // Init/Bind to an specific cdc interface
-  void begin(uint8_t idx = 0);
+  // Set/Get index of cdc interface
+  void setInterfaceIndex(uint8_t idx) { _idx = idx; }
+  uint8_t getInterfaceIndex(void) { return _idx; }
+
+  void begin(unsigned long baudrate);
+  void begin(unsigned long baudrate, uint16_t config);
 
   // unbind cdc interface
   void end(void);
-
-  // Get index of cdc interface
-  uint8_t getIndex(void) { return _idx; }
 
   // If cdc is mounted
   bool mounted(void);
@@ -67,6 +68,7 @@ public:
 
 private:
   uint8_t _idx; // TinyUSB CDC Interface Index
+  uint32_t _baud;
 };
 
 #endif

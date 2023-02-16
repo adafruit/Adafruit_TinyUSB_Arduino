@@ -138,14 +138,15 @@ void loop1()
 // idx is index of cdc interface in the internal pool.
 void tuh_cdc_mount_cb(uint8_t idx) {
   // bind SerialHost object to this interface index
-  SerialHost.begin(idx);
+  SerialHost.setInterfaceIndex(idx);
+  SerialHost.begin(115200);
 
   Serial.println("SerialHost is connected to a new CDC device");
 }
 
 // Invoked when a device with CDC interface is unmounted
 void tuh_cdc_umount_cb(uint8_t idx) {
-  if (idx == SerialHost.getIndex()) {
+  if (idx == SerialHost.getInterfaceIndex()) {
     // unbind SerialHost if this interface is unmounted
     SerialHost.end();
 
