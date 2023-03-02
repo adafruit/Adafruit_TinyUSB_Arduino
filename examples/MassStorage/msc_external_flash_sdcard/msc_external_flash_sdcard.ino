@@ -17,6 +17,9 @@
  * Note: Adafruit fork of SdFat enabled ENABLE_EXTENDED_TRANSFER_CLASS and FAT12_SUPPORT
  * in SdFatConfig.h, which is needed to run SdFat on external flash. You can use original
  * SdFat library and manually change those macros
+ *
+ * Note2: If your flash is not formatted as FAT12 previously, you could format it using
+ * follow sketch https://github.com/adafruit/Adafruit_SPIFlash/tree/master/examples/SdFat_format
  */
 
 #include "SPI.h"

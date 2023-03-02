@@ -47,7 +47,7 @@ void Adafruit_USBH_CDC::begin(unsigned long baud) {
 
 void Adafruit_USBH_CDC::begin(unsigned long baudrate, uint16_t config) {
   (void)config; // TODO support line coding later
-  begin(115200);
+  begin(baudrate);
 }
 
 void Adafruit_USBH_CDC::end(void) { _idx = TUSB_INDEX_INVALID; }

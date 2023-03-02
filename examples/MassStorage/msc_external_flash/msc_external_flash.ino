@@ -42,10 +42,10 @@ FatFile file;
 Adafruit_USBD_MSC usb_msc;
 
 // Check if flash is formatted
-bool fs_formatted;
+bool fs_formatted = false;
 
 // Set to true when PC write to flash
-bool fs_changed;
+bool fs_changed = true;;
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -74,32 +74,33 @@ void setup()
   Serial.begin(115200);
   //while ( !Serial ) delay(10);   // wait for native usb
 
-  if ( !fs_formatted )
-  {
-    Serial.println("Failed to init files system, flash may not be formatted");
-  }
-
   Serial.println("Adafruit TinyUSB Mass Storage External Flash example");
   Serial.print("JEDEC ID: 0x"); Serial.println(flash.getJEDECID(), HEX);
   Serial.print("Flash size: "); Serial.print(flash.size() / 1024); Serial.println(" KB");
-
-  fs_changed = true; // to print contents initially
 }
 
 void loop()
 {
+  // check if formatted
+  if ( !fs_formatted )
+  {
+    fs_formatted = fatfs.begin(&flash);
+
+    if (!fs_formatted)
+    {
+      Serial.println("Failed to init files system, flash may not be formatted");
+      Serial.println("Please format it as FAT12 with your PC or using Adafruit_SPIFlash's SdFat_format example:");
+      Serial.println("- https://github.com/adafruit/Adafruit_SPIFlash/tree/master/examples/SdFat_format");
+      Serial.println();
+
+      delay(1000);
+      return;
+    }
+  }
+
   if ( fs_changed )
   {
     fs_changed = false;
-
-    // check if host formatted disk
-    if (!fs_formatted)
-    {
-      fs_formatted = fatfs.begin(&flash);
-    }
-
-    // skip if still not formatted
-    if (!fs_formatted) return;
 
     Serial.println("Opening root");
 
