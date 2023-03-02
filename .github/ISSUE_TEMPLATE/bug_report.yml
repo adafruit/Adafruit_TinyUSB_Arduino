@@ -56,7 +56,7 @@ body:
       placeholder: |
         e.g examples/MassStorage/msc_ramdisk.
         If it is custom sketch, please provide it as **ATTACHED** files or link to it.
-        Pasting raw long code that hurts readibility can get your issue **closed**
+        Pasting raw long code that hurts readability can get your issue **closed**
     validations:
       required: true
 
@@ -65,7 +65,7 @@ body:
       label: Compiled Log as ATTACHED TXT
       placeholder: |
         Compiled log from Arduino IDE as **ATTACHED** txt.
-        Pasting raw long log that hurts readibility can get your issue **closed**
+        Pasting raw long log that hurts readability can get your issue **closed**
     validations:
       required: true
 
