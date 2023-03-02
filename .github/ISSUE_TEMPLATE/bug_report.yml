@@ -52,11 +52,20 @@ body:
 
   - type: textarea
     attributes:
-      label: Sketch & compiled Log (as attached txt files)
+      label: Sketch as ATTACHED TXT
       placeholder: |
         e.g examples/MassStorage/msc_ramdisk.
         If it is custom sketch, please provide it as **ATTACHED** files or link to it.
-        Compiled log must be attached as txt files for readability
+        Pasting raw long code that hurts readability can get your issue **closed**
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Compiled Log as ATTACHED TXT
+      placeholder: |
+        Compiled log from Arduino IDE as **ATTACHED** txt.
+        Pasting raw long log that hurts readability can get your issue **closed**
     validations:
       required: true
 
