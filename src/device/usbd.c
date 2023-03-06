@@ -388,6 +388,8 @@ bool tud_init (uint8_t rhport)
 
   TU_LOG(USBD_DBG, "USBD init on controller %u\r\n", rhport);
   TU_LOG_INT(USBD_DBG, sizeof(usbd_device_t));
+  TU_LOG_INT(USBD_DBG, sizeof(tu_fifo_t));
+  TU_LOG_INT(USBD_DBG, sizeof(tu_edpt_stream_t));
 
   tu_varclr(&_usbd_dev);
 
@@ -506,10 +508,6 @@ void tud_task_ext(uint32_t timeout_ms, bool in_isr)
       break;
 
       case DCD_EVENT_SETUP_RECEIVED:
-// FIXME arduino-esp32 takes time to upgrade tinyusb
-#ifndef TU_LOG_PTR
-#define TU_LOG_PTR  TU_LOG_VAR
-#endif
         TU_LOG_PTR(USBD_DBG, &event.setup_received);
         TU_LOG(USBD_DBG, "\r\n");
 
