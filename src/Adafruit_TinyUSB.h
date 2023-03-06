@@ -34,7 +34,7 @@
 #include "tusb_option.h"
 
 // Device
-#if TUSB_OPT_DEVICE_ENABLED
+#if CFG_TUD_ENABLED
 
 #include "arduino/Adafruit_USBD_Device.h"
 

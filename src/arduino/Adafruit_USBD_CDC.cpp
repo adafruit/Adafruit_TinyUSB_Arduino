@@ -24,7 +24,7 @@
 
 #include "tusb_option.h"
 
-#if TUSB_OPT_DEVICE_ENABLED && CFG_TUD_CDC && !defined(ARDUINO_ARCH_ESP32)
+#if CFG_TUD_ENABLED && CFG_TUD_CDC && !defined(ARDUINO_ARCH_ESP32)
 
 #include "Arduino.h"
 
@@ -265,4 +265,4 @@ void tud_cdc_line_state_cb(uint8_t instance, bool dtr, bool rts) {
 }
 }
 
-#endif // TUSB_OPT_DEVICE_ENABLED
+#endif // CFG_TUD_ENABLED

@@ -24,7 +24,7 @@
 
 #include "tusb_option.h"
 
-#if TUSB_OPT_DEVICE_ENABLED && CFG_TUD_MSC
+#if CFG_TUD_ENABLED && CFG_TUD_MSC
 
 #include "Adafruit_USBD_MSC.h"
 
@@ -292,4 +292,4 @@ bool tud_msc_is_writable_cb(uint8_t lun) {
 
 } // extern "C"
 
-#endif // TUSB_OPT_DEVICE_ENABLED
+#endif // CFG_TUD_ENABLED

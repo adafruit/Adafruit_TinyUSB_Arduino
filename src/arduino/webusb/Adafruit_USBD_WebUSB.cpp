@@ -24,7 +24,7 @@
 
 #include "tusb_option.h"
 
-#if TUSB_OPT_DEVICE_ENABLED && CFG_TUD_VENDOR
+#if CFG_TUD_ENABLED && CFG_TUD_VENDOR
 
 #include "Adafruit_USBD_WebUSB.h"
 #include "Arduino.h"
@@ -349,4 +349,4 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
 }
 }
 
-#endif // TUSB_OPT_DEVICE_ENABLED
+#endif // CFG_TUD_ENABLED

@@ -24,7 +24,7 @@
 
 #include "tusb_option.h"
 
-#if TUSB_OPT_DEVICE_ENABLED && CFG_TUD_HID
+#if CFG_TUD_ENABLED && CFG_TUD_HID
 
 #include "Adafruit_USBD_HID.h"
 
@@ -288,4 +288,4 @@ bool Adafruit_USBD_HID::mouseButtonRelease(uint8_t report_id) {
   return tud_hid_mouse_report(report_id, 0, 0, 0, 0, 0);
 }
 
-#endif // TUSB_OPT_DEVICE_ENABLED
+#endif // CFG_TUD_ENABLED

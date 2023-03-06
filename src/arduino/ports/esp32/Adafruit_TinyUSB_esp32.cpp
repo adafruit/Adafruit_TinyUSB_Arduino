@@ -24,7 +24,7 @@
 
 #include "tusb_option.h"
 
-#if defined(ARDUINO_ARCH_ESP32) && TUSB_OPT_DEVICE_ENABLED
+#if defined(ARDUINO_ARCH_ESP32) && CFG_TUD_ENABLED
 
 #include <stdint.h>
 
