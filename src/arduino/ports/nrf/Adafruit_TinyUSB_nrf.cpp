@@ -24,7 +24,7 @@
 
 #include "tusb_option.h"
 
-#if defined ARDUINO_NRF52_ADAFRUIT && TUSB_OPT_DEVICE_ENABLED
+#if defined ARDUINO_NRF52_ADAFRUIT && CFG_TUD_ENABLED
 
 #include "nrfx.h"
 #include "nrfx_power.h"

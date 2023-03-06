@@ -24,7 +24,7 @@
 
 #include "tusb_option.h"
 
-#if defined ARDUINO_ARCH_SAMD && TUSB_OPT_DEVICE_ENABLED
+#if defined ARDUINO_ARCH_SAMD && CFG_TUD_ENABLED
 
 #include "Arduino.h"
 #include <Reset.h> // Needed for auto-reset with 1200bps port touch

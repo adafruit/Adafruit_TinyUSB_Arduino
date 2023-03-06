@@ -24,7 +24,7 @@
 
 #include "tusb_option.h"
 
-#if TUSB_OPT_DEVICE_ENABLED && CFG_TUD_MIDI
+#if CFG_TUD_ENABLED && CFG_TUD_MIDI
 
 #include "Adafruit_USBD_MIDI.h"
 
@@ -190,4 +190,4 @@ bool Adafruit_USBD_MIDI::readPacket(uint8_t packet[4]) {
   return tud_midi_packet_read(packet);
 }
 
-#endif // TUSB_OPT_DEVICE_ENABLED
+#endif // CFG_TUD_ENABLED

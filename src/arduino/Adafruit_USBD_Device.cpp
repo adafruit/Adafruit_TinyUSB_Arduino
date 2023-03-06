@@ -24,7 +24,7 @@
 
 #include "tusb_option.h"
 
-#if TUSB_OPT_DEVICE_ENABLED
+#if CFG_TUD_ENABLED
 
 #include "Adafruit_TinyUSB_API.h"
 
@@ -555,4 +555,4 @@ void tud_dfu_runtime_reboot_to_dfu_cb(void) {
 
 #endif // ESP32
 
-#endif // TUSB_OPT_DEVICE_ENABLED
+#endif // CFG_TUD_ENABLED
