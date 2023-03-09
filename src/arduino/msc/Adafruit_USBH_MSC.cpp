@@ -46,7 +46,8 @@ bool Adafruit_USBH_MSC_BlockDevice::setActiveLUN(uint8_t lun) {
   _lun = lun;
   return true;
 }
-void Adafruit_USBH_MSC_BlockDevice::setWriteCompleteCallback(tuh_msc_complete_cb_t cb) {
+void Adafruit_USBH_MSC_BlockDevice::setWriteCompleteCallback(
+    tuh_msc_complete_cb_t cb) {
   _wr_cb = cb;
 }
 
@@ -75,11 +76,11 @@ bool Adafruit_USBH_MSC_BlockDevice::_io_complete_cb(
   // TODO skip csw status: assuming io is successful
   _busy = false;
 
-  switch(cb_data->cbw->command[0]) {
-    case SCSI_CMD_WRITE_10:
-      if (_wr_cb) {
-        _wr_cb(dev_addr, cb_data);
-      }
+  switch (cb_data->cbw->command[0]) {
+  case SCSI_CMD_WRITE_10:
+    if (_wr_cb) {
+      _wr_cb(dev_addr, cb_data);
+    }
     break;
   }
 
