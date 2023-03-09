@@ -14,6 +14,8 @@
  * - Device run on native usb controller (controller0)
  * - Host run on bit-banging 2 GPIOs with the help of Pico-PIO-USB library (controller1)
  *
+ * Example will log CPU temperature periodically (ms,value) to USB thumbdrive
+ *
  * Requirements:
  * - [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB) library
  * - 2 consecutive GPIOs: D+ is defined by HOST_PIN_DP (gpio20), D- = D+ +1 (gpio21)
@@ -37,6 +39,10 @@
 #define HOST_PIN_VBUS_EN        22
 #define HOST_PIN_VBUS_EN_STATE  1
 
+
+#define LOG_FILE        "cpu_temp.txt"
+#define LOG_INTERVAL    5000
+
 // USB Host object
 Adafruit_USBH_Host USBHost;
 
@@ -45,9 +51,10 @@ Adafruit_USBH_MSC_BlockDevice msc_block_dev;
 
 // file system object from SdFat
 FatVolume fatfs;
+File32 f_log;
 
 // if file system is successfully mounted on usb block device
-bool is_mounted = false;
+volatile bool is_mounted = false;
 
 //--------------------------------------------------------------------+
 // Setup and Loop on Core0
@@ -60,11 +67,27 @@ void setup()
   Serial.begin(115200);
   //while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.println("TinyUSB Host Mass Storage File Explorer Example");
+  Serial.println("TinyUSB Host MassStorage Data Logger Example");
 }
 
 void loop()
 {
+  // nothing to do
+  if (!is_mounted) return;
+
+  f_log = fatfs.open(LOG_FILE, O_WRITE | O_APPEND | O_CREAT);
+
+  if (!f_log) {
+    Serial.println("Cannot create file: " LOG_FILE);
+  }else {
+    float cpu_temp = analogReadTemp();
+
+    f_log.printf("%u\t%.02f\r\n", millis(), cpu_temp);
+
+    f_log.close();
+  }
+
+  delay(LOG_INTERVAL);
 }
 
 //--------------------------------------------------------------------+
@@ -106,6 +129,7 @@ void setup1() {
 void loop1()
 {
   USBHost.task();
+  Serial.flush();
 }
 
 //--------------------------------------------------------------------+
@@ -137,6 +161,8 @@ void tuh_msc_mount_cb(uint8_t dev_addr)
 
   if (is_mounted) {
     fatfs.ls(&Serial, LS_SIZE);
+  }else {
+    Serial.println("Failed to mount mass storage device. Make sure it is formatted as FAT");
   }
 }
 
