@@ -55,8 +55,6 @@ bool is_mounted = false;
 
 void setup()
 {
-  Serial1.begin(115200);
-
   Serial.begin(115200);
   //while ( !Serial ) delay(10);   // wait for native usb
 

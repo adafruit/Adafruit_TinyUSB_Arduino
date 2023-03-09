@@ -40,7 +40,7 @@
 #define HOST_PIN_VBUS_EN_STATE  1
 
 
-#define LOG_FILE        "cpu_temp.txt"
+#define LOG_FILE        "cpu_temp.csv"
 #define LOG_INTERVAL    5000
 
 // USB Host object
@@ -62,7 +62,7 @@ volatile bool is_mounted = false;
 
 void setup()
 {
-  Serial1.begin(115200);
+  pinMode(LED_BUILTIN, OUTPUT);
 
   Serial.begin(115200);
   //while ( !Serial ) delay(10);   // wait for native usb
@@ -72,8 +72,14 @@ void setup()
 
 void loop()
 {
-  // nothing to do
-  if (!is_mounted) return;
+  if (!is_mounted) {
+    // nothing to do
+    delay(1000);
+    return;
+  }
+
+  // Turn on LED when start writing
+  digitalWrite(LED_BUILTIN, HIGH);
 
   f_log = fatfs.open(LOG_FILE, O_WRITE | O_APPEND | O_CREAT);
 
@@ -81,8 +87,10 @@ void loop()
     Serial.println("Cannot create file: " LOG_FILE);
   }else {
     float cpu_temp = analogReadTemp();
+    uint32_t ms = millis();
 
-    f_log.printf("%u\t%.02f\r\n", millis(), cpu_temp);
+    Serial.printf("%u,%.02f\r\n", millis(), cpu_temp);
+    f_log.printf("%u,%.02f\r\n", millis(), cpu_temp);
 
     f_log.close();
   }
@@ -157,6 +165,8 @@ void tuh_msc_mount_cb(uint8_t dev_addr)
   // For simplicity this example only support LUN 0
   msc_block_dev.setActiveLUN(0);
 
+  msc_block_dev.setWriteCompleteCallback(write_complete_callback);
+
   is_mounted = fatfs.begin(&msc_block_dev);
 
   if (is_mounted) {
@@ -177,5 +187,19 @@ void tuh_msc_umount_cb(uint8_t dev_addr)
 
   // end block device
   msc_block_dev.end();
+}
+
+
+bool write_complete_callback(uint8_t dev_addr, tuh_msc_complete_data_t const* cb_data)
+{
+  (void) dev_addr;
+  (void) cb_data;
+
+  // turn off LED after write is complete
+  // Note this only marks the usb transfer is complete, device can take longer to actual
+  // write data to physical flash
+  digitalWrite(LED_BUILTIN, LOW);
+
+  return true;
 }
 
