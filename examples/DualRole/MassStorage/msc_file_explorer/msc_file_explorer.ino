@@ -55,12 +55,10 @@ bool is_mounted = false;
 
 void setup()
 {
-  Serial1.begin(115200);
-
   Serial.begin(115200);
   //while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.println("TinyUSB Dual Device Info Example");
+  Serial.println("TinyUSB Host Mass Storage File Explorer Example");
 }
 
 void loop()

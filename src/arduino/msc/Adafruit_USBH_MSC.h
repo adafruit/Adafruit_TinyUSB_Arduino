@@ -39,10 +39,11 @@ public:
   bool begin(uint8_t dev_addr);
   void end(void);
 
+  bool mounted(void);
+
   // Set active LUN
   bool setActiveLUN(uint8_t lun);
-
-  bool mounted(void);
+  void setWriteCompleteCallback(tuh_msc_complete_cb_t cb);
 
   //------------- SdFat v2 FsBlockDeviceInterface API -------------//
   virtual bool isBusy();
@@ -65,6 +66,8 @@ private:
   // TODO use mutex to prevent race condition or atomic for better
   // implementation
   volatile bool _busy;
+
+  tuh_msc_complete_cb_t _wr_cb;
 
   bool wait_for_io(void);
 };
