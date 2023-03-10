@@ -88,6 +88,10 @@ static void usb_task_irq(void) {
   }
 }
 
+#ifndef PICO_SHARED_IRQ_HANDLER_LOWEST_ORDER_PRIORITY
+#define PICO_SHARED_IRQ_HANDLER_LOWEST_ORDER_PRIORITY 0x00
+#endif
+
 // invoked when there is hardware usb irq, trigger task runner later
 static void usb_task_trigger_irq(void) { irq_set_pending(USB_TASK_IRQ); }
 
