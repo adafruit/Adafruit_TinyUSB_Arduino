@@ -55,6 +55,8 @@ static uint8_t i2c_buf[800];
 Adafruit_WireUSB i2c_usb(&MyWire);
 
 void setup() {
+  Serial.begin(115200);
+
   // init i2c usb with buffer and size
   i2c_usb.begin(i2c_buf, sizeof(i2c_buf));
 }
