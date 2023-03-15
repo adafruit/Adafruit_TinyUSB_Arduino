@@ -140,7 +140,7 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_requ
         case CMD_I2C_IO | CMD_I2C_IO_BEGIN | CMD_I2C_IO_END:
         {
           uint8_t const addr = (uint8_t) request->wIndex;
-          uint16_t const flags = request->wValue;
+          // uint16_t const flags = request->wValue;
           uint16_t const len = request->wLength;
           bool const stop_bit = (cmd & CMD_I2C_IO_END) ? true : false;
 
@@ -174,7 +174,7 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_requ
           if (request->bmRequestType_bit.direction == TUSB_DIR_OUT)
           {
             uint8_t const addr = (uint8_t) request->wIndex;
-            uint16_t const flags = request->wValue;
+            // uint16_t const flags = request->wValue;
             uint16_t const len = request->wLength;
             bool const stop_bit = (cmd & CMD_I2C_IO_END) ? true : false;
 
