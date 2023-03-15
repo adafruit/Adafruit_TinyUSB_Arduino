@@ -1,4 +1,4 @@
-/* 
+/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2023 Ha Thach (tinyusb.org) for Adafruit Industries
@@ -22,10 +22,11 @@
  * THE SOFTWARE.
  */
 
-#ifndef I2C_USB_INTERFACE_H_
-#define I2C_USB_INTERFACE_H_
+#ifndef ADAFRUIT_WIREUSB_H_
+#define ADAFRUIT_WIREUSB_H_
 
 #include "Adafruit_TinyUSB.h"
+#include "Wire.h"
 
 /* commands from USB, must e.g. match command ids in kernel driver */
 #define CMD_ECHO        0
@@ -80,27 +81,27 @@
 /* if I2C_M_RECV_LEN is also supported */
 #define I2C_FUNC_SMBUS_EMUL_ALL (I2C_FUNC_SMBUS_EMUL | I2C_FUNC_SMBUS_READ_BLOCK_DATA | I2C_FUNC_SMBUS_BLOCK_PROC_CALL)
 
-class I2C_USB_Interface : public Adafruit_USBD_Interface {
+#define I2C_STATUS_IDLE 0
+#define I2C_STATUS_ACK  1
+#define I2C_STATUS_NAK  2
+
+class Adafruit_WireUSB : public Adafruit_USBD_Interface {
 public:
-  I2C_USB_Interface(void) {
-    setStringDescriptor("I2C Interface");
-  }
+  Adafruit_WireUSB(TwoWire* wire);
+  uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize);
+  bool begin(uint8_t* buffer, size_t bufsize);
 
-  uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize) {
-    uint8_t desc[] = { TUD_VENDOR_DESCRIPTOR(itfnum, 0, 0x00, 0x80, 64) };
-    uint16_t const len = sizeof(desc);
-    if (buf) {
-      if (bufsize < len) {
-        return 0;
-      }
-      memcpy(buf, desc, len);
-    }
-    return len;
-  }
+  bool handleControlTransfer(uint8_t rhport, uint8_t stage, tusb_control_request_t const* request);
 
-  bool begin(void) {
-    return TinyUSBDevice.addInterface(*this);
-  }
+private:
+  TwoWire* _wire;
+  uint8_t _state;
+  uint32_t _functionality;
+  uint8_t* _buf;
+  uint16_t _bufsize;
+
+  uint16_t i2c_write(uint8_t addr, uint8_t const* buf, uint16_t len, bool stop_bit);
+  uint16_t i2c_read(uint8_t addr, uint8_t* buf, uint16_t len, bool stop_bit);
 };
 
 #endif
