@@ -12,7 +12,7 @@
 #include <Wire.h>
 #include "Adafruit_TinyUSB.h"
 
-#include "../i2c_tiny_usb_adapter/I2C_USB_Interface.h"
+#include "I2C_USB_Interface.h"
 
 /* This sketch demonstrates how to use tinyusb vendor interface to implement
  * i2c-tiny-usb adapter to use with Linux

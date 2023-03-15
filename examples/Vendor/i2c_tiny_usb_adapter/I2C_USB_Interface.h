@@ -34,8 +34,8 @@
 #define CMD_GET_STATUS  3
 
 #define CMD_I2C_IO        4
-#define CMD_I2C_IO_BEGIN  (1<<0) // flag fo I2C_IO
-#define CMD_I2C_IO_END    (1<<1) // flag fo I2C_IO
+#define CMD_I2C_IO_BEGIN  (1<<0) // flag for I2C_IO
+#define CMD_I2C_IO_END    (1<<1) // flag for I2C_IO
 
 /* linux kernel flags */
 #define I2C_M_TEN            0x10  /* we have a ten bit chip address */
