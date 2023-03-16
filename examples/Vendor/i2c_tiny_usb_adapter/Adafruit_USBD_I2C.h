@@ -22,8 +22,8 @@
  * THE SOFTWARE.
  */
 
-#ifndef ADAFRUIT_WIREUSB_H_
-#define ADAFRUIT_WIREUSB_H_
+#ifndef ADAFRUIT_USBD_I2C_H_
+#define ADAFRUIT_USBD_I2C_H_
 
 #include "Adafruit_TinyUSB.h"
 #include "Wire.h"
@@ -85,9 +85,9 @@
 #define I2C_STATUS_ACK  1
 #define I2C_STATUS_NAK  2
 
-class Adafruit_WireUSB : public Adafruit_USBD_Interface {
+class Adafruit_USBD_I2C : public Adafruit_USBD_Interface {
 public:
-  Adafruit_WireUSB(TwoWire* wire);
+  Adafruit_USBD_I2C(TwoWire* wire);
   uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize);
   bool begin(uint8_t* buffer, size_t bufsize);
 

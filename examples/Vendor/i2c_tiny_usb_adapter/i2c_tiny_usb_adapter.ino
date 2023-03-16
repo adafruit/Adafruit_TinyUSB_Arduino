@@ -12,7 +12,7 @@
 #include <Wire.h>
 #include "Adafruit_TinyUSB.h"
 
-#include "Adafruit_WireUSB.h"
+#include "Adafruit_USBD_I2C.h"
 
 /* This sketch demonstrates how to use tinyusb vendor interface to implement
  * i2c-tiny-usb adapter to use with Linux
@@ -45,6 +45,10 @@
 
    - You can then interact with sensor using following commands:
      i2cget i2cset i2cdump i2ctransfer or using any driver/tools that work on i2c device.
+
+   Adafruit CircuitPython library for PC
+   - You can use run CircuitPython library with Extended Bus to read sensor data.
+   - 'i2c_usb.py' is provided a sample script
  */
 
 static uint8_t i2c_buf[800];
@@ -52,7 +56,7 @@ static uint8_t i2c_buf[800];
 #define MyWire    Wire
 //#define MyWire    Wire1
 
-Adafruit_WireUSB i2c_usb(&MyWire);
+Adafruit_USBD_I2C i2c_usb(&MyWire);
 
 void setup() {
   Serial.begin(115200);

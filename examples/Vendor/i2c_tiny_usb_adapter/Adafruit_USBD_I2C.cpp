@@ -53,9 +53,9 @@
      i2cget i2cset i2cdump i2ctransfer or using any driver/tools that work on i2c device.
  */
 
-#include "Adafruit_WireUSB.h"
+#include "Adafruit_USBD_I2C.h"
 
-Adafruit_WireUSB::Adafruit_WireUSB(TwoWire* wire) {
+Adafruit_USBD_I2C::Adafruit_USBD_I2C(TwoWire* wire) {
   _wire = wire;
   _buf = NULL;
   _bufsize = 0; // not used to verify length yet
@@ -64,7 +64,7 @@ Adafruit_WireUSB::Adafruit_WireUSB(TwoWire* wire) {
   setStringDescriptor("I2C Interface");
 }
 
-uint16_t Adafruit_WireUSB::getInterfaceDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize) {
+uint16_t Adafruit_USBD_I2C::getInterfaceDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize) {
   uint8_t desc[] = { TUD_VENDOR_DESCRIPTOR(itfnum, 0, 0x00, 0x80, 64) };
   uint16_t const len = sizeof(desc);
   if (buf) {
@@ -76,7 +76,7 @@ uint16_t Adafruit_WireUSB::getInterfaceDescriptor(uint8_t itfnum, uint8_t* buf, 
   return len;
 }
 
-bool Adafruit_WireUSB::begin(uint8_t* buffer, size_t bufsize) {
+bool Adafruit_USBD_I2C::begin(uint8_t* buffer, size_t bufsize) {
   _buf = buffer;
   _bufsize = (uint16_t) bufsize;
 
@@ -90,7 +90,7 @@ bool Adafruit_WireUSB::begin(uint8_t* buffer, size_t bufsize) {
   return true;
 }
 
-uint16_t Adafruit_WireUSB::i2c_read(uint8_t addr, uint8_t* buf, uint16_t len, bool stop_bit)
+uint16_t Adafruit_USBD_I2C::i2c_read(uint8_t addr, uint8_t* buf, uint16_t len, bool stop_bit)
 {
   uint16_t const rd_count = (uint16_t) _wire->requestFrom(addr, len, stop_bit);
 
@@ -106,7 +106,7 @@ uint16_t Adafruit_WireUSB::i2c_read(uint8_t addr, uint8_t* buf, uint16_t len, bo
   return rd_count;
 }
 
-uint16_t Adafruit_WireUSB::i2c_write(uint8_t addr, uint8_t const* buf, uint16_t len, bool stop_bit)
+uint16_t Adafruit_USBD_I2C::i2c_write(uint8_t addr, uint8_t const* buf, uint16_t len, bool stop_bit)
 {
   _wire->beginTransmission(addr);
   uint16_t wr_count = (uint16_t) _wire->write(buf, len);
@@ -119,7 +119,7 @@ uint16_t Adafruit_WireUSB::i2c_write(uint8_t addr, uint8_t const* buf, uint16_t 
   return wr_count;
 }
 
-bool Adafruit_WireUSB::handleControlTransfer(uint8_t rhport, uint8_t stage, tusb_control_request_t const* request) {
+bool Adafruit_USBD_I2C::handleControlTransfer(uint8_t rhport, uint8_t stage, tusb_control_request_t const* request) {
   uint8_t const cmd = request->bRequest;
 
   if ( stage == CONTROL_STAGE_SETUP )

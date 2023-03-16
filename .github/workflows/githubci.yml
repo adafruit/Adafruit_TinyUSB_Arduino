@@ -50,7 +50,6 @@ jobs:
            - 'feather_esp32s3'
            # ESP32S2
            - 'feather_esp32s2'
-           - 'metroesp32s2'
            # nRF52
            - 'cpb'
            - 'nrf52840'
