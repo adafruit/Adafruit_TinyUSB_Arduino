@@ -3,10 +3,8 @@
 # SPDX-License-Identifier: Unlicense
 
 repos:
--   repo: local
-    hooks:
-    -   id: codespell
-        name: codespell
-        entry: codespell
-        types_or: [c, ino, c++, header]
-        language: system
+- repo: https://github.com/codespell-project/codespell
+  rev: v2.2.4
+  hooks:
+  - id: codespell
+    #args: [-w]
