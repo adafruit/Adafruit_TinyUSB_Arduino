@@ -1,4 +1,4 @@
-/* 
+/*
  * The MIT License (MIT)
  *
  * Copyright (c) 2019 Ha Thach (tinyusb.org)
@@ -35,6 +35,33 @@
 #include "device/usbd_pvt.h"
 
 #include "midi_device.h"
+
+#if defined(ARDUINO_ARCH_ESP32) && !defined(tu_static)
+#define tu_static static
+
+// This is a backport of memset_s from c11
+TU_ATTR_ALWAYS_INLINE static inline int tu_memset_s(void *dest, size_t destsz, int ch, size_t count)
+{
+  // TODO may check if desst and src is not NULL
+  if (count > destsz) {
+    return -1;
+  }
+  memset(dest, ch, count);
+  return 0;
+}
+
+// This is a backport of memcpy_s from c11
+TU_ATTR_ALWAYS_INLINE static inline int tu_memcpy_s(void *dest, size_t destsz, const void * src, size_t count )
+{
+  // TODO may check if desst and src is not NULL
+  if (count > destsz) {
+    return -1;
+  }
+  memcpy(dest, src, count);
+  return 0;
+}
+
+#endif
 
 //--------------------------------------------------------------------+
 // MACRO CONSTANT TYPEDEF
@@ -182,7 +209,7 @@ uint32_t tud_midi_n_stream_read(uint8_t itf, uint8_t cable_num, void* buffer, ui
     uint8_t const count = (uint8_t) tu_min32(stream->total - stream->index, bufsize);
 
     // Skip the header (1st byte) in the buffer
-    memcpy(buf8, stream->buffer + 1 + stream->index, count);
+    TU_VERIFY(0 == tu_memcpy_s(buf8, bufsize, stream->buffer + 1 + stream->index, count));
 
     total_read += count;
     stream->index += count;
@@ -261,11 +288,11 @@ uint32_t tud_midi_n_stream_write(uint8_t itf, uint8_t cable_num, uint8_t const* 
       stream->buffer[1] = data;
 
       // Check to see if we're still in a SysEx transmit.
-      if ( stream->buffer[0] == MIDI_CIN_SYSEX_START )
+      if ( ((stream->buffer[0]) & 0xF) == MIDI_CIN_SYSEX_START )
       {
         if ( data == MIDI_STATUS_SYSEX_END )
         {
-          stream->buffer[0] = MIDI_CIN_SYSEX_END_1BYTE;
+          stream->buffer[0] = (uint8_t) ((cable_num << 4) | MIDI_CIN_SYSEX_END_1BYTE);
           stream->total = 2;
         }
         else
@@ -308,6 +335,7 @@ uint32_t tud_midi_n_stream_write(uint8_t itf, uint8_t cable_num, uint8_t const* 
           stream->buffer[0] = MIDI_CIN_SYSEX_END_1BYTE;
           stream->total = 2;
         }
+        stream->buffer[0] |= (uint8_t)(cable_num << 4);
       }
       else
       {
@@ -328,9 +356,9 @@ uint32_t tud_midi_n_stream_write(uint8_t itf, uint8_t cable_num, uint8_t const* 
       stream->index++;
 
       // See if this byte ends a SysEx.
-      if ( stream->buffer[0] == MIDI_CIN_SYSEX_START && data == MIDI_STATUS_SYSEX_END )
+      if ( (stream->buffer[0] & 0xF) == MIDI_CIN_SYSEX_START && data == MIDI_STATUS_SYSEX_END )
       {
-        stream->buffer[0] = MIDI_CIN_SYSEX_START + (stream->index - 1);
+        stream->buffer[0] = (uint8_t) ((cable_num << 4) | (MIDI_CIN_SYSEX_START + (stream->index - 1)));
         stream->total = stream->index;
       }
     }

@@ -35,6 +35,13 @@
 #include "device/usbd.h"
 #include "device/usbd_pvt.h"
 
+#if defined(ARDUINO_ARCH_ESP32) && !defined(tu_static)
+#define tu_static static
+
+TU_ATTR_WEAK bool dcd_edpt_iso_alloc(uint8_t rhport, uint8_t ep_addr, uint16_t largest_packet_size);
+TU_ATTR_WEAK bool dcd_edpt_iso_activate(uint8_t rhport,  tusb_desc_endpoint_t const * p_endpoint_desc);
+#endif
+
 //--------------------------------------------------------------------+
 // USBD Configuration
 //--------------------------------------------------------------------+
@@ -76,7 +83,7 @@ typedef struct
 
 }usbd_device_t;
 
-static usbd_device_t _usbd_dev;
+tu_static usbd_device_t _usbd_dev;
 
 //--------------------------------------------------------------------+
 // Class Driver
@@ -88,7 +95,7 @@ static usbd_device_t _usbd_dev;
 #endif
 
 // Built-in class drivers
-static usbd_class_driver_t const _usbd_driver[] =
+tu_static usbd_class_driver_t const _usbd_driver[] =
 {
   #if CFG_TUD_CDC
   {
@@ -238,8 +245,8 @@ static usbd_class_driver_t const _usbd_driver[] =
 enum { BUILTIN_DRIVER_COUNT = TU_ARRAY_SIZE(_usbd_driver) };
 
 // Additional class drivers implemented by application
-static usbd_class_driver_t const * _app_driver = NULL;
-static uint8_t _app_driver_count = 0;
+tu_static usbd_class_driver_t const * _app_driver = NULL;
+tu_static uint8_t _app_driver_count = 0;
 
 // virtually joins built-in and application drivers together.
 // Application is positioned first to allow overwriting built-in ones.
@@ -265,17 +272,17 @@ static inline usbd_class_driver_t const * get_driver(uint8_t drvid)
 //--------------------------------------------------------------------+
 
 enum { RHPORT_INVALID = 0xFFu };
-static uint8_t _usbd_rhport = RHPORT_INVALID;
+tu_static uint8_t _usbd_rhport = RHPORT_INVALID;
 
 // Event queue
 // usbd_int_set() is used as mutex in OS NONE config
 OSAL_QUEUE_DEF(usbd_int_set, _usbd_qdef, CFG_TUD_TASK_QUEUE_SZ, dcd_event_t);
-static osal_queue_t _usbd_q;
+tu_static osal_queue_t _usbd_q;
 
 // Mutex for claiming endpoint
 #if OSAL_MUTEX_REQUIRED
-  static osal_mutex_def_t _ubsd_mutexdef;
-  static osal_mutex_t _usbd_mutex;
+  tu_static osal_mutex_def_t _ubsd_mutexdef;
+  tu_static osal_mutex_t _usbd_mutex;
 #else
   #define _usbd_mutex   NULL
 #endif
@@ -299,7 +306,7 @@ bool usbd_control_xfer_cb (uint8_t rhport, uint8_t ep_addr, xfer_result_t event,
 // Debug
 //--------------------------------------------------------------------+
 #if CFG_TUSB_DEBUG >= 2
-static char const* const _usbd_event_str[DCD_EVENT_COUNT] =
+tu_static char const* const _usbd_event_str[DCD_EVENT_COUNT] =
 {
   "Invalid"        ,
   "Bus Reset"      ,
@@ -1380,6 +1387,33 @@ void usbd_sof_enable(uint8_t rhport, bool en)
   // TODO: Check needed if all drivers including the user sof_cb does not need an active SOF ISR any more.
   // Only if all drivers switched off SOF calls the SOF interrupt may be disabled
   dcd_sof_enable(rhport, en);
+}
+
+bool usbd_edpt_iso_alloc(uint8_t rhport, uint8_t ep_addr, uint16_t largest_packet_size)
+{
+  rhport = _usbd_rhport;
+
+  TU_ASSERT(dcd_edpt_iso_alloc);
+  TU_ASSERT(tu_edpt_number(ep_addr) < CFG_TUD_ENDPPOINT_MAX);
+
+  return dcd_edpt_iso_alloc(rhport, ep_addr, largest_packet_size);
+}
+
+bool usbd_edpt_iso_activate(uint8_t rhport, tusb_desc_endpoint_t const * desc_ep)
+{
+  rhport = _usbd_rhport;
+
+  uint8_t const epnum = tu_edpt_number(desc_ep->bEndpointAddress);
+  uint8_t const dir   = tu_edpt_dir(desc_ep->bEndpointAddress);
+
+  TU_ASSERT(dcd_edpt_iso_activate);
+  TU_ASSERT(epnum < CFG_TUD_ENDPPOINT_MAX);
+  TU_ASSERT(tu_edpt_validate(desc_ep, (tusb_speed_t) _usbd_dev.speed));
+
+  _usbd_dev.ep_status[epnum][dir].stalled = false;
+  _usbd_dev.ep_status[epnum][dir].busy = false;
+  _usbd_dev.ep_status[epnum][dir].claimed = false;
+  return dcd_edpt_iso_activate(rhport, desc_ep);
 }
 
 #endif

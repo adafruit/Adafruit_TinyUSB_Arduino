@@ -33,6 +33,32 @@
 
 #include "dfu_rt_device.h"
 
+#if defined(ARDUINO_ARCH_ESP32) && !defined(tu_static)
+#define tu_static static
+
+// This is a backport of memset_s from c11
+TU_ATTR_ALWAYS_INLINE static inline int tu_memset_s(void *dest, size_t destsz, int ch, size_t count)
+{
+  // TODO may check if desst and src is not NULL
+  if (count > destsz) {
+    return -1;
+  }
+  memset(dest, ch, count);
+  return 0;
+}
+
+// This is a backport of memcpy_s from c11
+TU_ATTR_ALWAYS_INLINE static inline int tu_memcpy_s(void *dest, size_t destsz, const void * src, size_t count )
+{
+  // TODO may check if desst and src is not NULL
+  if (count > destsz) {
+    return -1;
+  }
+  memcpy(dest, src, count);
+  return 0;
+}
+#endif
+
 //--------------------------------------------------------------------+
 // MACRO CONSTANT TYPEDEF
 //--------------------------------------------------------------------+
@@ -110,7 +136,7 @@ bool dfu_rtd_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request
       TU_LOG2("  DFU RT Request: GETSTATUS\r\n");
       dfu_status_response_t resp;
       // Status = OK, Poll timeout is ignored during RT, State = APP_IDLE, IString = 0
-      memset(&resp, 0x00, sizeof(dfu_status_response_t));
+      TU_VERIFY(tu_memset_s(&resp, sizeof(resp), 0x00, sizeof(resp))==0);
       tud_control_xfer(rhport, request, &resp, sizeof(dfu_status_response_t));
     }
     break;

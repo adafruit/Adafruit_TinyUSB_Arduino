@@ -29,6 +29,7 @@
 #if CFG_TUD_ENABLED && (CFG_TUSB_MCU == OPT_MCU_RP2040) && !CFG_TUD_RPI_PIO_USB
 
 #include "pico.h"
+#include "hardware/sync.h"
 #include "rp2040_usb.h"
 
 #if TUD_OPT_RP2040_USB_DEVICE_ENUMERATION_FIX
@@ -198,7 +199,7 @@ static void __tusb_irq_path_func(hw_handle_buff_status)(void)
             usb_hw_clear->buf_status = bit;
 
             // IN transfer for even i, OUT transfer for odd i
-            struct hw_endpoint *ep = hw_endpoint_get_by_num(i >> 1u, !(i & 1u));
+            struct hw_endpoint *ep = hw_endpoint_get_by_num(i >> 1u, (i & 1u) ? TUSB_DIR_OUT : TUSB_DIR_IN);
 
             // Continue xfer
             bool done = hw_endpoint_xfer_continue(ep);
@@ -297,7 +298,7 @@ static void __tusb_irq_path_func(dcd_rp2040_irq)(void)
   if ( status & USB_INTS_SETUP_REQ_BITS )
   {
     handled |= USB_INTS_SETUP_REQ_BITS;
-    uint8_t const * setup = (uint8_t const*) &usb_dpram->setup_packet;
+    uint8_t const * setup = remove_volatile_cast(uint8_t const*, &usb_dpram->setup_packet);
 
     // reset pid to both 1 (data and ack)
     reset_ep0_pid();

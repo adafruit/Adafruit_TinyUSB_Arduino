@@ -36,6 +36,33 @@
 
 #include "hid_device.h"
 
+#if defined(ARDUINO_ARCH_ESP32) && !defined(tu_static)
+#define tu_static static
+
+// This is a backport of memset_s from c11
+TU_ATTR_ALWAYS_INLINE static inline int tu_memset_s(void *dest, size_t destsz, int ch, size_t count)
+{
+  // TODO may check if desst and src is not NULL
+  if (count > destsz) {
+    return -1;
+  }
+  memset(dest, ch, count);
+  return 0;
+}
+
+// This is a backport of memcpy_s from c11
+TU_ATTR_ALWAYS_INLINE static inline int tu_memcpy_s(void *dest, size_t destsz, const void * src, size_t count )
+{
+  // TODO may check if desst and src is not NULL
+  if (count > destsz) {
+    return -1;
+  }
+  memcpy(dest, src, count);
+  return 0;
+}
+
+#endif
+
 //--------------------------------------------------------------------+
 // MACRO CONSTANT TYPEDEF
 //--------------------------------------------------------------------+
@@ -58,7 +85,7 @@ typedef struct
   tusb_hid_descriptor_hid_t const * hid_descriptor;
 } hidd_interface_t;
 
-CFG_TUSB_MEM_SECTION static hidd_interface_t _hidd_itf[CFG_TUD_HID];
+CFG_TUSB_MEM_SECTION tu_static hidd_interface_t _hidd_itf[CFG_TUD_HID];
 
 /*------------- Helpers -------------*/
 static inline uint8_t get_index_by_itfnum(uint8_t itf_num)
@@ -92,16 +119,12 @@ bool tud_hid_n_report(uint8_t instance, uint8_t report_id, void const* report, u
   // prepare data
   if (report_id)
   {
-    len = tu_min16(len, CFG_TUD_HID_EP_BUFSIZE-1);
-
     p_hid->epin_buf[0] = report_id;
-    memcpy(p_hid->epin_buf+1, report, len);
+    TU_VERIFY(0 == tu_memcpy_s(p_hid->epin_buf+1, CFG_TUD_HID_EP_BUFSIZE-1, report, len));
     len++;
   }else
   {
-    // If report id = 0, skip ID field
-    len = tu_min16(len, CFG_TUD_HID_EP_BUFSIZE);
-    memcpy(p_hid->epin_buf, report, len);
+    TU_VERIFY(0 == tu_memcpy_s(p_hid->epin_buf, CFG_TUD_HID_EP_BUFSIZE, report, len));
   }
 
   return usbd_edpt_xfer(rhport, p_hid->ep_in, p_hid->epin_buf, len);
@@ -126,7 +149,7 @@ bool tud_hid_n_keyboard_report(uint8_t instance, uint8_t report_id, uint8_t modi
 
   if ( keycode )
   {
-    memcpy(report.keycode, keycode, 6);
+    memcpy(report.keycode, keycode, sizeof(report.keycode));
   }else
   {
     tu_memclr(report.keycode, 6);
@@ -151,8 +174,7 @@ bool tud_hid_n_mouse_report(uint8_t instance, uint8_t report_id,
 }
 
 bool tud_hid_n_gamepad_report(uint8_t instance, uint8_t report_id,
-                              int8_t x, int8_t y, int8_t z, int8_t rz, int8_t rx, int8_t ry, uint8_t hat, uint32_t buttons)
-{
+                              int8_t x, int8_t y, int8_t z, int8_t rz, int8_t rx, int8_t ry, uint8_t hat, uint32_t buttons) {
   hid_gamepad_report_t report =
   {
     .x       = x,
@@ -183,11 +205,12 @@ void hidd_reset(uint8_t rhport)
 }
 
 uint16_t hidd_open(uint8_t rhport, tusb_desc_interface_t const * desc_itf, uint16_t max_len)
-{
+ {
   TU_VERIFY(TUSB_CLASS_HID == desc_itf->bInterfaceClass, 0);
 
   // len = interface + hid + n*endpoints
-  uint16_t const drv_len = (uint16_t) (sizeof(tusb_desc_interface_t) + sizeof(tusb_hid_descriptor_hid_t) +
+  uint16_t const drv_len =
+      (uint16_t) (sizeof(tusb_desc_interface_t) + sizeof(tusb_hid_descriptor_hid_t) +
                                        desc_itf->bNumEndpoints * sizeof(tusb_desc_endpoint_t));
   TU_ASSERT(max_len >= drv_len, 0);
 
