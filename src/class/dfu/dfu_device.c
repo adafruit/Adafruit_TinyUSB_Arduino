@@ -37,6 +37,10 @@
 // MACRO CONSTANT TYPEDEF
 //--------------------------------------------------------------------+
 
+#if defined(ARDUINO_ARCH_ESP32) && !defined(tu_static)
+#define tu_static static
+#endif
+
 //--------------------------------------------------------------------+
 // INTERNAL OBJECT & FUNCTION DECLARATION
 //--------------------------------------------------------------------+
