@@ -59,8 +59,8 @@ private:
 //
 //// USBHost has a high chance to conflict with other usb stack
 //// only define if supported BSP
-//#ifdef USE_TINYUSB
-//#define USBHost TinyUSBHost
-//#endif
+// #ifdef USE_TINYUSB
+// #define USBHost TinyUSBHost
+// #endif
 
 #endif /* ADAFRUIT_USBH_HOST_H_ */

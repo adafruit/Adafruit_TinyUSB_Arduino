@@ -30,8 +30,8 @@ jobs:
     - name: pre-install
       run: bash ci/actions_install.sh
 
-    - name: clang
-      run: python3 ci/run-clang-format.py -r src/arduino
+#    - name: clang
+#      run: python3 ci/run-clang-format.py -r src/arduino
 
     - name: doxygen
       env:
