@@ -16,7 +16,7 @@
  *
  * Requirements:
  * - [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB) library
- * - 2 consecutive GPIOs: D+ is defined by HOST_PIN_DP (gpio20), D- = D+ +1 (gpio21)
+ * - 2 consecutive GPIOs: D+ is defined by PIN_PIO_USB_HOST_DP, D- = D+ +1
  * - Provide VBus (5v) and GND for peripheral
  * - CPU Speed must be either 120 or 240 Mhz. Selected via "Menu -> CPU Speed"
  *
@@ -46,11 +46,18 @@
 #include "Adafruit_TinyUSB.h"
 
 // Pin D+ for host, D- = D+ + 1
-#define HOST_PIN_DP       20
+#ifndef PIN_PIO_USB_HOST_DP
+#define PIN_PIO_USB_HOST_DP       20
+#endif
 
 // Pin for enabling Host VBUS. comment out if not used
-#define HOST_PIN_VBUS_EN        22
-#define HOST_PIN_VBUS_EN_STATE  1
+#ifndef PIN_PIO_USB_HOST_VBUSEN
+#define PIN_PIO_USB_HOST_VBUSEN        22
+#endif
+
+#ifndef PIN_PIO_USB_HOST_VBUSEN_STATE
+#define PIN_PIO_USB_HOST_VBUSEN_STATE  1
+#endif
 
 // Language ID: English
 #define LANGUAGE_ID 0x0409
@@ -101,13 +108,13 @@ void setup1() {
     }
   }
 
-#ifdef HOST_PIN_VBUS_EN
-  pinMode(HOST_PIN_VBUS_EN, OUTPUT);
-  digitalWrite(HOST_PIN_VBUS_EN, HOST_PIN_VBUS_EN_STATE);
+#ifdef PIN_PIO_USB_HOST_VBUSEN
+  pinMode(PIN_PIO_USB_HOST_VBUSEN, OUTPUT);
+  digitalWrite(PIN_PIO_USB_HOST_VBUSEN, PIN_PIO_USB_HOST_VBUSEN_STATE);
 #endif
 
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
-  pio_cfg.pin_dp = HOST_PIN_DP;
+  pio_cfg.pin_dp = PIN_PIO_USB_HOST_DP;
   USBHost.configure_pio_usb(1, &pio_cfg);
 
   // run host stack on controller (rhport) 1
