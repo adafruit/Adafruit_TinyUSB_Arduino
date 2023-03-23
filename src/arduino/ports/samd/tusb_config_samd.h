@@ -46,9 +46,8 @@ extern "C" {
 
 #define CFG_TUSB_OS OPT_OS_NONE
 
+#ifndef CFG_TUSB_DEBUG
 #define CFG_TUSB_DEBUG 0
-#if CFG_TUSB_DEBUG
-#define CFG_TUSB_DEBUG_PRINTF serial1_printf
 #endif
 
 #define CFG_TUSB_MEM_SECTION

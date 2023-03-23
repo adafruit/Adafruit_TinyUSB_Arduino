@@ -46,6 +46,11 @@
   #error TinyUSB Arduino Library does not support your core yet
 #endif
 
+// Debug TinyUSB with Serial1
+#if CFG_TUSB_DEBUG
+#define CFG_TUSB_DEBUG_PRINTF serial1_printf
+#endif
+
 #ifdef __cplusplus
  }
 #endif

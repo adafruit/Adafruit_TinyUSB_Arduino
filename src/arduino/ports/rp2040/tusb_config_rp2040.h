@@ -52,11 +52,6 @@ extern "C" {
 #define CFG_TUSB_DEBUG 0
 #endif
 
-#if CFG_TUSB_DEBUG
-#define CFG_TUSB_DEBUG_PRINTF serial1_printf
-extern int serial1_printf(const char *__restrict __format, ...);
-#endif
-
 #define CFG_TUSB_MEM_SECTION
 #define CFG_TUSB_MEM_ALIGN TU_ATTR_ALIGNED(4)
 
