@@ -28,6 +28,7 @@
 #if CFG_TUD_ENABLED && !defined(ARDUINO_ARCH_ESP32)
 
 #include "Adafruit_TinyUSB.h"
+#include "Arduino.h"
 
 //--------------------------------------------------------------------+
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
@@ -53,6 +54,26 @@ void TinyUSB_Device_FlushCDC(void) {
     tud_cdc_n_write_flush(instance);
   }
 }
+
+// Debug log with Serial1
+#if CFG_TUSB_DEBUG && defined(CFG_TUSB_DEBUG_PRINTF)
+int CFG_TUSB_DEBUG_PRINTF(const char *__restrict format, ...) {
+  static bool ser1_inited = false;
+  if (!ser1_inited) {
+    ser1_inited = true;
+    Serial1.begin(115200);
+  }
+
+  char buf[256];
+  int len;
+  va_list ap;
+  va_start(ap, format);
+  len = vsnprintf(buf, sizeof(buf), format, ap);
+  Serial1.write(buf);
+  va_end(ap);
+  return len;
+}
+#endif
 
 } // extern C
 
