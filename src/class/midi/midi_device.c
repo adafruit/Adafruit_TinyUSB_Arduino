@@ -38,29 +38,8 @@
 
 #if defined(ARDUINO_ARCH_ESP32) && !defined(tu_static)
 #define tu_static static
-
-// This is a backport of memset_s from c11
-TU_ATTR_ALWAYS_INLINE static inline int tu_memset_s(void *dest, size_t destsz, int ch, size_t count)
-{
-  // TODO may check if desst and src is not NULL
-  if (count > destsz) {
-    return -1;
-  }
-  memset(dest, ch, count);
-  return 0;
-}
-
-// This is a backport of memcpy_s from c11
-TU_ATTR_ALWAYS_INLINE static inline int tu_memcpy_s(void *dest, size_t destsz, const void * src, size_t count )
-{
-  // TODO may check if desst and src is not NULL
-  if (count > destsz) {
-    return -1;
-  }
-  memcpy(dest, src, count);
-  return 0;
-}
-
+static inline int tu_memset_s(void *dest, size_t destsz, int ch, size_t count) { if (count > destsz) { return -1; } memset(dest, ch, count); return 0; }
+static inline int tu_memcpy_s(void *dest, size_t destsz, const void * src, size_t count ) { if (count > destsz) { return -1; } memcpy(dest, src, count); return 0; }
 #endif
 
 //--------------------------------------------------------------------+
