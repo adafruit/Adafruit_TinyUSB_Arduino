@@ -57,7 +57,8 @@ void TinyUSB_Device_FlushCDC(void) {
 
 // Debug log with Serial1
 #if CFG_TUSB_DEBUG && defined(CFG_TUSB_DEBUG_PRINTF)
-int CFG_TUSB_DEBUG_PRINTF(const char *__restrict format, ...) {
+__attribute__((used)) int CFG_TUSB_DEBUG_PRINTF(const char *__restrict format,
+                                                ...) {
   static bool ser1_inited = false;
   if (!ser1_inited) {
     ser1_inited = true;
