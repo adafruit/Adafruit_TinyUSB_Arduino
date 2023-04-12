@@ -62,7 +62,7 @@ extern "C" {
 //------------- CLASS -------------//
 #define CFG_TUD_CDC 1
 #define CFG_TUD_MSC 1
-#define CFG_TUD_HID 1
+#define CFG_TUD_HID 2
 #define CFG_TUD_MIDI 1
 #define CFG_TUD_VENDOR 1
 
