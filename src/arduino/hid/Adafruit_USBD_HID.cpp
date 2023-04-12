@@ -186,23 +186,23 @@ bool Adafruit_USBD_HID::begin(void) {
   return true;
 }
 
-bool Adafruit_USBD_HID::ready(void) { return tud_hid_ready(); }
+bool Adafruit_USBD_HID::ready(void) { return tud_hid_n_ready(_instance); }
 
 bool Adafruit_USBD_HID::sendReport(uint8_t report_id, void const *report,
                                    uint8_t len) {
-  return tud_hid_report(report_id, report, len);
+  return tud_hid_n_report(_instance, report_id, report, len);
 }
 
 bool Adafruit_USBD_HID::sendReport8(uint8_t report_id, uint8_t num) {
-  return tud_hid_report(report_id, &num, sizeof(num));
+  return tud_hid_n_report(_instance, report_id, &num, sizeof(num));
 }
 
 bool Adafruit_USBD_HID::sendReport16(uint8_t report_id, uint16_t num) {
-  return tud_hid_report(report_id, &num, sizeof(num));
+  return tud_hid_n_report(_instance, report_id, &num, sizeof(num));
 }
 
 bool Adafruit_USBD_HID::sendReport32(uint8_t report_id, uint32_t num) {
-  return tud_hid_report(report_id, &num, sizeof(num));
+  return tud_hid_n_report(_instance, report_id, &num, sizeof(num));
 }
 
 //------------- TinyUSB callbacks -------------//
@@ -258,7 +258,7 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id,
 
 bool Adafruit_USBD_HID::keyboardReport(uint8_t report_id, uint8_t modifier,
                                        uint8_t keycode[6]) {
-  return tud_hid_keyboard_report(report_id, modifier, keycode);
+  return tud_hid_n_keyboard_report(_instance, report_id, modifier, keycode);
 }
 
 bool Adafruit_USBD_HID::keyboardPress(uint8_t report_id, char ch) {
@@ -271,11 +271,11 @@ bool Adafruit_USBD_HID::keyboardPress(uint8_t report_id, char ch) {
   }
   keycode[0] = _ascii2keycode[uch][1];
 
-  return tud_hid_keyboard_report(report_id, modifier, keycode);
+  return tud_hid_n_keyboard_report(_instance, report_id, modifier, keycode);
 }
 
 bool Adafruit_USBD_HID::keyboardRelease(uint8_t report_id) {
-  return tud_hid_keyboard_report(report_id, 0, NULL);
+  return tud_hid_n_keyboard_report(_instance, report_id, 0, NULL);
 }
 
 //--------------------------------------------------------------------+
@@ -288,24 +288,27 @@ bool Adafruit_USBD_HID::mouseReport(uint8_t report_id, uint8_t buttons,
   // cache mouse button for other API such as move, scroll
   _mouse_button = buttons;
 
-  return tud_hid_mouse_report(report_id, buttons, x, y, vertical, horizontal);
+  return tud_hid_n_mouse_report(_instance, report_id, buttons, x, y, vertical,
+                                horizontal);
 }
 
 bool Adafruit_USBD_HID::mouseMove(uint8_t report_id, int8_t x, int8_t y) {
-  return tud_hid_mouse_report(report_id, _mouse_button, x, y, 0, 0);
+  return tud_hid_n_mouse_report(_instance, report_id, _mouse_button, x, y, 0,
+                                0);
 }
 
 bool Adafruit_USBD_HID::mouseScroll(uint8_t report_id, int8_t scroll,
                                     int8_t pan) {
-  return tud_hid_mouse_report(report_id, _mouse_button, 0, 0, scroll, pan);
+  return tud_hid_n_mouse_report(_instance, report_id, _mouse_button, 0, 0,
+                                scroll, pan);
 }
 
 bool Adafruit_USBD_HID::mouseButtonPress(uint8_t report_id, uint8_t buttons) {
-  return tud_hid_mouse_report(report_id, buttons, 0, 0, 0, 0);
+  return tud_hid_n_mouse_report(_instance, report_id, buttons, 0, 0, 0, 0);
 }
 
 bool Adafruit_USBD_HID::mouseButtonRelease(uint8_t report_id) {
-  return tud_hid_mouse_report(report_id, 0, 0, 0, 0, 0);
+  return tud_hid_n_mouse_report(_instance, report_id, 0, 0, 0, 0, 0);
 }
 
 #endif // CFG_TUD_ENABLED
