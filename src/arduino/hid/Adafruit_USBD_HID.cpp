@@ -32,28 +32,32 @@
 #define EPIN 0x80
 
 uint8_t const _ascii2keycode[128][2] = {HID_ASCII_TO_KEYCODE};
+static Adafruit_USBD_HID *_hid_instances[CFG_TUD_HID] = {0};
 
-// TODO multiple instances
-static Adafruit_USBD_HID *_hid_dev = NULL;
+uint8_t Adafruit_USBD_HID::_instance_count = 0;
 
 #ifdef ARDUINO_ARCH_ESP32
 static uint16_t hid_load_descriptor(uint8_t *dst, uint8_t *itf) {
   // uint8_t str_index = tinyusb_add_string_descriptor("TinyUSB HID");
 
-  TU_VERIFY(_hid_dev);
+  uint8_t const inst_count = Adafruit_USBD_HID::getInstanceCount();
+  TU_VERIFY(inst_count > 0, 0);
+
+  Adafruit_USBD_HID *p_hid = _hid_instances[inst_count - 1];
+  TU_VERIFY(p_hid);
 
   uint8_t ep_in = tinyusb_get_free_in_endpoint();
   TU_VERIFY(ep_in != 0);
   ep_in |= 0x80;
 
   uint8_t ep_out = 0;
-  if (_hid_dev->isOutEndpointEnabled()) {
+  if (p_hid->isOutEndpointEnabled()) {
     ep_out = tinyusb_get_free_out_endpoint();
     TU_VERIFY(ep_out != 0);
   }
 
   uint16_t const desc_len =
-      _hid_dev->makeItfDesc(*itf, dst, TUD_HID_INOUT_DESC_LEN, ep_in, ep_out);
+      p_hid->makeItfDesc(*itf, dst, TUD_HID_INOUT_DESC_LEN, ep_in, ep_out);
 
   *itf += 1;
   return desc_len;
@@ -68,6 +72,7 @@ Adafruit_USBD_HID::Adafruit_USBD_HID(void)
 Adafruit_USBD_HID::Adafruit_USBD_HID(uint8_t const *desc_report, uint16_t len,
                                      uint8_t protocol, uint8_t interval_ms,
                                      bool has_out_endpoint) {
+  _instance = INVALID_INSTANCE;
   _interval_ms = interval_ms;
   _protocol = protocol;
 
@@ -82,7 +87,13 @@ Adafruit_USBD_HID::Adafruit_USBD_HID(uint8_t const *desc_report, uint16_t len,
 
 #ifdef ARDUINO_ARCH_ESP32
   // ESP32 requires setup configuration descriptor within constructor
-  _hid_dev = this;
+  if (_instance_count >= CFG_TUD_HID) {
+    return;
+  }
+
+  _instance = _instance_count++;
+  _hid_instances[_instance] = this;
+
   uint16_t const desc_len = getInterfaceDescriptor(0, NULL, 0);
   tinyusb_enable_interface(USB_INTERFACE_HID, desc_len, hid_load_descriptor);
 #endif
@@ -158,11 +169,20 @@ uint16_t Adafruit_USBD_HID::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
 }
 
 bool Adafruit_USBD_HID::begin(void) {
-  if (!TinyUSBDevice.addInterface(*this)) {
+  if (isValid()) {
+    return true;
+  }
+
+  if (_instance_count >= CFG_TUD_HID) {
     return false;
   }
 
-  _hid_dev = this;
+  if (!TinyUSBDevice.addInterface(*this)) {
+    return false;
+  }
+  _instance = _instance_count++;
+  _hid_instances[_instance] = this;
+
   return true;
 }
 
@@ -192,13 +212,13 @@ extern "C" {
 // Application return pointer to descriptor, whose contents must exist long
 // enough for transfer to complete
 uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf) {
-  (void)itf;
+  Adafruit_USBD_HID *p_hid = _hid_instances[itf];
 
-  if (!_hid_dev) {
+  if (!p_hid) {
     return NULL;
   }
 
-  return _hid_dev->_desc_report;
+  return p_hid->_desc_report;
 }
 
 // Invoked when received GET_REPORT control request
@@ -207,13 +227,13 @@ uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf) {
 uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id,
                                hid_report_type_t report_type, uint8_t *buffer,
                                uint16_t reqlen) {
-  (void)itf;
+  Adafruit_USBD_HID *p_hid = _hid_instances[itf];
 
-  if (!(_hid_dev && _hid_dev->_get_report_cb)) {
+  if (!(p_hid && p_hid->_get_report_cb)) {
     return 0;
   }
 
-  return _hid_dev->_get_report_cb(report_id, report_type, buffer, reqlen);
+  return p_hid->_get_report_cb(report_id, report_type, buffer, reqlen);
 }
 
 // Invoked when received SET_REPORT control request or
@@ -221,13 +241,13 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id,
 void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id,
                            hid_report_type_t report_type, uint8_t const *buffer,
                            uint16_t bufsize) {
-  (void)itf;
+  Adafruit_USBD_HID *p_hid = _hid_instances[itf];
 
-  if (!(_hid_dev && _hid_dev->_set_report_cb)) {
+  if (!(p_hid && p_hid->_set_report_cb)) {
     return;
   }
 
-  _hid_dev->_set_report_cb(report_id, report_type, buffer, bufsize);
+  p_hid->_set_report_cb(report_id, report_type, buffer, bufsize);
 }
 
 } // extern "C"
