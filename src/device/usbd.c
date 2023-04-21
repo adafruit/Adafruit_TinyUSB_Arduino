@@ -35,13 +35,6 @@
 #include "device/usbd.h"
 #include "device/usbd_pvt.h"
 
-#if defined(ARDUINO_ARCH_ESP32) && !defined(tu_static)
-#define tu_static static
-
-TU_ATTR_WEAK bool dcd_edpt_iso_alloc(uint8_t rhport, uint8_t ep_addr, uint16_t largest_packet_size);
-TU_ATTR_WEAK bool dcd_edpt_iso_activate(uint8_t rhport,  tusb_desc_endpoint_t const * p_endpoint_desc);
-#endif
-
 //--------------------------------------------------------------------+
 // USBD Configuration
 //--------------------------------------------------------------------+
