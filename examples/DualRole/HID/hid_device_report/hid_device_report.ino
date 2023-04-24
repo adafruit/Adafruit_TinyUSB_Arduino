@@ -26,17 +26,17 @@
 #include "Adafruit_TinyUSB.h"
 
 // Pin D+ for host, D- = D+ + 1
-#ifndef PIN_PIO_USB_HOST_DP
-#define PIN_PIO_USB_HOST_DP       20
+#ifndef PIN_USB_HOST_DP
+#define PIN_USB_HOST_DP  16
 #endif
 
 // Pin for enabling Host VBUS. comment out if not used
-#ifndef PIN_PIO_USB_HOST_VBUSEN
-#define PIN_PIO_USB_HOST_VBUSEN        22
+#ifndef PIN_5V_EN
+#define PIN_5V_EN        18
 #endif
 
-#ifndef PIN_PIO_USB_HOST_VBUSEN_STATE
-#define PIN_PIO_USB_HOST_VBUSEN_STATE  1
+#ifndef PIN_5V_EN_STATE
+#define PIN_5V_EN_STATE  1
 #endif
 
 // Language ID: English
@@ -51,16 +51,15 @@ Adafruit_USBH_Host USBHost;
 
 void setup()
 {
-  Serial1.begin(115200);
-
   Serial.begin(115200);
-  //while ( !Serial ) delay(10);   // wait for native usb
+  while ( !Serial ) delay(10);   // wait for native usb
 
   Serial.println("TinyUSB Dual Device Info Example");
 }
 
 void loop()
 {
+  Serial.flush();
 }
 
 //--------------------------------------------------------------------+
@@ -80,13 +79,13 @@ void setup1() {
     while(1) delay(1);
   }
 
-#ifdef PIN_PIO_USB_HOST_VBUSEN
-  pinMode(PIN_PIO_USB_HOST_VBUSEN, OUTPUT);
-  digitalWrite(PIN_PIO_USB_HOST_VBUSEN, PIN_PIO_USB_HOST_VBUSEN_STATE);
+#ifdef PIN_5V_EN
+  pinMode(PIN_5V_EN, OUTPUT);
+  digitalWrite(PIN_5V_EN, PIN_5V_EN_STATE);
 #endif
 
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
-  pio_cfg.pin_dp = PIN_PIO_USB_HOST_DP;
+  pio_cfg.pin_dp = PIN_USB_HOST_DP;
   USBHost.configure_pio_usb(1, &pio_cfg);
 
   // run host stack on controller (rhport) 1
@@ -100,14 +99,16 @@ void loop1()
   USBHost.task();
 }
 
+extern "C" {
+
 // Invoked when device with hid interface is mounted
 // Report descriptor is also available for use.
 // tuh_hid_parse_report_descriptor() can be used to parse common/simple enough
 // descriptor. Note: if report descriptor length > CFG_TUH_ENUMERATION_BUFSIZE,
 // it will be skipped therefore report_desc = NULL, desc_len = 0
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_report, uint16_t desc_len) {
-  (void)desc_report;
-  (void)desc_len;
+  (void) desc_report;
+  (void) desc_len;
   uint16_t vid, pid;
   tuh_vid_pid_get(dev_addr, &vid, &pid);
 
@@ -135,3 +136,5 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
     Serial.printf("Error: cannot request to receive report\r\n");
   }
 }
+
+} // extern C

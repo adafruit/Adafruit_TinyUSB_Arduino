@@ -32,17 +32,17 @@
 #include "Adafruit_TinyUSB.h"
 
 // Pin D+ for host, D- = D+ + 1
-#ifndef PIN_PIO_USB_HOST_DP
-#define PIN_PIO_USB_HOST_DP       20
+#ifndef PIN_USB_HOST_DP
+#define PIN_USB_HOST_DP  16
 #endif
 
 // Pin for enabling Host VBUS. comment out if not used
-#ifndef PIN_PIO_USB_HOST_VBUSEN
-#define PIN_PIO_USB_HOST_VBUSEN        22
+#ifndef PIN_5V_EN
+#define PIN_5V_EN        18
 #endif
 
-#ifndef PIN_PIO_USB_HOST_VBUSEN_STATE
-#define PIN_PIO_USB_HOST_VBUSEN_STATE  1
+#ifndef PIN_5V_EN_STATE
+#define PIN_5V_EN_STATE  1
 #endif
 
 // Language ID: English
@@ -55,12 +55,27 @@ Adafruit_USBH_Host USBHost;
 // Single Report (no ID) descriptor
 uint8_t const desc_hid_report[] =
 {
-  TUD_HID_REPORT_DESC_KEYBOARD()
+  TUD_HID_REPORT_DESC_MOUSE()
 };
 
 // USB HID object. For ESP32 these values cannot be changed after this declaration
 // desc report, desc len, protocol, interval, use out endpoint
-Adafruit_USBD_HID usb_hid(desc_hid_report, sizeof(desc_hid_report), HID_ITF_PROTOCOL_KEYBOARD, 2, false);
+Adafruit_USBD_HID usb_hid(desc_hid_report, sizeof(desc_hid_report), HID_ITF_PROTOCOL_MOUSE, 2, false);
+
+//------------- Low pass filter with Butterworth -------------//
+// Butterworth low-pass filter coefficients
+typedef struct {
+  float b0, b1, b2, a1, a2;
+} butterworth_coeffs_t;
+
+#define SAMPLING_FREQUENCY 100.0  // Hz
+#define CUTOFF_FREQUENCY    10.0  // Hz
+
+// x, y
+butterworth_coeffs_t coeffs[2];
+
+butterworth_coeffs_t butterworth_lowpass(float cutoff_frequency, float sampling_frequency);
+void filter_report(hid_mouse_report_t const* report);
 
 //--------------------------------------------------------------------+
 // Setup and Loop on Core0
@@ -71,14 +86,16 @@ void setup()
   Serial.begin(115200);
   usb_hid.begin();
 
-  //while ( !Serial ) delay(10);   // wait for native usb
+  coeffs[0] = butterworth_lowpass(CUTOFF_FREQUENCY, SAMPLING_FREQUENCY);
+  coeffs[1] = butterworth_lowpass(CUTOFF_FREQUENCY, SAMPLING_FREQUENCY);
 
-  Serial.println("TinyUSB Host HID Remap Example");
+  //while ( !Serial ) delay(10);   // wait for native usb
+  Serial.println("TinyUSB Mouse Tremor Filter Example");
 }
 
 void loop()
 {
-
+  Serial.flush();
 }
 
 //--------------------------------------------------------------------+
@@ -98,13 +115,13 @@ void setup1() {
     while(1) delay(1);
   }
 
-#ifdef PIN_PIO_USB_HOST_VBUSEN
-  pinMode(PIN_PIO_USB_HOST_VBUSEN, OUTPUT);
-  digitalWrite(PIN_PIO_USB_HOST_VBUSEN, PIN_PIO_USB_HOST_VBUSEN_STATE);
+#ifdef PIN_5V_EN
+  pinMode(PIN_5V_EN, OUTPUT);
+  digitalWrite(PIN_5V_EN, PIN_5V_EN_STATE);
 #endif
 
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
-  pio_cfg.pin_dp = PIN_PIO_USB_HOST_DP;
+  pio_cfg.pin_dp = PIN_USB_HOST_DP;
   USBHost.configure_pio_usb(1, &pio_cfg);
 
   // run host stack on controller (rhport) 1
@@ -118,14 +135,18 @@ void loop1()
   USBHost.task();
 }
 
+
+extern "C"
+{
+
 // Invoked when device with hid interface is mounted
 // Report descriptor is also available for use.
 // tuh_hid_parse_report_descriptor() can be used to parse common/simple enough
 // descriptor. Note: if report descriptor length > CFG_TUH_ENUMERATION_BUFSIZE,
 // it will be skipped therefore report_desc = NULL, desc_len = 0
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_report, uint16_t desc_len) {
-  (void)desc_report;
-  (void)desc_len;
+  (void) desc_report;
+  (void) desc_len;
   uint16_t vid, pid;
   tuh_vid_pid_get(dev_addr, &vid, &pid);
 
@@ -133,8 +154,8 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
   Serial.printf("VID = %04x, PID = %04x\r\n", vid, pid);
 
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
-  if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
-    Serial.printf("HID Keyboard\r\n");
+  if (itf_protocol == HID_ITF_PROTOCOL_MOUSE) {
+    Serial.printf("HID Mouse\r\n");
     if (!tuh_hid_receive_report(dev_addr, instance)) {
       Serial.printf("Error: cannot request to receive report\r\n");
     }
@@ -146,40 +167,60 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance) {
   Serial.printf("HID device address = %d, instance = %d is unmounted\r\n", dev_addr, instance);
 }
 
-void remap_key(hid_keyboard_report_t const* original_report, hid_keyboard_report_t* remapped_report)
-{
-  memcpy(remapped_report, original_report, sizeof(hid_keyboard_report_t));
-
-  // only remap if not empty report i.e key released
-  for(uint8_t i=0; i<6; i++) {
-    if (remapped_report->keycode[i] != 0) {
-      // Note: we ignore right shift here
-      remapped_report->modifier ^= KEYBOARD_MODIFIER_LEFTSHIFT;
-      break;
-    }
-  }
-}
 
 // Invoked when received report from device via interrupt endpoint
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *report, uint16_t len) {
-  if ( len != 8 ) {
-    Serial.printf("report len = %u NOT 8, probably something wrong !!\r\n", len);
-  }else {
-    hid_keyboard_report_t remapped_report;
-    remap_key((hid_keyboard_report_t const*) report, &remapped_report);
-
-    // send remapped report to PC
-    // NOTE: for better performance you should save/queue remapped report instead of
-    // blocking wait for usb_hid ready here
-    while ( !usb_hid.ready() ) {
-      yield();
-    }
-
-    usb_hid.sendReport(0, &remapped_report, sizeof(hid_keyboard_report_t));
-  }
+  filter_report((hid_mouse_report_t const *) report);
 
   // continue to request to receive report
   if (!tuh_hid_receive_report(dev_addr, instance)) {
     Serial.printf("Error: cannot request to receive report\r\n");
   }
+}
+
+} // extern C
+
+//--------------------------------------------------------------------+
+// Low pass filter Functions
+//--------------------------------------------------------------------+
+
+butterworth_coeffs_t butterworth_lowpass(float cutoff_frequency, float sampling_frequency) {
+  butterworth_coeffs_t coe;
+
+  float omega = 2.0 * PI * cutoff_frequency / sampling_frequency;
+  float c = cos(omega);
+  float s = sin(omega);
+  float t = tan(omega / 2.0);
+  float alpha = s / (2.0 * t);
+
+  coe.b0 = 1.0 / (1.0 + 2.0 * alpha + 2.0 * alpha * alpha);
+  coe.b1 = 2.0 * coe.b0;
+  coe.b2 = coe.b0;
+  coe.a1 = 2.0 * (alpha * alpha - 1.0) * coe.b0;
+  coe.a2 = (1.0 - 2.0 * alpha + 2.0 * alpha * alpha) * coe.b0;
+
+  return coe;
+}
+
+float butterworth_filter(float data, butterworth_coeffs_t *coeffs, float *filtered, float *prev1, float *prev2) {
+  float output = coeffs->b0 * data + coeffs->b1 * (*prev1) + coeffs->b2 * (*prev2) - coeffs->a1 * (*filtered) - coeffs->a2 * (*prev1);
+  *prev2 = *prev1;
+  *prev1 = data;
+  *filtered = output;
+  return output;
+}
+
+void filter_report(hid_mouse_report_t const* report) {
+  static float filtered[2] = { 0.0, 0.0 };
+  static float prev1[2] = { 0.0, 0.0 };
+  static float prev2[2] = { 0.0, 0.0 };
+
+  butterworth_filter(report->x, &coeffs[0], &filtered[0], &prev1[0], &prev2[0]);
+  butterworth_filter(report->y, &coeffs[1], &filtered[1], &prev1[1], &prev2[1]);
+
+  hid_mouse_report_t filtered_report = *report;
+  filtered_report.x = (int8_t) filtered[0];
+  filtered_report.y = (int8_t) filtered[1];
+
+  usb_hid.sendReport(0, &filtered_report, sizeof(filtered_report));
 }
