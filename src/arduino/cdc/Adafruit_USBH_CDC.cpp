@@ -32,14 +32,13 @@
 
 Adafruit_USBH_CDC::Adafruit_USBH_CDC(void) { _idx = TUSB_INDEX_INVALID_8; }
 
-void Adafruit_USBH_CDC::begin(unsigned long baud) {
-
+void Adafruit_USBH_CDC::begin(unsigned long baudrate) {
   // default to index 0 when begin
   if (_idx == TUSB_INDEX_INVALID_8) {
     _idx = 0;
   }
 
-  _baud = baud;
+  _baud = baudrate;
   if (_baud == 0) {
     _baud = 115200; // default, backward compatible with previous API begin(0)
   }
@@ -52,13 +51,64 @@ void Adafruit_USBH_CDC::begin(unsigned long baudrate, uint16_t config) {
 
 void Adafruit_USBH_CDC::end(void) { _idx = TUSB_INDEX_INVALID_8; }
 
-bool Adafruit_USBH_CDC::connected(void) {
-  return (_idx != TUSB_INDEX_INVALID_8) && tuh_cdc_connected(_idx);
+bool Adafruit_USBH_CDC::mount(uint8_t idx) {
+  _idx = idx;
+
+  uint32_t local_baud = baud();
+  if (local_baud != _baud) {
+    return setBaudrate(_baud);
+  }
+
+  return true;
 }
 
-bool Adafruit_USBH_CDC::mounted(void) {
-  return (_idx != TUSB_INDEX_INVALID_8) && tuh_cdc_mounted(_idx);
+void Adafruit_USBH_CDC::umount(uint8_t idx) {
+  if (_idx == idx) {
+    _idx = TUSB_INDEX_INVALID_8;
+  }
 }
+
+bool Adafruit_USBH_CDC::connected(void) { return tuh_cdc_connected(_idx); }
+
+bool Adafruit_USBH_CDC::mounted(void) { return tuh_cdc_mounted(_idx); }
+uint32_t Adafruit_USBH_CDC::baud() {
+  cdc_line_coding_t line_coding;
+  if (!tuh_cdc_get_local_line_coding(_idx, &line_coding)) {
+    return 0;
+  }
+  return line_coding.bit_rate;
+}
+
+//--------------------------------------------------------------------+
+// Control API
+//--------------------------------------------------------------------+
+
+bool Adafruit_USBH_CDC::setDtrRts(bool dtr, bool rts, tuh_xfer_cb_t complete_cb,
+                                  uintptr_t user_data) {
+  if (!tuh_cdc_mounted(_idx)) {
+    return false;
+  }
+
+  uint16_t const line_state = (dtr ? CDC_CONTROL_LINE_STATE_DTR : 0) |
+                              (rts ? CDC_CONTROL_LINE_STATE_RTS : 0);
+
+  return tuh_cdc_set_control_line_state(_idx, line_state, complete_cb,
+                                        user_data);
+}
+
+bool Adafruit_USBH_CDC::setBaudrate(uint32_t baudrate,
+                                    tuh_xfer_cb_t complete_cb,
+                                    uintptr_t user_data) {
+  if (!tuh_cdc_mounted(_idx)) {
+    return false;
+  }
+
+  return tuh_cdc_set_baudrate(_idx, baudrate, complete_cb, user_data);
+}
+
+//--------------------------------------------------------------------+
+// Stream API
+//--------------------------------------------------------------------+
 
 int Adafruit_USBH_CDC::available(void) {
   return (int)tuh_cdc_read_available(_idx);

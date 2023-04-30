@@ -38,6 +38,9 @@ public:
   void begin(unsigned long baudrate);
   void begin(unsigned long baudrate, uint16_t config);
 
+  bool mount(uint8_t idx);
+  void umount(uint8_t idx);
+
   // unbind cdc interface
   void end(void);
 
@@ -47,6 +50,15 @@ public:
 
   // if cdc's DTR is asserted
   bool connected(void);
+
+  // Line encoding
+  uint32_t baud();
+
+  //------------- Control API -------------//
+  bool setDtrRts(bool dtr, bool rts, tuh_xfer_cb_t complete_cb = NULL,
+                 uintptr_t user_data = 0);
+  bool setBaudrate(uint32_t baudrate, tuh_xfer_cb_t complete_cb = NULL,
+                   uintptr_t user_data = 0);
 
   //------------- Stream API -------------//
   virtual int available(void);
