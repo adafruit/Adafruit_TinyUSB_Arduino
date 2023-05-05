@@ -42,6 +42,11 @@ void Adafruit_USBH_CDC::begin(unsigned long baudrate) {
   if (_baud == 0) {
     _baud = 115200; // default, backward compatible with previous API begin(0)
   }
+
+  // if already mounted, this will set baudrate
+  if (mounted()) {
+    setBaudrate(_baud);
+  }
 }
 
 void Adafruit_USBH_CDC::begin(unsigned long baudrate, uint16_t config) {
@@ -101,6 +106,11 @@ bool Adafruit_USBH_CDC::setBaudrate(uint32_t baudrate,
                                     uintptr_t user_data) {
   if (!tuh_cdc_mounted(_idx)) {
     return false;
+  }
+
+  if (baud() == baudrate) {
+    // skip if already matched
+    return true;
   }
 
   return tuh_cdc_set_baudrate(_idx, baudrate, complete_cb, user_data);
