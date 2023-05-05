@@ -56,10 +56,8 @@ Adafruit_USBH_CDC  SerialHost;
 //--------------------------------------------------------------------+
 
 void setup() {
-  Serial1.begin(115200);
-
   Serial.begin(115200);
-  while ( !Serial ) delay(10);   // wait for native usb
+  // while ( !Serial ) delay(10);   // wait for native usb
 
   Serial.println("TinyUSB Host Serial Echo Example");
 }
@@ -89,7 +87,7 @@ void loop()
 //--------------------------------------------------------------------+
 
 void setup1() {
-  while ( !Serial ) delay(10);   // wait for native usb
+  // while ( !Serial ) delay(10);   // wait for native usb
   Serial.println("Core1 setup to run TinyUSB host with pio-usb");
 
   // Check for CPU frequency, must be multiple of 120Mhz for bit-banging USB
@@ -125,6 +123,8 @@ void setup1() {
   // Note: For rp2040 pico-pio-usb, calling USBHost.begin() on core1 will have most of the
   // host bit-banging processing works done in core1 to free up core0 for other works
   USBHost.begin(1);
+
+  SerialHost.begin(115200);
 }
 
 void loop1()
@@ -140,23 +140,20 @@ void loop1()
 //--------------------------------------------------------------------+
 // TinyUSB Host callbacks
 //--------------------------------------------------------------------+
+extern "C" {
 
 // Invoked when a device with CDC interface is mounted
 // idx is index of cdc interface in the internal pool.
 void tuh_cdc_mount_cb(uint8_t idx) {
   // bind SerialHost object to this interface index
-  SerialHost.setInterfaceIndex(idx);
-  SerialHost.begin(115200);
-
+  SerialHost.mount(idx);
   Serial.println("SerialHost is connected to a new CDC device");
 }
 
 // Invoked when a device with CDC interface is unmounted
 void tuh_cdc_umount_cb(uint8_t idx) {
-  if (idx == SerialHost.getInterfaceIndex()) {
-    // unbind SerialHost if this interface is unmounted
-    SerialHost.end();
+  SerialHost.umount(idx);
+  Serial.println("SerialHost is disconnected");
+}
 
-    Serial.println("SerialHost is disconnected");
-  }
 }
