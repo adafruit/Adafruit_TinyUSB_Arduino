@@ -15,11 +15,10 @@
  * - Device run on native usb controller (controller0)
  * - Host run on bit-banging 2 GPIOs with the help of Pico-PIO-USB library (controller1)
  *
- * Example sketch receive keyboard report from host interface (from e.g consumer keyboard)
- * and remap it to another key and send it via device interface (to PC). For simplicity,
- * this example only toggle shift key to the report, effectively remap:
- * - all character key <-> upper case
- * - number <-> its symbol (with shift)
+ * Example sketch receive mouse report from host interface (from e.g consumer mouse)
+ * and reduce large motions due to tremors by applying the natural log function.
+ * It handles negative values and a dead zone where small values will not be adjusted.
+ * Adjusted mouse movement are send via device interface (to PC).
  *
  * Requirements:
  * - [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB) library
