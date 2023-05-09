@@ -14,11 +14,9 @@
  * - Device run on native usb controller (controller0)
  * - Host run on bit-banging 2 GPIOs with the help of Pico-PIO-USB library (controller1)
  *
- * Example sketch receive keyboard report from host interface (from e.g consumer keyboard)
- * and remap it to another key and send it via device interface (to PC). For simplicity,
- * this example only toggle shift key to the report, effectively remap:
- * - all character key <-> upper case
- * - number <-> its symbol (with shift)
+ * Example sketch receive mouse report from host interface (from e.g consumer mouse)
+ * and apply a butterworth low pass filter with a specific CUTOFF_FREQUENCY on hid mouse movement report.
+ * Filtered report are send via device interface (to PC) acting as a "Mouse Tremor Filter".
  *
  * Requirements:
  * - [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB) library
