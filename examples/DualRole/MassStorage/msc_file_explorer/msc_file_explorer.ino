@@ -100,6 +100,19 @@ void setup1() {
 
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
   pio_cfg.pin_dp = PIN_USB_HOST_DP;
+
+#if defined(ARDUINO_RASPBERRY_PI_PICO_W)
+  // For pico-w, PIO is also used to communicate with cyw43
+  // Therefore we need to alternate the pio-usb configuration
+  // details https://github.com/sekigon-gonnoc/Pico-PIO-USB/issues/46
+  pio_cfg.sm_tx      = 3;
+  pio_cfg.sm_rx      = 2;
+  pio_cfg.sm_eop     = 3;
+  pio_cfg.pio_rx_num = 0;
+  pio_cfg.pio_tx_num = 1;
+  pio_cfg.tx_ch      = 9;
+#endif
+
   USBHost.configure_pio_usb(1, &pio_cfg);
 
   // run host stack on controller (rhport) 1
