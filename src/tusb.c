@@ -36,7 +36,7 @@
 #endif
 
 #if CFG_TUH_ENABLED
-#include "host/usbh_classdriver.h"
+#include "host/usbh_pvt.h"
 #endif
 
 //--------------------------------------------------------------------+
@@ -437,6 +437,10 @@ char const* const tu_str_std_request[] =
   "Get Interface"     ,
   "Set Interface"     ,
   "Synch Frame"
+};
+
+char const* const tu_str_xfer_result[] = {
+    "OK", "FAILED", "STALLED", "TIMEOUT"
 };
 
 #endif
