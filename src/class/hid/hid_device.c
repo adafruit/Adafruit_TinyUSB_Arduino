@@ -36,6 +36,15 @@
 
 #include "hid_device.h"
 
+// ESP32 out-of-sync
+#ifndef CFG_TUD_MEM_SECTION
+  #define CFG_TUD_MEM_SECTION CFG_TUSB_MEM_SECTION
+#endif
+
+#ifndef tu_static
+  #define tu_static static
+#endif
+
 //--------------------------------------------------------------------+
 // MACRO CONSTANT TYPEDEF
 //--------------------------------------------------------------------+

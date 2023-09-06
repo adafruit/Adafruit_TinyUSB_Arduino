@@ -35,6 +35,11 @@
 #include "device/usbd.h"
 #include "device/usbd_pvt.h"
 
+// ESP32 out-of-sync
+#ifndef CFG_TUD_LOG_LEVEL
+  #define CFG_TUD_LOG_LEVEL 2
+#endif
+
 //--------------------------------------------------------------------+
 // USBD Configuration
 //--------------------------------------------------------------------+

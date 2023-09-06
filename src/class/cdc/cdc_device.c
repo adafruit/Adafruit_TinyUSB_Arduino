@@ -33,6 +33,15 @@
 
 #include "cdc_device.h"
 
+// ESP32 out-of-sync
+#ifndef CFG_TUD_MEM_SECTION
+  #define CFG_TUD_MEM_SECTION CFG_TUSB_MEM_SECTION
+#endif
+
+#ifndef tu_static
+  #define tu_static static
+#endif
+
 // Level where CFG_TUSB_DEBUG must be at least for this driver is logged
 #ifndef CFG_TUD_CDC_LOG_LEVEL
   #define CFG_TUD_CDC_LOG_LEVEL   CFG_TUD_LOG_LEVEL
