@@ -585,7 +585,7 @@ bool tuh_control_xfer (tuh_xfer_t* xfer)
   TU_LOG_USBH("[%u:%u] %s: ", rhport, daddr,
               (xfer->setup->bmRequestType_bit.type == TUSB_REQ_TYPE_STANDARD && xfer->setup->bRequest <= TUSB_REQ_SYNCH_FRAME) ?
                   tu_str_std_request[xfer->setup->bRequest] : "Class Request");
-  TU_LOG_PTR(CFG_TUH_LOG_LEVEL, xfer->setup);
+  TU_LOG_ARR(CFG_TUH_LOG_LEVEL, xfer->setup, 8);
   TU_LOG_USBH("\r\n");
 
   if (xfer->complete_cb)

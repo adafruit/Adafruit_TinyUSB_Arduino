@@ -35,9 +35,27 @@
 #include "device/usbd.h"
 #include "device/usbd_pvt.h"
 
+//--------------------------------------------------------------------+
 // ESP32 out-of-sync
+//--------------------------------------------------------------------+
+#if defined(ARDUINO_ARCH_ESP32) && !defined(tu_static)
+#define tu_static static
+static inline int tu_memset_s(void *dest, size_t destsz, int ch, size_t count) { if (count > destsz) { return -1; } memset(dest, ch, count); return 0; }
+static inline int tu_memcpy_s(void *dest, size_t destsz, const void * src, size_t count ) { if (count > destsz) { return -1; } memcpy(dest, src, count); return 0; }
+TU_ATTR_WEAK bool dcd_edpt_iso_alloc(uint8_t rhport, uint8_t ep_addr, uint16_t largest_packet_size);
+TU_ATTR_WEAK bool dcd_edpt_iso_activate(uint8_t rhport,  tusb_desc_endpoint_t const * p_endpoint_desc);
+#endif
+
+#ifndef CFG_TUD_MEM_SECTION
+  #define CFG_TUD_MEM_SECTION CFG_TUSB_MEM_SECTION
+#endif
+
 #ifndef CFG_TUD_LOG_LEVEL
   #define CFG_TUD_LOG_LEVEL 2
+#endif
+
+#ifndef TU_LOG_USBD
+  #define TU_LOG_USBD(...)   TU_LOG(CFG_TUD_LOG_LEVEL, __VA_ARGS__)
 #endif
 
 //--------------------------------------------------------------------+
@@ -511,8 +529,11 @@ void tud_task_ext(uint32_t timeout_ms, bool in_isr)
       break;
 
       case DCD_EVENT_SETUP_RECEIVED:
-        TU_LOG_PTR(CFG_TUD_LOG_LEVEL, &event.setup_received);
+        #if CFG_TUSB_DEBUG >= CFG_TUD_LOG_LEVEL
+        //TU_LOG_ARR(CFG_TUD_LOG_LEVEL, &event.setup_received, 8);
+        tu_print_arr(&event.setup_received, 8);
         TU_LOG_USBD("\r\n");
+        #endif
 
         // Mark as connected after receiving 1st setup packet.
         // But it is easier to set it every time instead of wasting time to check then set
