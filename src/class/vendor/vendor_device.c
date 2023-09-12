@@ -35,12 +35,15 @@
 
 //--------------------------------------------------------------------+
 // ESP32 out-of-sync
+// Somehow we have linking issue: multiple definition of vendor APIs with arduino-esp32 master
+// skip this driver entirely and used the pre-compiled libarduino_tinyusb.a instead
 //--------------------------------------------------------------------+
 #if defined(ARDUINO_ARCH_ESP32) && !defined(tu_static)
 #define tu_static static
 static inline int tu_memset_s(void *dest, size_t destsz, int ch, size_t count) { if (count > destsz) { return -1; } memset(dest, ch, count); return 0; }
 static inline int tu_memcpy_s(void *dest, size_t destsz, const void * src, size_t count ) { if (count > destsz) { return -1; } memcpy(dest, src, count); return 0; }
-#endif
+
+#else
 
 #ifndef CFG_TUD_MEM_SECTION
   #define CFG_TUD_MEM_SECTION CFG_TUSB_MEM_SECTION
@@ -301,4 +304,5 @@ bool vendord_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint
   return true;
 }
 
+#endif
 #endif
