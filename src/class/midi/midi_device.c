@@ -37,6 +37,23 @@
 #include "midi_device.h"
 
 //--------------------------------------------------------------------+
+// ESP32 out-of-sync
+//--------------------------------------------------------------------+
+#if defined(ARDUINO_ARCH_ESP32) && !defined(tu_static)
+#define tu_static static
+static inline int tu_memset_s(void *dest, size_t destsz, int ch, size_t count) { if (count > destsz) { return -1; } memset(dest, ch, count); return 0; }
+static inline int tu_memcpy_s(void *dest, size_t destsz, const void * src, size_t count ) { if (count > destsz) { return -1; } memcpy(dest, src, count); return 0; }
+#endif
+
+#ifndef CFG_TUD_MEM_SECTION
+  #define CFG_TUD_MEM_SECTION CFG_TUSB_MEM_SECTION
+#endif
+
+#ifndef CFG_TUD_LOG_LEVEL
+  #define CFG_TUD_LOG_LEVEL 2
+#endif
+
+//--------------------------------------------------------------------+
 // MACRO CONSTANT TYPEDEF
 //--------------------------------------------------------------------+
 
@@ -82,7 +99,7 @@ typedef struct
 //--------------------------------------------------------------------+
 // INTERNAL OBJECT & FUNCTION DECLARATION
 //--------------------------------------------------------------------+
-CFG_TUSB_MEM_SECTION midid_interface_t _midid_itf[CFG_TUD_MIDI];
+CFG_TUD_MEM_SECTION midid_interface_t _midid_itf[CFG_TUD_MIDI];
 
 bool tud_midi_n_mounted (uint8_t itf)
 {

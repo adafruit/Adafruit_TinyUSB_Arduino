@@ -37,6 +37,23 @@
 #include "hid_device.h"
 
 //--------------------------------------------------------------------+
+// ESP32 out-of-sync
+//--------------------------------------------------------------------+
+#if defined(ARDUINO_ARCH_ESP32) && !defined(tu_static)
+#define tu_static static
+static inline int tu_memset_s(void *dest, size_t destsz, int ch, size_t count) { if (count > destsz) { return -1; } memset(dest, ch, count); return 0; }
+static inline int tu_memcpy_s(void *dest, size_t destsz, const void * src, size_t count ) { if (count > destsz) { return -1; } memcpy(dest, src, count); return 0; }
+#endif
+
+#ifndef CFG_TUD_MEM_SECTION
+  #define CFG_TUD_MEM_SECTION CFG_TUSB_MEM_SECTION
+#endif
+
+#ifndef CFG_TUD_LOG_LEVEL
+  #define CFG_TUD_LOG_LEVEL 2
+#endif
+
+//--------------------------------------------------------------------+
 // MACRO CONSTANT TYPEDEF
 //--------------------------------------------------------------------+
 typedef struct
@@ -58,7 +75,7 @@ typedef struct
   tusb_hid_descriptor_hid_t const * hid_descriptor;
 } hidd_interface_t;
 
-CFG_TUSB_MEM_SECTION tu_static hidd_interface_t _hidd_itf[CFG_TUD_HID];
+CFG_TUD_MEM_SECTION tu_static hidd_interface_t _hidd_itf[CFG_TUD_HID];
 
 /*------------- Helpers -------------*/
 static inline uint8_t get_index_by_itfnum(uint8_t itf_num)

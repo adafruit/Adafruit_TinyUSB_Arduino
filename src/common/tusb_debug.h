@@ -46,6 +46,7 @@
 #if CFG_TUSB_DEBUG >= 2
 extern char const* const tu_str_speed[];
 extern char const* const tu_str_std_request[];
+extern char const* const tu_str_xfer_result[];
 #endif
 
 void tu_print_mem(void const *buf, uint32_t count, uint8_t indent);
@@ -132,6 +133,7 @@ static inline const char* tu_lookup_find(tu_lookup_table_t const* p_table, uint3
 #ifndef TU_LOG
   #define TU_LOG(n, ...)
   #define TU_LOG_MEM(n, ...)
+  #define TU_LOG_ARR(n, ...)
   #define TU_LOG_PTR(n, ...)
   #define TU_LOG_INT(n, ...)
   #define TU_LOG_HEX(n, ...)
@@ -143,6 +145,7 @@ static inline const char* tu_lookup_find(tu_lookup_table_t const* p_table, uint3
 
 #define TU_LOG0(...)
 #define TU_LOG0_MEM(...)
+#define TU_LOG0_ARR(...)
 #define TU_LOG0_PTR(...)
 #define TU_LOG0_INT(...)
 #define TU_LOG0_HEX(...)
@@ -150,6 +153,7 @@ static inline const char* tu_lookup_find(tu_lookup_table_t const* p_table, uint3
 #ifndef TU_LOG1
   #define TU_LOG1(...)
   #define TU_LOG1_MEM(...)
+  #define TU_LOG1_ARR(...)
   #define TU_LOG1_PTR(...)
   #define TU_LOG1_INT(...)
   #define TU_LOG1_HEX(...)
@@ -158,6 +162,7 @@ static inline const char* tu_lookup_find(tu_lookup_table_t const* p_table, uint3
 #ifndef TU_LOG2
   #define TU_LOG2(...)
   #define TU_LOG2_MEM(...)
+  #define TU_LOG2_ARR(...)
   #define TU_LOG2_PTR(...)
   #define TU_LOG2_INT(...)
   #define TU_LOG2_HEX(...)
@@ -166,6 +171,7 @@ static inline const char* tu_lookup_find(tu_lookup_table_t const* p_table, uint3
 #ifndef TU_LOG3
   #define TU_LOG3(...)
   #define TU_LOG3_MEM(...)
+  #define TU_LOG3_ARR(...)
   #define TU_LOG3_PTR(...)
   #define TU_LOG3_INT(...)
   #define TU_LOG3_HEX(...)

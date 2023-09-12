@@ -33,13 +33,20 @@
  extern "C" {
 #endif
 
+// Level where CFG_TUSB_DEBUG must be at least for USBD is logged
+#ifndef CFG_TUD_LOG_LEVEL
+#define CFG_TUD_LOG_LEVEL   2
+#endif
+
+#define TU_LOG_USBD(...)   TU_LOG(CFG_TUD_LOG_LEVEL, __VA_ARGS__)
+
 //--------------------------------------------------------------------+
 // Class Driver API
 //--------------------------------------------------------------------+
 
 typedef struct
 {
-  #if CFG_TUSB_DEBUG >= 2
+  #if CFG_TUSB_DEBUG >= CFG_TUD_LOG_LEVEL
   char const* name;
   #endif
 
@@ -52,7 +59,7 @@ typedef struct
 } usbd_class_driver_t;
 
 // Invoked when initializing device stack to get additional class drivers.
-// Can optionally implemented by application to extend/overwrite class driver support.
+// Can be implemented by application to extend/overwrite class driver support.
 // Note: The drivers array must be accessible at all time when stack is active
 usbd_class_driver_t const* usbd_app_driver_get_cb(uint8_t* driver_count) TU_ATTR_WEAK;
 
