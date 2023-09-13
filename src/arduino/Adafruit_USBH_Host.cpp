@@ -29,7 +29,24 @@
 #include "Adafruit_TinyUSB_API.h"
 #include "Adafruit_USBH_Host.h"
 
-Adafruit_USBH_Host::Adafruit_USBH_Host(void) {}
+#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
+static void max3421_isr(void);
+#endif
+
+Adafruit_USBH_Host *Adafruit_USBH_Host::_instance = NULL;
+
+Adafruit_USBH_Host::Adafruit_USBH_Host(void) {
+  Adafruit_USBH_Host::_instance = this;
+  _spi = NULL;
+  _cs = _intr = -1;
+}
+
+Adafruit_USBH_Host::Adafruit_USBH_Host(SPIClass *spi, int8_t cs, int8_t intr) {
+  Adafruit_USBH_Host::_instance = this;
+  _spi = spi;
+  _cs = cs;
+  _intr = intr;
+}
 
 bool Adafruit_USBH_Host::configure(uint8_t rhport, uint32_t cfg_id,
                                    const void *cfg_param) {
@@ -43,7 +60,26 @@ bool Adafruit_USBH_Host::configure_pio_usb(uint8_t rhport,
 }
 #endif
 
-bool Adafruit_USBH_Host::begin(uint8_t rhport) { return tuh_init(rhport); }
+bool Adafruit_USBH_Host::begin(uint8_t rhport) {
+#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
+  if (_spi == NULL || _intr < 0 || _cs < 0) {
+    return false;
+  }
+
+  // CS pin
+  pinMode(_cs, OUTPUT);
+  digitalWrite(_cs, HIGH);
+
+  // SPI init
+  SPI.begin();
+
+  // Interrupt pin
+  pinMode(_intr, INPUT_PULLUP);
+  attachInterrupt(_intr, max3421_isr, FALLING);
+#endif
+
+  return tuh_init(rhport);
+}
 
 void Adafruit_USBH_Host::task(void) { tuh_task(); }
 
@@ -76,4 +112,53 @@ TU_ATTR_WEAK void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
   (void)report;
   (void)len;
 }
+
+//--------------------------------------------------------------------+
+// USB Host using MAX3421E
+//--------------------------------------------------------------------+
+#if CFG_TUH_ENABLED && defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
+
+static void max3421_isr(void) { tuh_int_handler(1); }
+
+extern "C" {
+
+void tuh_max3421_spi_cs_api(uint8_t rhport, bool active) {
+  (void)rhport;
+  if (!Adafruit_USBH_Host::_instance) {
+    return;
+  }
+
+  digitalWrite(Adafruit_USBH_Host::_instance->_cs, active ? LOW : HIGH);
+}
+
+bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
+                              size_t tx_len, uint8_t *rx_buf, size_t rx_len) {
+  (void)rhport;
+  if (!Adafruit_USBH_Host::_instance) {
+    return false;
+  }
+
+  return true;
+}
+
+void tuh_max3421_int_api(uint8_t rhport, bool enabled) {
+  (void)rhport;
+  if (!Adafruit_USBH_Host::_instance) {
+    return;
+  }
+
+#ifdef ARDUINO_ARCH_SAMD
+#ifdef __SAMD51
+#else
+  if (enabled) {
+    NVIC_EnableIRQ(EIC_IRQn);
+  } else {
+    NVIC_DisableIRQ(EIC_IRQn);
+  }
+#endif
+#endif
+}
+}
+#endif
+
 #endif

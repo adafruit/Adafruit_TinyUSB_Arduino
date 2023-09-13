@@ -38,12 +38,6 @@ extern "C" {
 #define CFG_TUSB_MCU OPT_MCU_SAMD21
 #endif
 
-#ifdef USE_TINYUSB
-#define CFG_TUSB_RHPORT0_MODE OPT_MODE_DEVICE
-#else
-#define CFG_TUSB_RHPORT0_MODE OPT_MODE_NONE
-#endif
-
 #define CFG_TUSB_OS OPT_OS_NONE
 
 #ifndef CFG_TUSB_DEBUG
@@ -52,6 +46,13 @@ extern "C" {
 
 #define CFG_TUSB_MEM_SECTION
 #define CFG_TUSB_MEM_ALIGN TU_ATTR_ALIGNED(4)
+
+// Enable device stack
+#define CFG_TUD_ENABLED 1
+
+// Enable host stack with MAX3421E (host shield)
+#define CFG_TUH_ENABLED 1
+#define CFG_TUH_MAX3421 1
 
 //--------------------------------------------------------------------
 // DEVICE CONFIGURATION

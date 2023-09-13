@@ -26,16 +26,32 @@
 #define ADAFRUIT_USBH_HOST_H_
 
 #include "Adafruit_USBD_Interface.h"
+#include "SPI.h"
 #include "tusb.h"
 
 #ifdef ARDUINO_ARCH_ESP32
 #include "esp32-hal-tinyusb.h"
 #endif
 
+extern "C" {
+void tuh_max3421_spi_cs_api(uint8_t rhport, bool active);
+bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
+                              size_t tx_len, uint8_t *rx_buf, size_t rx_len);
+void tuh_max3421_int_api(uint8_t rhport, bool enabled);
+}
+
 class Adafruit_USBH_Host {
 private:
+  SPIClass *_spi;
+  int8_t _cs;
+  int8_t _intr;
+
 public:
+  // default constructor
   Adafruit_USBH_Host(void);
+
+  // constructor for using MAX3421E (host shield)
+  Adafruit_USBH_Host(SPIClass *spi, int8_t cs, int8_t intr);
 
   bool configure(uint8_t rhport, uint32_t cfg_id, const void *cfg_param);
 
@@ -46,6 +62,9 @@ public:
   bool begin(uint8_t rhport);
   void task(void);
 
+  //------------- internal usage -------------//
+  static Adafruit_USBH_Host *_instance;
+
 private:
   //  uint16_t const *descrip`tor_string_cb(uint8_t index, uint16_t langid);
   //
@@ -53,14 +72,12 @@ private:
   //  friend uint8_t const *tud_descriptor_configuration_cb(uint8_t index);
   //  friend uint16_t const *tud_descriptor_string_cb(uint8_t index,
   //                                                  uint16_t langid);
+
+  friend void tuh_max3421_spi_cs_api(uint8_t rhport, bool active);
+  friend bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
+                                       size_t tx_len, uint8_t *rx_buf,
+                                       size_t rx_len);
+  friend void tuh_max3421_int_api(uint8_t rhport, bool enabled);
 };
 
-// extern Adafruit_USBH_Host TinyUSBHost;
-//
-//// USBHost has a high chance to conflict with other usb stack
-//// only define if supported BSP
-// #ifdef USE_TINYUSB
-// #define USBHost TinyUSBHost
-// #endif
-
-#endif /* ADAFRUIT_USBH_HOST_H_ */
+#endif
