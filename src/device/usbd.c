@@ -35,17 +35,6 @@
 #include "device/usbd.h"
 #include "device/usbd_pvt.h"
 
-//--------------------------------------------------------------------+
-// ESP32 out-of-sync
-//--------------------------------------------------------------------+
-#if defined(ARDUINO_ARCH_ESP32) && !defined(tu_static)
-#define tu_static static
-static inline int tu_memset_s(void *dest, size_t destsz, int ch, size_t count) { if (count > destsz) { return -1; } memset(dest, ch, count); return 0; }
-static inline int tu_memcpy_s(void *dest, size_t destsz, const void * src, size_t count ) { if (count > destsz) { return -1; } memcpy(dest, src, count); return 0; }
-TU_ATTR_WEAK bool dcd_edpt_iso_alloc(uint8_t rhport, uint8_t ep_addr, uint16_t largest_packet_size);
-TU_ATTR_WEAK bool dcd_edpt_iso_activate(uint8_t rhport,  tusb_desc_endpoint_t const * p_endpoint_desc);
-#endif
-
 #ifndef CFG_TUD_MEM_SECTION
   #define CFG_TUD_MEM_SECTION CFG_TUSB_MEM_SECTION
 #endif
@@ -56,6 +45,32 @@ TU_ATTR_WEAK bool dcd_edpt_iso_activate(uint8_t rhport,  tusb_desc_endpoint_t co
 
 #ifndef TU_LOG_USBD
   #define TU_LOG_USBD(...)   TU_LOG(CFG_TUD_LOG_LEVEL, __VA_ARGS__)
+#endif
+
+//--------------------------------------------------------------------+
+// ESP32 out-of-sync
+//--------------------------------------------------------------------+
+#if defined(ARDUINO_ARCH_ESP32)
+
+#ifndef tu_static
+#define tu_static static
+static inline int tu_memset_s(void *dest, size_t destsz, int ch, size_t count) { if (count > destsz) { return -1; } memset(dest, ch, count); return 0; }
+static inline int tu_memcpy_s(void *dest, size_t destsz, const void * src, size_t count ) { if (count > destsz) { return -1; } memcpy(dest, src, count); return 0; }
+TU_ATTR_WEAK bool dcd_edpt_iso_alloc(uint8_t rhport, uint8_t ep_addr, uint16_t largest_packet_size);
+TU_ATTR_WEAK bool dcd_edpt_iso_activate(uint8_t rhport,  tusb_desc_endpoint_t const * p_endpoint_desc);
+#endif
+
+#ifndef TU_LOG_BUF
+#if CFG_TUSB_DEBUG >= CFG_TUD_LOG_LEVEL
+  static inline void tu_print_buf(uint8_t const* buf, uint32_t bufsize) {
+    for(uint32_t i=0; i<bufsize; i++) tu_printf("%02X ", buf[i]);
+  }
+  #define TU_LOG_BUF(lvl, _buf, _bufsize)  tu_print_buf(_buf, _bufsize)
+#else
+  #define TU_LOG_BUF(lvl, _buf, _bufsize)
+#endif
+#endif
+
 #endif
 
 //--------------------------------------------------------------------+
@@ -529,11 +544,8 @@ void tud_task_ext(uint32_t timeout_ms, bool in_isr)
       break;
 
       case DCD_EVENT_SETUP_RECEIVED:
-        #if CFG_TUSB_DEBUG >= CFG_TUD_LOG_LEVEL
-        //TU_LOG_ARR(CFG_TUD_LOG_LEVEL, &event.setup_received, 8);
-        tu_print_arr(&event.setup_received, 8);
+        TU_LOG_BUF(CFG_TUD_LOG_LEVEL, &event.setup_received, 8);
         TU_LOG_USBD("\r\n");
-        #endif
 
         // Mark as connected after receiving 1st setup packet.
         // But it is easier to set it every time instead of wasting time to check then set
