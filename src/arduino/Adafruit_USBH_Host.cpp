@@ -199,6 +199,14 @@ void tuh_max3421_int_api(uint8_t rhport, bool enabled) {
     NVIC_DisableIRQ(EIC_IRQn);
   }
 #endif
+
+#elif defined(ARDUINO_NRF52_ADAFRUIT)
+  if (enabled) {
+    NVIC_EnableIRQ(GPIOTE_IRQn);
+  } else {
+    NVIC_DisableIRQ(GPIOTE_IRQn);
+  }
+
 #endif
 }
 }

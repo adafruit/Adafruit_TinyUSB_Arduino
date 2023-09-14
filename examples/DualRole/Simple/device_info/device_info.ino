@@ -62,10 +62,8 @@
 #include "Adafruit_TinyUSB.h"
 
 #if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
-
 #include "SPI.h"
-
-// USB Host object using MAX3421E: SPI, CS, INT
+// USB Host using MAX3421E: SPI, CS, INT
 Adafruit_USBH_Host USBHost(&SPI, 10, 9);
 #else
 Adafruit_USBH_Host USBHost;
@@ -93,7 +91,7 @@ void setup() {
   // init host stack on controller (rhport) 1
   USBHost.begin(1);
 
-  while ( !Serial ) delay(10);   // wait for native usb
+//  while ( !Serial ) delay(10);   // wait for native usb
   Serial.println("TinyUSB Dual Device Info Example");
 }
 

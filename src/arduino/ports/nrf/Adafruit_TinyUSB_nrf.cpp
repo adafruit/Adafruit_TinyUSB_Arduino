@@ -68,7 +68,8 @@ static void usb_device_task(void *param) {
   // 2 is highest for application
   NVIC_SetPriority(USBD_IRQn, 2);
 
-  tusb_init();
+  // init device on rhport0
+  tud_init(0);
 
   usb_hardware_init();
 
