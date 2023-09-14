@@ -57,20 +57,34 @@ void TinyUSB_Device_FlushCDC(void) {
 
 // Debug log with Serial1
 #if CFG_TUSB_DEBUG && defined(CFG_TUSB_DEBUG_PRINTF)
+// #define USE_SEGGER_RTT
+
+#ifdef USE_SEGGER_RTT
+#include "SEGGER_RTT/RTT/SEGGER_RTT.h"
+#endif
+
 __attribute__((used)) int CFG_TUSB_DEBUG_PRINTF(const char *__restrict format,
                                                 ...) {
+#ifndef USE_SEGGER_RTT
   static bool ser1_inited = false;
   if (!ser1_inited) {
     ser1_inited = true;
     Serial1.begin(115200);
   }
+#endif
 
   char buf[256];
   int len;
   va_list ap;
   va_start(ap, format);
   len = vsnprintf(buf, sizeof(buf), format, ap);
+
+#ifdef USE_SEGGER_RTT
+  SEGGER_RTT_Write(0, buf, len);
+#else
   Serial1.write(buf);
+#endif
+
   va_end(ap);
   return len;
 }

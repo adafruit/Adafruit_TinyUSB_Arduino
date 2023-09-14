@@ -26,8 +26,8 @@
 #define ADAFRUIT_USBH_HOST_H_
 
 #include "Adafruit_USBD_Interface.h"
-#include "SPI.h"
 #include "tusb.h"
+#include <SPI.h>
 
 #ifdef ARDUINO_ARCH_ESP32
 #include "esp32-hal-tinyusb.h"

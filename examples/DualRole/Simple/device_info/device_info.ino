@@ -40,7 +40,6 @@
         bNumConfigurations  1
  *
  */
-
 #ifdef ARDUINO_ARCH_RP2040
 // pio-usb is required for rp2040 host
 #include "pio_usb.h"
@@ -63,6 +62,7 @@
 #include "Adafruit_TinyUSB.h"
 
 #if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
+
 #include "SPI.h"
 
 // USB Host object using MAX3421E: SPI, CS, INT
@@ -86,18 +86,20 @@ typedef struct {
 dev_info_t dev_info[CFG_TUH_DEVICE_MAX] = { 0 };
 
 #if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
+
 void setup() {
   Serial.begin(115200);
-  //while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.println("TinyUSB Dual Device Info Example");
-
-  // run host stack on controller (rhport) 1
+  // init host stack on controller (rhport) 1
   USBHost.begin(1);
+
+  while ( !Serial ) delay(10);   // wait for native usb
+  Serial.println("TinyUSB Dual Device Info Example");
 }
 
 void loop() {
   USBHost.task();
+  Serial.flush();
 }
 
 #elif defined(ARDUINO_ARCH_RP2040)
@@ -171,19 +173,20 @@ void loop1() {
 //--------------------------------------------------------------------+
 // TinyUSB Host callbacks
 //--------------------------------------------------------------------+
-void print_device_descriptor(tuh_xfer_t* xfer);
+void print_device_descriptor(tuh_xfer_t *xfer);
+
 void utf16_to_utf8(uint16_t *temp_buf, size_t buf_len);
 
 void print_lsusb(void) {
   bool no_device = true;
-  for ( uint8_t daddr = 1; daddr < CFG_TUH_DEVICE_MAX+1; daddr++ ) {
+  for (uint8_t daddr = 1; daddr < CFG_TUH_DEVICE_MAX + 1; daddr++) {
     // TODO can use tuh_mounted(daddr), but tinyusb has an bug
     // use local connected flag instead
-    dev_info_t* dev = &dev_info[daddr-1];
-    if ( dev->mounted ) {
+    dev_info_t *dev = &dev_info[daddr - 1];
+    if (dev->mounted) {
       Serial.printf("Device %u: ID %04x:%04x %s %s\r\n", daddr,
                     dev->desc_device.idVendor, dev->desc_device.idProduct,
-                    (char*) dev->manufacturer, (char*) dev->product);
+                    (char *) dev->manufacturer, (char *) dev->product);
 
       no_device = false;
     }
@@ -195,11 +198,10 @@ void print_lsusb(void) {
 }
 
 // Invoked when device is mounted (configured)
-void tuh_mount_cb (uint8_t daddr)
-{
+void tuh_mount_cb(uint8_t daddr) {
   Serial.printf("Device attached, address = %d\r\n", daddr);
 
-  dev_info_t* dev = &dev_info[daddr-1];
+  dev_info_t *dev = &dev_info[daddr - 1];
   dev->mounted = true;
 
   // Get Device Descriptor
@@ -207,27 +209,24 @@ void tuh_mount_cb (uint8_t daddr)
 }
 
 /// Invoked when device is unmounted (bus reset/unplugged)
-void tuh_umount_cb(uint8_t daddr)
-{
+void tuh_umount_cb(uint8_t daddr) {
   Serial.printf("Device removed, address = %d\r\n", daddr);
-  dev_info_t* dev = &dev_info[daddr-1];
+  dev_info_t *dev = &dev_info[daddr - 1];
   dev->mounted = false;
 
   // print device summary
   print_lsusb();
 }
 
-void print_device_descriptor(tuh_xfer_t* xfer)
-{
-  if ( XFER_RESULT_SUCCESS != xfer->result )
-  {
+void print_device_descriptor(tuh_xfer_t *xfer) {
+  if (XFER_RESULT_SUCCESS != xfer->result) {
     Serial.printf("Failed to get device descriptor\r\n");
     return;
   }
 
   uint8_t const daddr = xfer->daddr;
-  dev_info_t* dev = &dev_info[daddr-1];
-  tusb_desc_device_t* desc = &dev->desc_device;
+  dev_info_t *dev = &dev_info[daddr - 1];
+  tusb_desc_device_t *desc = &dev->desc_device;
 
   Serial.printf("Device %u: ID %04x:%04x\r\n", daddr, desc->idVendor, desc->idProduct);
   Serial.printf("Device Descriptor:\r\n");
@@ -244,23 +243,26 @@ void print_device_descriptor(tuh_xfer_t* xfer)
 
   // Get String descriptor using Sync API
   Serial.printf("  iManufacturer       %u     ", desc->iManufacturer);
-  if (XFER_RESULT_SUCCESS == tuh_descriptor_get_manufacturer_string_sync(daddr, LANGUAGE_ID, dev->manufacturer, sizeof(dev->manufacturer)) ) {
+  if (XFER_RESULT_SUCCESS ==
+      tuh_descriptor_get_manufacturer_string_sync(daddr, LANGUAGE_ID, dev->manufacturer, sizeof(dev->manufacturer))) {
     utf16_to_utf8(dev->manufacturer, sizeof(dev->manufacturer));
-    Serial.printf((char*) dev->manufacturer);
+    Serial.printf((char *) dev->manufacturer);
   }
   Serial.printf("\r\n");
 
   Serial.printf("  iProduct            %u     ", desc->iProduct);
-  if (XFER_RESULT_SUCCESS == tuh_descriptor_get_product_string_sync(daddr, LANGUAGE_ID, dev->product, sizeof(dev->product))) {
+  if (XFER_RESULT_SUCCESS ==
+      tuh_descriptor_get_product_string_sync(daddr, LANGUAGE_ID, dev->product, sizeof(dev->product))) {
     utf16_to_utf8(dev->product, sizeof(dev->product));
-    Serial.printf((char*) dev->product);
+    Serial.printf((char *) dev->product);
   }
   Serial.printf("\r\n");
 
   Serial.printf("  iSerialNumber       %u     ", desc->iSerialNumber);
-  if (XFER_RESULT_SUCCESS == tuh_descriptor_get_serial_string_sync(daddr, LANGUAGE_ID, dev->serial, sizeof(dev->serial))) {
+  if (XFER_RESULT_SUCCESS ==
+      tuh_descriptor_get_serial_string_sync(daddr, LANGUAGE_ID, dev->serial, sizeof(dev->serial))) {
     utf16_to_utf8(dev->serial, sizeof(dev->serial));
-    Serial.printf((char*) dev->serial);
+    Serial.printf((char *) dev->serial);
   }
   Serial.printf("\r\n");
 
@@ -276,7 +278,7 @@ void print_device_descriptor(tuh_xfer_t* xfer)
 
 static void _convert_utf16le_to_utf8(const uint16_t *utf16, size_t utf16_len, uint8_t *utf8, size_t utf8_len) {
   // TODO: Check for runover.
-  (void)utf8_len;
+  (void) utf8_len;
   // Get the UTF-16 length out of the data itself.
 
   for (size_t i = 0; i < utf16_len; i++) {
@@ -284,13 +286,13 @@ static void _convert_utf16le_to_utf8(const uint16_t *utf16, size_t utf16_len, ui
     if (chr < 0x80) {
       *utf8++ = chr & 0xff;
     } else if (chr < 0x800) {
-      *utf8++ = (uint8_t)(0xC0 | (chr >> 6 & 0x1F));
-      *utf8++ = (uint8_t)(0x80 | (chr >> 0 & 0x3F));
+      *utf8++ = (uint8_t) (0xC0 | (chr >> 6 & 0x1F));
+      *utf8++ = (uint8_t) (0x80 | (chr >> 0 & 0x3F));
     } else {
       // TODO: Verify surrogate.
-      *utf8++ = (uint8_t)(0xE0 | (chr >> 12 & 0x0F));
-      *utf8++ = (uint8_t)(0x80 | (chr >> 6 & 0x3F));
-      *utf8++ = (uint8_t)(0x80 | (chr >> 0 & 0x3F));
+      *utf8++ = (uint8_t) (0xE0 | (chr >> 12 & 0x0F));
+      *utf8++ = (uint8_t) (0x80 | (chr >> 6 & 0x3F));
+      *utf8++ = (uint8_t) (0x80 | (chr >> 0 & 0x3F));
     }
     // TODO: Handle UTF-16 code points that take two entries.
   }
@@ -318,6 +320,5 @@ void utf16_to_utf8(uint16_t *temp_buf, size_t buf_len) {
   size_t utf8_len = _count_utf8_bytes(temp_buf + 1, utf16_len);
 
   _convert_utf16le_to_utf8(temp_buf + 1, utf16_len, (uint8_t *) temp_buf, buf_len);
-  ((uint8_t*) temp_buf)[utf8_len] = '\0';
+  ((uint8_t *) temp_buf)[utf8_len] = '\0';
 }
-

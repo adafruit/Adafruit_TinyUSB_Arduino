@@ -138,6 +138,34 @@ bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
     return false;
   }
 
+  Adafruit_USBH_Host *host = Adafruit_USBH_Host::_instance;
+
+  // MAX3421e max clock is 26MHz
+  // Depending on mcu ports, it may need to be clipped down
+  // uint32_t max_clock = 26000000ul;
+  uint32_t max_clock = 4000000ul;
+
+  SPISettings config(max_clock, MSBFIRST, SPI_MODE0);
+  host->_spi->beginTransaction(config);
+
+  size_t count = 0;
+  while (count < tx_len || count < rx_len) {
+    uint8_t data = 0x00;
+
+    if (count < tx_len) {
+      data = tx_buf[count];
+    }
+
+    data = host->_spi->transfer(data);
+
+    if (count < rx_len) {
+      rx_buf[count] = data;
+    }
+
+    count++;
+  }
+
+  host->_spi->endTransaction();
   return true;
 }
 
