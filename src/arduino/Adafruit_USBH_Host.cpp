@@ -134,10 +134,10 @@ void tuh_max3421_spi_cs_api(uint8_t rhport, bool active) {
 bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
                               size_t tx_len, uint8_t *rx_buf, size_t rx_len) {
   (void)rhport;
+
   if (!Adafruit_USBH_Host::_instance) {
     return false;
   }
-
   Adafruit_USBH_Host *host = Adafruit_USBH_Host::_instance;
 
   // MAX3421e max clock is 26MHz
@@ -171,13 +171,24 @@ bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
 
 void tuh_max3421_int_api(uint8_t rhport, bool enabled) {
   (void)rhport;
+
   if (!Adafruit_USBH_Host::_instance) {
     return;
   }
+  Adafruit_USBH_Host *host = Adafruit_USBH_Host::_instance;
 
 #ifdef ARDUINO_ARCH_SAMD
-#ifdef __SAMD51
+#ifdef __SAMD51__
+  const IRQn_Type irq =
+      (IRQn_Type)(EIC_0_IRQn + g_APinDescription[host->_intr].ulExtInt);
+
+  if (enabled) {
+    NVIC_EnableIRQ(irq);
+  } else {
+    NVIC_DisableIRQ(irq);
+  }
 #else
+  (void)host;
   if (enabled) {
     NVIC_EnableIRQ(EIC_IRQn);
   } else {
