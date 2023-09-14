@@ -142,8 +142,12 @@ bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
 
   // MAX3421e max clock is 26MHz
   // Depending on mcu ports, it may need to be clipped down
-  // uint32_t max_clock = 26000000ul;
-  uint32_t max_clock = 4000000ul;
+#ifdef ARDUINO_ARCH_SAMD
+  // SAMD 21/51 can only work reliably at 12MHz
+  uint32_t const max_clock = 12000000ul;
+#else
+  uint32_t const max_clock = 26000000ul;
+#endif
 
   SPISettings config(max_clock, MSBFIRST, SPI_MODE0);
   host->_spi->beginTransaction(config);
