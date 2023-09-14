@@ -84,7 +84,9 @@ typedef struct {
 dev_info_t dev_info[CFG_TUH_DEVICE_MAX] = { 0 };
 
 #if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
-
+//--------------------------------------------------------------------+
+// Using Host shield MAX3421E controller
+//--------------------------------------------------------------------+
 void setup() {
   Serial.begin(115200);
 
@@ -165,6 +167,7 @@ void setup1() {
 
 void loop1() {
   USBHost.task();
+  Serial.flush();
 }
 #endif
 

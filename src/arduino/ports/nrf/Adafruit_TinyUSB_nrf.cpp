@@ -76,6 +76,7 @@ static void usb_device_task(void *param) {
   // RTOS forever loop
   while (1) {
     tud_task();
+    TinyUSB_Device_FlushCDC();
   }
 }
 

@@ -21,9 +21,12 @@
  * - CPU Speed must be either 120 or 240 Mhz. Selected via "Menu -> CPU Speed"
  */
 
+// Language ID: English
+#define LANGUAGE_ID 0x0409
+
+#ifdef ARDUINO_ARCH_RP2040
 // pio-usb is required for rp2040 host
 #include "pio_usb.h"
-#include "Adafruit_TinyUSB.h"
 
 // Pin D+ for host, D- = D+ + 1
 #ifndef PIN_USB_HOST_DP
@@ -38,34 +41,58 @@
 #ifndef PIN_5V_EN_STATE
 #define PIN_5V_EN_STATE  1
 #endif
+#endif
 
-// Language ID: English
-#define LANGUAGE_ID 0x0409
+#include "Adafruit_TinyUSB.h"
 
-// USB Host object
+#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
+
+#include "SPI.h"
+
+// USB Host using MAX3421E: SPI, CS, INT
+Adafruit_USBH_Host USBHost(&SPI, 10, 9);
+#else
 Adafruit_USBH_Host USBHost;
+#endif
+
+#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
 
 //--------------------------------------------------------------------+
-// Setup and Loop on Core0
+// Using Host shield MAX3421E controller
 //--------------------------------------------------------------------+
-
-void setup()
-{
+void setup() {
   Serial.begin(115200);
-  while ( !Serial ) delay(10);   // wait for native usb
 
-  Serial.println("TinyUSB Dual Device Info Example");
+  // init host stack on controller (rhport) 1
+  USBHost.begin(1);
+
+//  while ( !Serial ) delay(10);   // wait for native usb
+  Serial.println("TinyUSB Dual: HID Device Report Example");
 }
 
-void loop()
-{
+void loop() {
+  USBHost.task();
   Serial.flush();
 }
 
+#elif defined(ARDUINO_ARCH_RP2040)
 //--------------------------------------------------------------------+
-// Setup and Loop on Core1
+// For RP2040 use both core0 for device stack, core1 for host stack
 //--------------------------------------------------------------------+
 
+//------------- Core0 -------------//
+void setup() {
+  Serial.begin(115200);
+  while ( !Serial ) delay(10);   // wait for native usb
+
+  Serial.println("TinyUSB Dual: HID Device Report Example");
+}
+
+void loop() {
+  Serial.flush();
+}
+
+//------------- Core1 -------------//
 void setup1() {
   //while ( !Serial ) delay(10);   // wait for native usb
   Serial.println("Core1 setup to run TinyUSB host with pio-usb");
@@ -107,10 +134,11 @@ void setup1() {
   USBHost.begin(1);
 }
 
-void loop1()
-{
+void loop1() {
   USBHost.task();
 }
+
+#endif
 
 extern "C" {
 
