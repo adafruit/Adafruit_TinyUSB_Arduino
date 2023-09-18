@@ -11,16 +11,23 @@
 
 
 /* This example demonstrates use of both device and host, where
- * - Device run on native usb controller (controller0)
- * - Host run on bit-banging 2 GPIOs with the help of Pico-PIO-USB library (controller1)
+ * - Device run on native usb controller (roothub port0)
+ * - Host depending on MCUs run on either:
+ *   - rp2040: bit-banging 2 GPIOs with the help of Pico-PIO-USB library (roothub port1)
+ *   - samd21/51, nrf52840, esp32: using MAX3421e controller (host shield)
  *
  * Requirements:
- * - [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB) library
- * - 2 consecutive GPIOs: D+ is defined by PIN_USB_HOST_DP, D- = D+ +1
- * - Provide VBus (5v) and GND for peripheral
- * - CPU Speed must be either 120 or 240 Mhz. Selected via "Menu -> CPU Speed"
- *
- * RP2040 host stack will get device descriptors of attached devices and print it out via
+ * - For rp2040:
+ *   - [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB) library
+ *   - 2 consecutive GPIOs: D+ is defined by PIN_USB_HOST_DP, D- = D+ +1
+ *   - Provide VBus (5v) and GND for peripheral
+ *   - CPU Speed must be either 120 or 240 Mhz. Selected via "Menu -> CPU Speed"
+ * - For samd21/51, nrf52840, esp32:
+ *   - Additional MAX2341e USB Host shield or featherwing is required
+ *   - SPI instance, CS pin, INT pin are correctly configured in usbh_helper.h
+ */
+
+/* Host example will get device descriptors of attached devices and print it out via
  * device cdc (Serial) as follows:
  *    Device 1: ID 046d:c52f
       Device Descriptor:
@@ -41,29 +48,11 @@
  *
  */
 
-// pio-usb is required for rp2040 host
-#include "pio_usb.h"
-#include "Adafruit_TinyUSB.h"
-
-// Pin D+ for host, D- = D+ + 1
-#ifndef PIN_USB_HOST_DP
-#define PIN_USB_HOST_DP       16
-#endif
-
-// Pin for enabling Host VBUS. comment out if not used
-#ifndef PIN_5V_EN
-#define PIN_5V_EN        18
-#endif
-
-#ifndef PIN_5V_EN_STATE
-#define PIN_5V_EN_STATE  1
-#endif
+// USBHost is defined in usbh_helper.h
+#include "usbh_helper.h"
 
 // Language ID: English
 #define LANGUAGE_ID 0x0409
-
-// USB Host object
-Adafruit_USBH_Host USBHost;
 
 typedef struct {
   tusb_desc_device_t desc_device;
@@ -76,65 +65,43 @@ typedef struct {
 // CFG_TUH_DEVICE_MAX is defined by tusb_config header
 dev_info_t dev_info[CFG_TUH_DEVICE_MAX] = { 0 };
 
-//--------------------------------------------------------------------+
-// Setup and Loop on Core0
-//--------------------------------------------------------------------+
-
-// the setup function runs once when you press reset or power the board
 void setup() {
-  Serial1.begin(115200);
-
   Serial.begin(115200);
-  //while ( !Serial ) delay(10);   // wait for native usb
 
+#ifndef ARDUINO_ARCH_RP2040
+  // init host stack on controller (rhport) 1
+  // For rp2040: this is called in core1's setup1()
+  USBHost.begin(1);
+#endif
+
+//  while ( !Serial ) delay(10);   // wait for native usb
   Serial.println("TinyUSB Dual Device Info Example");
 }
 
+#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
+//--------------------------------------------------------------------+
+// Using Host shield MAX3421E controller
+//--------------------------------------------------------------------+
 void loop() {
+  USBHost.task();
+  Serial.flush();
 }
 
+#elif defined(ARDUINO_ARCH_RP2040)
 //--------------------------------------------------------------------+
-// Setup and Loop on Core1
+// For RP2040 use both core0 for device stack, core1 for host stack
 //--------------------------------------------------------------------+
 
+//------------- Core0 -------------//
+void loop() {
+
+}
+
+//------------- Core1 -------------//
 void setup1() {
   //while ( !Serial ) delay(10);   // wait for native usb
-  Serial.println("Core1 setup to run TinyUSB host with pio-usb");
-
-  // Check for CPU frequency, must be multiple of 120Mhz for bit-banging USB
-  uint32_t cpu_hz = clock_get_hz(clk_sys);
-  if ( cpu_hz != 120000000UL && cpu_hz != 240000000UL ) {
-    while ( !Serial ) {
-      delay(10);   // wait for native usb
-    }
-    Serial.printf("Error: CPU Clock = %lu, PIO USB require CPU clock must be multiple of 120 Mhz\r\n", cpu_hz);
-    Serial.printf("Change your CPU Clock to either 120 or 240 Mhz in Menu->CPU Speed \r\n");
-    while(1) {
-      delay(1);
-    }
-  }
-
-#ifdef PIN_5V_EN
-  pinMode(PIN_5V_EN, OUTPUT);
-  digitalWrite(PIN_5V_EN, PIN_5V_EN_STATE);
-#endif
-
-  pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
-  pio_cfg.pin_dp = PIN_USB_HOST_DP;
-
-#if defined(ARDUINO_RASPBERRY_PI_PICO_W)
-  // For pico-w, PIO is also used to communicate with cyw43
-  // Therefore we need to alternate the pio-usb configuration
-  // details https://github.com/sekigon-gonnoc/Pico-PIO-USB/issues/46
-  pio_cfg.sm_tx      = 3;
-  pio_cfg.sm_rx      = 2;
-  pio_cfg.sm_eop     = 3;
-  pio_cfg.pio_rx_num = 0;
-  pio_cfg.pio_tx_num = 1;
-  pio_cfg.tx_ch      = 9;
-#endif
-
-  USBHost.configure_pio_usb(1, &pio_cfg);
+  // configure pio-usb: defined in usbh_helper.h
+  rp2040_configure_pio_usb();
 
   // run host stack on controller (rhport) 1
   // Note: For rp2040 pico-pio-usb, calling USBHost.begin() on core1 will have most of the
@@ -142,27 +109,29 @@ void setup1() {
   USBHost.begin(1);
 }
 
-void loop1()
-{
+void loop1() {
   USBHost.task();
+  Serial.flush();
 }
+#endif
 
 //--------------------------------------------------------------------+
 // TinyUSB Host callbacks
 //--------------------------------------------------------------------+
-void print_device_descriptor(tuh_xfer_t* xfer);
+void print_device_descriptor(tuh_xfer_t *xfer);
+
 void utf16_to_utf8(uint16_t *temp_buf, size_t buf_len);
 
 void print_lsusb(void) {
   bool no_device = true;
-  for ( uint8_t daddr = 1; daddr < CFG_TUH_DEVICE_MAX+1; daddr++ ) {
+  for (uint8_t daddr = 1; daddr < CFG_TUH_DEVICE_MAX + 1; daddr++) {
     // TODO can use tuh_mounted(daddr), but tinyusb has an bug
     // use local connected flag instead
-    dev_info_t* dev = &dev_info[daddr-1];
-    if ( dev->mounted ) {
+    dev_info_t *dev = &dev_info[daddr - 1];
+    if (dev->mounted) {
       Serial.printf("Device %u: ID %04x:%04x %s %s\r\n", daddr,
                     dev->desc_device.idVendor, dev->desc_device.idProduct,
-                    (char*) dev->manufacturer, (char*) dev->product);
+                    (char *) dev->manufacturer, (char *) dev->product);
 
       no_device = false;
     }
@@ -174,11 +143,10 @@ void print_lsusb(void) {
 }
 
 // Invoked when device is mounted (configured)
-void tuh_mount_cb (uint8_t daddr)
-{
+void tuh_mount_cb(uint8_t daddr) {
   Serial.printf("Device attached, address = %d\r\n", daddr);
 
-  dev_info_t* dev = &dev_info[daddr-1];
+  dev_info_t *dev = &dev_info[daddr - 1];
   dev->mounted = true;
 
   // Get Device Descriptor
@@ -186,27 +154,24 @@ void tuh_mount_cb (uint8_t daddr)
 }
 
 /// Invoked when device is unmounted (bus reset/unplugged)
-void tuh_umount_cb(uint8_t daddr)
-{
+void tuh_umount_cb(uint8_t daddr) {
   Serial.printf("Device removed, address = %d\r\n", daddr);
-  dev_info_t* dev = &dev_info[daddr-1];
+  dev_info_t *dev = &dev_info[daddr - 1];
   dev->mounted = false;
 
   // print device summary
   print_lsusb();
 }
 
-void print_device_descriptor(tuh_xfer_t* xfer)
-{
-  if ( XFER_RESULT_SUCCESS != xfer->result )
-  {
+void print_device_descriptor(tuh_xfer_t *xfer) {
+  if (XFER_RESULT_SUCCESS != xfer->result) {
     Serial.printf("Failed to get device descriptor\r\n");
     return;
   }
 
   uint8_t const daddr = xfer->daddr;
-  dev_info_t* dev = &dev_info[daddr-1];
-  tusb_desc_device_t* desc = &dev->desc_device;
+  dev_info_t *dev = &dev_info[daddr - 1];
+  tusb_desc_device_t *desc = &dev->desc_device;
 
   Serial.printf("Device %u: ID %04x:%04x\r\n", daddr, desc->idVendor, desc->idProduct);
   Serial.printf("Device Descriptor:\r\n");
@@ -223,23 +188,26 @@ void print_device_descriptor(tuh_xfer_t* xfer)
 
   // Get String descriptor using Sync API
   Serial.printf("  iManufacturer       %u     ", desc->iManufacturer);
-  if (XFER_RESULT_SUCCESS == tuh_descriptor_get_manufacturer_string_sync(daddr, LANGUAGE_ID, dev->manufacturer, sizeof(dev->manufacturer)) ) {
+  if (XFER_RESULT_SUCCESS ==
+      tuh_descriptor_get_manufacturer_string_sync(daddr, LANGUAGE_ID, dev->manufacturer, sizeof(dev->manufacturer))) {
     utf16_to_utf8(dev->manufacturer, sizeof(dev->manufacturer));
-    Serial.printf((char*) dev->manufacturer);
+    Serial.printf((char *) dev->manufacturer);
   }
   Serial.printf("\r\n");
 
   Serial.printf("  iProduct            %u     ", desc->iProduct);
-  if (XFER_RESULT_SUCCESS == tuh_descriptor_get_product_string_sync(daddr, LANGUAGE_ID, dev->product, sizeof(dev->product))) {
+  if (XFER_RESULT_SUCCESS ==
+      tuh_descriptor_get_product_string_sync(daddr, LANGUAGE_ID, dev->product, sizeof(dev->product))) {
     utf16_to_utf8(dev->product, sizeof(dev->product));
-    Serial.printf((char*) dev->product);
+    Serial.printf((char *) dev->product);
   }
   Serial.printf("\r\n");
 
   Serial.printf("  iSerialNumber       %u     ", desc->iSerialNumber);
-  if (XFER_RESULT_SUCCESS == tuh_descriptor_get_serial_string_sync(daddr, LANGUAGE_ID, dev->serial, sizeof(dev->serial))) {
+  if (XFER_RESULT_SUCCESS ==
+      tuh_descriptor_get_serial_string_sync(daddr, LANGUAGE_ID, dev->serial, sizeof(dev->serial))) {
     utf16_to_utf8(dev->serial, sizeof(dev->serial));
-    Serial.printf((char*) dev->serial);
+    Serial.printf((char *) dev->serial);
   }
   Serial.printf("\r\n");
 
@@ -255,7 +223,7 @@ void print_device_descriptor(tuh_xfer_t* xfer)
 
 static void _convert_utf16le_to_utf8(const uint16_t *utf16, size_t utf16_len, uint8_t *utf8, size_t utf8_len) {
   // TODO: Check for runover.
-  (void)utf8_len;
+  (void) utf8_len;
   // Get the UTF-16 length out of the data itself.
 
   for (size_t i = 0; i < utf16_len; i++) {
@@ -263,13 +231,13 @@ static void _convert_utf16le_to_utf8(const uint16_t *utf16, size_t utf16_len, ui
     if (chr < 0x80) {
       *utf8++ = chr & 0xff;
     } else if (chr < 0x800) {
-      *utf8++ = (uint8_t)(0xC0 | (chr >> 6 & 0x1F));
-      *utf8++ = (uint8_t)(0x80 | (chr >> 0 & 0x3F));
+      *utf8++ = (uint8_t) (0xC0 | (chr >> 6 & 0x1F));
+      *utf8++ = (uint8_t) (0x80 | (chr >> 0 & 0x3F));
     } else {
       // TODO: Verify surrogate.
-      *utf8++ = (uint8_t)(0xE0 | (chr >> 12 & 0x0F));
-      *utf8++ = (uint8_t)(0x80 | (chr >> 6 & 0x3F));
-      *utf8++ = (uint8_t)(0x80 | (chr >> 0 & 0x3F));
+      *utf8++ = (uint8_t) (0xE0 | (chr >> 12 & 0x0F));
+      *utf8++ = (uint8_t) (0x80 | (chr >> 6 & 0x3F));
+      *utf8++ = (uint8_t) (0x80 | (chr >> 0 & 0x3F));
     }
     // TODO: Handle UTF-16 code points that take two entries.
   }
@@ -297,6 +265,5 @@ void utf16_to_utf8(uint16_t *temp_buf, size_t buf_len) {
   size_t utf8_len = _count_utf8_bytes(temp_buf + 1, utf16_len);
 
   _convert_utf16le_to_utf8(temp_buf + 1, utf16_len, (uint8_t *) temp_buf, buf_len);
-  ((uint8_t*) temp_buf)[utf8_len] = '\0';
+  ((uint8_t *) temp_buf)[utf8_len] = '\0';
 }
-

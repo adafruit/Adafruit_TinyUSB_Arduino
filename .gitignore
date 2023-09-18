@@ -2,3 +2,4 @@
 /.development
 .idea
 platformio.ini
+.pio/

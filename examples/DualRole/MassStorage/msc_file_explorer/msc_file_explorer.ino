@@ -9,43 +9,28 @@
  any redistribution
 *********************************************************************/
 
-
 /* This example demonstrates use of both device and host, where
- * - Device run on native usb controller (controller0)
- * - Host run on bit-banging 2 GPIOs with the help of Pico-PIO-USB library (controller1)
+ * - Device run on native usb controller (roothub port0)
+ * - Host depending on MCUs run on either:
+ *   - rp2040: bit-banging 2 GPIOs with the help of Pico-PIO-USB library (roothub port1)
+ *   - samd21/51, nrf52840, esp32: using MAX3421e controller (host shield)
  *
  * Requirements:
- * - [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB) library
- * - 2 consecutive GPIOs: D+ is defined by PIN_USB_HOST_DP, D- = D+ +1
- * - Provide VBus (5v) and GND for peripheral
- * - CPU Speed must be either 120 or 240 Mhz. Selected via "Menu -> CPU Speed"
+ * - For rp2040:
+ *   - [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB) library
+ *   - 2 consecutive GPIOs: D+ is defined by PIN_USB_HOST_DP, D- = D+ +1
+ *   - Provide VBus (5v) and GND for peripheral
+ *   - CPU Speed must be either 120 or 240 Mhz. Selected via "Menu -> CPU Speed"
+ * - For samd21/51, nrf52840, esp32:
+ *   - Additional MAX2341e USB Host shield or featherwing is required
+ *   - SPI instance, CS pin, INT pin are correctly configured in usbh_helper.h
  */
-
-// pio-usb is required for rp2040 host
-#include "pio_usb.h"
 
 // SdFat is required for using Adafruit_USBH_MSC_SdFatDevice
 #include "SdFat.h"
 
-// TinyUSB lib
-#include "Adafruit_TinyUSB.h"
-
-// Pin D+ for host, D- = D+ + 1
-#ifndef PIN_USB_HOST_DP
-#define PIN_USB_HOST_DP       16
-#endif
-
-// Pin for enabling Host VBUS. comment out if not used
-#ifndef PIN_5V_EN
-#define PIN_5V_EN        18
-#endif
-
-#ifndef PIN_5V_EN_STATE
-#define PIN_5V_EN_STATE  1
-#endif
-
-// USB Host object
-Adafruit_USBH_Host USBHost;
+// USBHost is defined in usbh_helper.h
+#include "usbh_helper.h"
 
 // USB Host MSC Block Device object which implemented API for use with SdFat
 Adafruit_USBH_MSC_BlockDevice msc_block_dev;
@@ -56,64 +41,40 @@ FatVolume fatfs;
 // if file system is successfully mounted on usb block device
 bool is_mounted = false;
 
-//--------------------------------------------------------------------+
-// Setup and Loop on Core0
-//--------------------------------------------------------------------+
-
-void setup()
-{
+void setup() {
   Serial.begin(115200);
-  //while ( !Serial ) delay(10);   // wait for native usb
 
+#ifndef ARDUINO_ARCH_RP2040
+  // init host stack on controller (rhport) 1
+  // For rp2040: this is called in core1's setup1()
+  USBHost.begin(1);
+#endif
+
+  // while ( !Serial ) delay(10);   // wait for native usb
   Serial.println("TinyUSB Host Mass Storage File Explorer Example");
 }
 
-void loop()
-{
+
+#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
+//--------------------------------------------------------------------+
+// Using Host shield MAX3421E controller
+//--------------------------------------------------------------------+
+void loop() {
+  USBHost.task();
+  Serial.flush();
 }
 
+#elif defined(ARDUINO_ARCH_RP2040)
 //--------------------------------------------------------------------+
-// Setup and Loop on Core1
+// For RP2040 use both core0 for device stack, core1 for host stack
 //--------------------------------------------------------------------+
+void loop() {
+}
 
+//------------- Core1 -------------//
 void setup1() {
-  //while ( !Serial ) delay(10);   // wait for native usb
-  Serial.println("Core1 setup to run TinyUSB host with pio-usb");
-
-  // Check for CPU frequency, must be multiple of 120Mhz for bit-banging USB
-  uint32_t cpu_hz = clock_get_hz(clk_sys);
-  if ( cpu_hz != 120000000UL && cpu_hz != 240000000UL ) {
-    while ( !Serial ) {
-      delay(10);   // wait for native usb
-    }
-    Serial.printf("Error: CPU Clock = %lu, PIO USB require CPU clock must be multiple of 120 Mhz\r\n", cpu_hz);
-    Serial.printf("Change your CPU Clock to either 120 or 240 Mhz in Menu->CPU Speed \r\n");
-    while(1) {
-      delay(1);
-    }
-  }
-
-#ifdef PIN_5V_EN
-  pinMode(PIN_5V_EN, OUTPUT);
-  digitalWrite(PIN_5V_EN, PIN_5V_EN_STATE);
-#endif
-
-  pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
-  pio_cfg.pin_dp = PIN_USB_HOST_DP;
-
-#if defined(ARDUINO_RASPBERRY_PI_PICO_W)
-  // For pico-w, PIO is also used to communicate with cyw43
-  // Therefore we need to alternate the pio-usb configuration
-  // details https://github.com/sekigon-gonnoc/Pico-PIO-USB/issues/46
-  pio_cfg.sm_tx      = 3;
-  pio_cfg.sm_rx      = 2;
-  pio_cfg.sm_eop     = 3;
-  pio_cfg.pio_rx_num = 0;
-  pio_cfg.pio_tx_num = 1;
-  pio_cfg.tx_ch      = 9;
-#endif
-
-  USBHost.configure_pio_usb(1, &pio_cfg);
+  // configure pio-usb: defined in usbh_helper.h
+  rp2040_configure_pio_usb();
 
   // run host stack on controller (rhport) 1
   // Note: For rp2040 pico-pio-usb, calling USBHost.begin() on core1 will have most of the
@@ -121,30 +82,32 @@ void setup1() {
   USBHost.begin(1);
 }
 
-void loop1()
-{
+void loop1() {
   USBHost.task();
 }
+
+#endif
 
 //--------------------------------------------------------------------+
 // TinyUSB Host callbacks
 //--------------------------------------------------------------------+
+extern "C"
+{
 
 // Invoked when device is mounted (configured)
-void tuh_mount_cb (uint8_t daddr)
-{
+void tuh_mount_cb(uint8_t daddr) {
   (void) daddr;
 }
 
 /// Invoked when device is unmounted (bus reset/unplugged)
-void tuh_umount_cb(uint8_t daddr)
-{
+void tuh_umount_cb(uint8_t daddr) {
   (void) daddr;
 }
 
 // Invoked when a device with MassStorage interface is mounted
-void tuh_msc_mount_cb(uint8_t dev_addr)
-{
+void tuh_msc_mount_cb(uint8_t dev_addr) {
+  Serial.printf("Device attached, address = %d\r\n", dev_addr);
+
   // Initialize block device with MSC device address
   msc_block_dev.begin(dev_addr);
 
@@ -159,9 +122,8 @@ void tuh_msc_mount_cb(uint8_t dev_addr)
 }
 
 // Invoked when a device with MassStorage interface is unmounted
-void tuh_msc_umount_cb(uint8_t dev_addr)
-{
-  (void) dev_addr;
+void tuh_msc_umount_cb(uint8_t dev_addr) {
+  Serial.printf("Device removed, address = %d\r\n", dev_addr);
 
   // unmount file system
   is_mounted = false;
@@ -171,3 +133,4 @@ void tuh_msc_umount_cb(uint8_t dev_addr)
   msc_block_dev.end();
 }
 
+}

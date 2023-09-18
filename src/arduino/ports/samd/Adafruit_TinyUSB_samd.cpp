@@ -112,11 +112,8 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
   NVIC_SetPriority((IRQn_Type)USB_IRQn, 0UL);
 #endif
 
-#if CFG_TUSB_DEBUG
-  Serial1.begin(115200);
-#endif
-
-  tusb_init();
+  // Init port 0 as device
+  tud_init(0);
 }
 
 void TinyUSB_Port_EnterDFU(void) {

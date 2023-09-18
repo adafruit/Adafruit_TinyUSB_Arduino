@@ -59,7 +59,9 @@ bool Adafruit_USBH_MSC_BlockDevice::isBusy(void) { return _busy; }
 
 bool Adafruit_USBH_MSC_BlockDevice::wait_for_io(void) {
   while (_busy) {
-    tuh_task();
+    if (tuh_task_event_ready()) {
+      tuh_task();
+    }
   }
 
   return true;

@@ -263,7 +263,7 @@ static void fifo_read(uint8_t rhport, uint8_t * buffer, uint16_t len, bool in_is
 
   max3421_spi_lock(rhport, in_isr);
 
-  tuh_max3421_spi_xfer_api(rhport, &reg, 1, &hirq, 0);
+  tuh_max3421_spi_xfer_api(rhport, &reg, 1, &hirq, 1);
   _hcd_data.hirq = hirq;
   tuh_max3421_spi_xfer_api(rhport, NULL, 0, buffer, len);
 
@@ -428,8 +428,8 @@ bool hcd_init(uint8_t rhport) {
   reg_write(rhport, PINCTL_ADDR, PINCTL_FDUPSPI, false);
 
   // V1 is 0x01, V2 is 0x12, V3 is 0x13
-  // uint8_t const revision = reg_read(rhport, REVISION_ADDR, false);
-  // TU_LOG2_HEX(revision);
+// uint8_t const revision = reg_read(rhport, REVISION_ADDR, false);
+// TU_LOG2_HEX(revision);
 
   // reset
   reg_write(rhport, USBCTL_ADDR, USBCTL_CHIPRES, false);

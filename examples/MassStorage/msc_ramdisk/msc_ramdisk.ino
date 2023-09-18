@@ -35,8 +35,7 @@ Adafruit_USBD_MSC usb_msc;
 
 
 // the setup function runs once when you press reset or power the board
-void setup()
-{ 
+void setup() {
 #if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
   // Manual begin() is required on core without built-in support for TinyUSB such as
   // - mbed rp2040
