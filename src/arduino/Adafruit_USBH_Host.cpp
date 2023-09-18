@@ -179,10 +179,10 @@ void tuh_max3421_int_api(uint8_t rhport, bool enabled) {
   if (!Adafruit_USBH_Host::_instance) {
     return;
   }
-  Adafruit_USBH_Host *host = Adafruit_USBH_Host::_instance;
 
 #ifdef ARDUINO_ARCH_SAMD
 #ifdef __SAMD51__
+  Adafruit_USBH_Host *host = Adafruit_USBH_Host::_instance;
   const IRQn_Type irq =
       (IRQn_Type)(EIC_0_IRQn + g_APinDescription[host->_intr].ulExtInt);
 
@@ -192,7 +192,6 @@ void tuh_max3421_int_api(uint8_t rhport, bool enabled) {
     NVIC_DisableIRQ(irq);
   }
 #else
-  (void)host;
   if (enabled) {
     NVIC_EnableIRQ(EIC_IRQn);
   } else {

@@ -9,51 +9,35 @@
  any redistribution
 *********************************************************************/
 
-
 /* This example demonstrates use of both device and host, where
- * - Device run on native usb controller (controller0)
- * - Host run on bit-banging 2 GPIOs with the help of Pico-PIO-USB library (controller1)
- *
- * Example sketch receive mouse report from host interface (from e.g consumer mouse)
- * and apply a butterworth low pass filter with a specific CUTOFF_FREQUENCY on hid mouse movement report.
- * Filtered report are send via device interface (to PC) acting as a "Mouse Tremor Filter".
+ * - Device run on native usb controller (roothub port0)
+ * - Host depending on MCUs run on either:
+ *   - rp2040: bit-banging 2 GPIOs with the help of Pico-PIO-USB library (roothub port1)
+ *   - samd21/51, nrf52840, esp32: using MAX3421e controller (host shield)
  *
  * Requirements:
- * - [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB) library
- * - 2 consecutive GPIOs: D+ is defined by PIN_PIO_USB_HOST_DP, D- = D+ +1
- * - Provide VBus (5v) and GND for peripheral
- * - CPU Speed must be either 120 or 240 Mhz. Selected via "Menu -> CPU Speed"
+ * - For rp2040:
+ *   - [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB) library
+ *   - 2 consecutive GPIOs: D+ is defined by PIN_USB_HOST_DP, D- = D+ +1
+ *   - Provide VBus (5v) and GND for peripheral
+ *   - CPU Speed must be either 120 or 240 Mhz. Selected via "Menu -> CPU Speed"
+ * - For samd21/51, nrf52840, esp32:
+ *   - Additional MAX2341e USB Host shield or featherwing is required
+ *   - SPI instance, CS pin, INT pin are correctly configured in usbh_helper.h
  */
 
-// pio-usb is required for rp2040 host
-#include "pio_usb.h"
-#include "Adafruit_TinyUSB.h"
+/* Example sketch receive mouse report from host interface (from e.g consumer mouse)
+ * and apply a butterworth low pass filter with a specific CUTOFF_FREQUENCY on hid mouse movement report.
+ * Filtered report are send via device interface (to PC) acting as a "Mouse Tremor Filter".
+ */
 
-// Pin D+ for host, D- = D+ + 1
-#ifndef PIN_USB_HOST_DP
-#define PIN_USB_HOST_DP  16
-#endif
-
-// Pin for enabling Host VBUS. comment out if not used
-#ifndef PIN_5V_EN
-#define PIN_5V_EN        18
-#endif
-
-#ifndef PIN_5V_EN_STATE
-#define PIN_5V_EN_STATE  1
-#endif
-
-// Language ID: English
-#define LANGUAGE_ID 0x0409
-
-// USB Host object
-Adafruit_USBH_Host USBHost;
+// USBHost is defined in usbh_helper.h
+#include "usbh_helper.h"
 
 // HID report descriptor using TinyUSB's template
 // Single Report (no ID) descriptor
-uint8_t const desc_hid_report[] =
-{
-  TUD_HID_REPORT_DESC_MOUSE()
+uint8_t const desc_hid_report[] = {
+    TUD_HID_REPORT_DESC_MOUSE()
 };
 
 // USB HID object. For ESP32 these values cannot be changed after this declaration
@@ -73,67 +57,49 @@ typedef struct {
 butterworth_coeffs_t coeffs[2];
 
 butterworth_coeffs_t butterworth_lowpass(float cutoff_frequency, float sampling_frequency);
-void filter_report(hid_mouse_report_t const* report);
 
-//--------------------------------------------------------------------+
-// Setup and Loop on Core0
-//--------------------------------------------------------------------+
+void filter_report(hid_mouse_report_t const *report);
 
-void setup()
-{
+
+void setup() {
   Serial.begin(115200);
   usb_hid.begin();
 
   coeffs[0] = butterworth_lowpass(CUTOFF_FREQUENCY, SAMPLING_FREQUENCY);
   coeffs[1] = butterworth_lowpass(CUTOFF_FREQUENCY, SAMPLING_FREQUENCY);
 
+#ifndef ARDUINO_ARCH_RP2040
+  // init host stack on controller (rhport) 1
+  // For rp2040: this is called in core1's setup1()
+  USBHost.begin(1);
+#endif
+
   //while ( !Serial ) delay(10);   // wait for native usb
   Serial.println("TinyUSB Mouse Tremor Filter Example");
 }
 
-void loop()
-{
+
+#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
+//--------------------------------------------------------------------+
+// Using Host shield MAX3421E controller
+//--------------------------------------------------------------------+
+void loop() {
+  USBHost.task();
   Serial.flush();
 }
 
+#elif defined(ARDUINO_ARCH_RP2040)
 //--------------------------------------------------------------------+
-// Setup and Loop on Core1
+// For RP2040 use both core0 for device stack, core1 for host stack
 //--------------------------------------------------------------------+
+void loop() {
+  Serial.flush();
+}
 
+//------------- Core1 -------------//
 void setup1() {
-  //while ( !Serial ) delay(10);   // wait for native usb
-  Serial.println("Core1 setup to run TinyUSB host with pio-usb");
-
-  // Check for CPU frequency, must be multiple of 120Mhz for bit-banging USB
-  uint32_t cpu_hz = clock_get_hz(clk_sys);
-  if ( cpu_hz != 120000000UL && cpu_hz != 240000000UL ) {
-    while ( !Serial ) delay(10);   // wait for native usb
-    Serial.printf("Error: CPU Clock = %lu, PIO USB require CPU clock must be multiple of 120 Mhz\r\n", cpu_hz);
-    Serial.printf("Change your CPU Clock to either 120 or 240 Mhz in Menu->CPU Speed \r\n");
-    while(1) delay(1);
-  }
-
-#ifdef PIN_5V_EN
-  pinMode(PIN_5V_EN, OUTPUT);
-  digitalWrite(PIN_5V_EN, PIN_5V_EN_STATE);
-#endif
-
-  pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
-  pio_cfg.pin_dp = PIN_USB_HOST_DP;
-
-#if defined(ARDUINO_RASPBERRY_PI_PICO_W)
-  // For pico-w, PIO is also used to communicate with cyw43
-  // Therefore we need to alternate the pio-usb configuration
-  // details https://github.com/sekigon-gonnoc/Pico-PIO-USB/issues/46
-  pio_cfg.sm_tx      = 3;
-  pio_cfg.sm_rx      = 2;
-  pio_cfg.sm_eop     = 3;
-  pio_cfg.pio_rx_num = 0;
-  pio_cfg.pio_tx_num = 1;
-  pio_cfg.tx_ch      = 9;
-#endif
-
-  USBHost.configure_pio_usb(1, &pio_cfg);
+  // configure pio-usb: defined in usbh_helper.h
+  rp2040_configure_pio_usb();
 
   // run host stack on controller (rhport) 1
   // Note: For rp2040 pico-pio-usb, calling USBHost.begin() on core1 will have most of the
@@ -141,12 +107,15 @@ void setup1() {
   USBHost.begin(1);
 }
 
-void loop1()
-{
+void loop1() {
   USBHost.task();
 }
 
+#endif
 
+//--------------------------------------------------------------------+
+// TinyUSB Host callbacks
+//--------------------------------------------------------------------+
 extern "C"
 {
 
@@ -214,14 +183,15 @@ butterworth_coeffs_t butterworth_lowpass(float cutoff_frequency, float sampling_
 }
 
 float butterworth_filter(float data, butterworth_coeffs_t *coeffs, float *filtered, float *prev1, float *prev2) {
-  float output = coeffs->b0 * data + coeffs->b1 * (*prev1) + coeffs->b2 * (*prev2) - coeffs->a1 * (*filtered) - coeffs->a2 * (*prev1);
+  float output = coeffs->b0 * data + coeffs->b1 * (*prev1) + coeffs->b2 * (*prev2) - coeffs->a1 * (*filtered) -
+                 coeffs->a2 * (*prev1);
   *prev2 = *prev1;
   *prev1 = data;
   *filtered = output;
   return output;
 }
 
-void filter_report(hid_mouse_report_t const* report) {
+void filter_report(hid_mouse_report_t const *report) {
   static float filtered[2] = { 0.0, 0.0 };
   static float prev1[2] = { 0.0, 0.0 };
   static float prev2[2] = { 0.0, 0.0 };
