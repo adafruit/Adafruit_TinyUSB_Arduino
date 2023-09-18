@@ -57,7 +57,7 @@ void TinyUSB_Device_FlushCDC(void) {
 
 // Debug log with Serial1
 #if CFG_TUSB_DEBUG && defined(CFG_TUSB_DEBUG_PRINTF)
-#define USE_SEGGER_RTT
+// #define USE_SEGGER_RTT
 
 #ifdef USE_SEGGER_RTT
 #include "SEGGER_RTT/RTT/SEGGER_RTT.h"
