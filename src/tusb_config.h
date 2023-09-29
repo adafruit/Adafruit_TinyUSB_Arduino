@@ -39,7 +39,7 @@
   #include "arduino/ports/rp2040/tusb_config_rp2040.h"
 
 #elif defined(ARDUINO_ARCH_ESP32)
-  // Use the BSP sdk/include/arduino_tinyusb/include/tusb_config.h
+  // For consistency: use the BSP sdk/include/arduino_tinyusb/include/tusb_config.h
   #include <tusb_config.h>
 
 #else
