@@ -35,30 +35,14 @@
 #include "device/usbd.h"
 #include "device/usbd_pvt.h"
 
-#ifndef CFG_TUD_MEM_SECTION
-  #define CFG_TUD_MEM_SECTION CFG_TUSB_MEM_SECTION
-#endif
-
-#ifndef CFG_TUD_LOG_LEVEL
-  #define CFG_TUD_LOG_LEVEL 2
-#endif
-
-#ifndef TU_LOG_USBD
-  #define TU_LOG_USBD(...)   TU_LOG(CFG_TUD_LOG_LEVEL, __VA_ARGS__)
-#endif
-
 //--------------------------------------------------------------------+
 // ESP32 out-of-sync
 //--------------------------------------------------------------------+
-#if defined(ARDUINO_ARCH_ESP32)
+#ifdef ARDUINO_ARCH_ESP32
+#include "arduino/ports/esp32/tusb_config_esp32.h"
 
-#ifndef tu_static
-#define tu_static static
-static inline int tu_memset_s(void *dest, size_t destsz, int ch, size_t count) { if (count > destsz) { return -1; } memset(dest, ch, count); return 0; }
-static inline int tu_memcpy_s(void *dest, size_t destsz, const void * src, size_t count ) { if (count > destsz) { return -1; } memcpy(dest, src, count); return 0; }
 TU_ATTR_WEAK bool dcd_edpt_iso_alloc(uint8_t rhport, uint8_t ep_addr, uint16_t largest_packet_size);
 TU_ATTR_WEAK bool dcd_edpt_iso_activate(uint8_t rhport,  tusb_desc_endpoint_t const * p_endpoint_desc);
-#endif
 
 #ifndef TU_LOG_BUF
 #if CFG_TUSB_DEBUG >= CFG_TUD_LOG_LEVEL
@@ -71,6 +55,10 @@ TU_ATTR_WEAK bool dcd_edpt_iso_activate(uint8_t rhport,  tusb_desc_endpoint_t co
 #endif
 #endif
 
+#endif
+
+#ifndef TU_LOG_USBD
+  #define TU_LOG_USBD(...)   TU_LOG(CFG_TUD_LOG_LEVEL, __VA_ARGS__)
 #endif
 
 //--------------------------------------------------------------------+

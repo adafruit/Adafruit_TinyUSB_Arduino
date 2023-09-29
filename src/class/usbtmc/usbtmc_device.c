@@ -71,31 +71,15 @@
 
 #if (CFG_TUD_ENABLED && CFG_TUD_USBTMC)
 
+// ESP32 out-of-sync
+#ifdef ARDUINO_ARCH_ESP32
+#include "arduino/ports/esp32/tusb_config_esp32.h"
+#endif
+
 #include "device/usbd.h"
 #include "device/usbd_pvt.h"
 
 #include "usbtmc_device.h"
-
-//--------------------------------------------------------------------+
-// ESP32 out-of-sync
-//--------------------------------------------------------------------+
-#if defined(ARDUINO_ARCH_ESP32) && !defined(tu_static)
-#define tu_static static
-static inline int tu_memset_s(void *dest, size_t destsz, int ch, size_t count) { if (count > destsz) { return -1; } memset(dest, ch, count); return 0; }
-static inline int tu_memcpy_s(void *dest, size_t destsz, const void * src, size_t count ) { if (count > destsz) { return -1; } memcpy(dest, src, count); return 0; }
-#endif
-
-#ifndef CFG_TUD_MEM_SECTION
-  #define CFG_TUD_MEM_SECTION CFG_TUSB_MEM_SECTION
-#endif
-
-#ifndef CFG_TUD_LOG_LEVEL
-  #define CFG_TUD_LOG_LEVEL 2
-#endif
-
-//--------------------------------------------------------------------+
-//
-//--------------------------------------------------------------------+
 
 #ifdef xDEBUG
 #include "uart_util.h"
