@@ -1,0 +1,7 @@
+{
+    "name": "Adafruit TinyUSB Library",
+    "build": {
+        "libArchive": false,
+        "flags": "-DUSE_TINYUSB"
+    }
+}
