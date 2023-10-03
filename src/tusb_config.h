@@ -40,7 +40,8 @@
 
 #elif defined(ARDUINO_ARCH_ESP32)
   // For consistency: use the BSP sdk/include/arduino_tinyusb/include/tusb_config.h
-  #include <tusb_config.h>
+  // Note: platformio prioritize this file over the one in BSP, include BSP one is required
+  #include "../../arduino_tinyusb/include/tusb_config.h"
 
 #else
   #error TinyUSB Arduino Library does not support your core yet
