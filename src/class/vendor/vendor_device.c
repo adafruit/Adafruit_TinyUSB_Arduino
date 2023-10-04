@@ -24,16 +24,16 @@
  * This file is part of the TinyUSB stack.
  */
 
-#include "tusb_option.h"
-
-#if (CFG_TUD_ENABLED && CFG_TUD_VENDOR)
-
 // ESP32 out-of-sync
 // Somehow we have linking issue: multiple definition of vendor APIs with arduino-esp32 master
 // skip this driver entirely and used the pre-compiled libarduino_tinyusb.a instead
 #ifdef ARDUINO_ARCH_ESP32
 #include "arduino/ports/esp32/tusb_config_esp32.h"
 #else
+
+#include "tusb_option.h"
+
+#if (CFG_TUD_ENABLED && CFG_TUD_VENDOR)
 
 #include "device/usbd.h"
 #include "device/usbd_pvt.h"

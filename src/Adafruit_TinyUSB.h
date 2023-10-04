@@ -32,6 +32,11 @@
 #error TinyUSB is not selected, please select it in "Tools->Menu->USB Stack"
 #endif
 
+// ESP32 out-of-sync
+#ifdef ARDUINO_ARCH_ESP32
+#include "arduino/ports/esp32/tusb_config_esp32.h"
+#endif
+
 #include "tusb_option.h"
 
 // Device

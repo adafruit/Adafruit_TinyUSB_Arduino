@@ -22,6 +22,12 @@
  * THE SOFTWARE.
  */
 
+// ESP32 out-of-sync
+#ifdef ARDUINO_ARCH_ESP32
+#include "arduino/ports/esp32/tusb_config_esp32.h"
+#define MSBFIRST SPI_MSBFIRST
+#endif
+
 #include "tusb_option.h"
 
 #if CFG_TUH_ENABLED
@@ -118,7 +124,15 @@ TU_ATTR_WEAK void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
 //--------------------------------------------------------------------+
 #if CFG_TUH_ENABLED && defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
 
-static void max3421_isr(void) { tuh_int_handler(1); }
+static void max3421_isr(void) {
+  // ESP32 out-of-sync
+#if defined(ARDUINO_ARCH_ESP32)
+  extern "C" void hcd_int_handler_esp32(uint8_t rhport, bool in_isr);
+  hcd_int_handler_esp32(1, false);
+#else
+  tuh_int_handler(1, true);
+#endif
+}
 
 extern "C" {
 
@@ -152,21 +166,20 @@ bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
   SPISettings config(max_clock, MSBFIRST, SPI_MODE0);
   host->_spi->beginTransaction(config);
 
-  size_t count = 0;
-  while (count < tx_len || count < rx_len) {
+  // TODO improve spi speed with burst transfer
+  for (size_t count = 0; count < tx_len || count < rx_len; count++) {
     uint8_t data = 0x00;
 
+    // TX
     if (count < tx_len) {
       data = tx_buf[count];
     }
-
     data = host->_spi->transfer(data);
 
+    // RX
     if (count < rx_len) {
       rx_buf[count] = data;
     }
-
-    count++;
   }
 
   host->_spi->endTransaction();
@@ -179,10 +192,12 @@ void tuh_max3421_int_api(uint8_t rhport, bool enabled) {
   if (!Adafruit_USBH_Host::_instance) {
     return;
   }
+  Adafruit_USBH_Host *host = Adafruit_USBH_Host::_instance;
+  (void)host;
 
 #ifdef ARDUINO_ARCH_SAMD
+  //--- SAMD51 ---//
 #ifdef __SAMD51__
-  Adafruit_USBH_Host *host = Adafruit_USBH_Host::_instance;
   const IRQn_Type irq =
       (IRQn_Type)(EIC_0_IRQn + g_APinDescription[host->_intr].ulExtInt);
 
@@ -192,6 +207,7 @@ void tuh_max3421_int_api(uint8_t rhport, bool enabled) {
     NVIC_DisableIRQ(irq);
   }
 #else
+  //--- SAMD21 ---//
   if (enabled) {
     NVIC_EnableIRQ(EIC_IRQn);
   } else {
@@ -200,12 +216,22 @@ void tuh_max3421_int_api(uint8_t rhport, bool enabled) {
 #endif
 
 #elif defined(ARDUINO_NRF52_ADAFRUIT)
+  //--- nRF52 ---//
   if (enabled) {
     NVIC_EnableIRQ(GPIOTE_IRQn);
   } else {
     NVIC_DisableIRQ(GPIOTE_IRQn);
   }
 
+#elif defined(ARDUINO_ARCH_ESP32)
+  //--- ESP32 ---//
+  if (enabled) {
+    gpio_intr_enable((gpio_num_t)host->_intr);
+  } else {
+    gpio_intr_disable((gpio_num_t)host->_intr);
+  }
+#else
+#error "MAX3421e host is not Unsupported by this architecture"
 #endif
 }
 }

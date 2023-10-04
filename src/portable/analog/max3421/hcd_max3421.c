@@ -24,6 +24,11 @@
  * This file is part of the TinyUSB stack.
  */
 
+// ESP32 out-of-sync
+#ifdef ARDUINO_ARCH_ESP32
+#include "arduino/ports/esp32/tusb_config_esp32.h"
+#endif
+
 #include "tusb_option.h"
 
 #if CFG_TUH_ENABLED && defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
@@ -666,9 +671,14 @@ bool hcd_setup_send(uint8_t rhport, uint8_t daddr, uint8_t const setup_packet[8]
   return true;
 }
 
+// ESP32 out-of-sync
+#ifdef ARDUINO_ARCH_ESP32
+bool hcd_edpt_clear_stall(uint8_t dev_addr, uint8_t ep_addr) {
+#else
 // clear stall, data toggle is also reset to DATA0
 bool hcd_edpt_clear_stall(uint8_t rhport, uint8_t dev_addr, uint8_t ep_addr) {
   (void) rhport;
+#endif
   (void) dev_addr;
   (void) ep_addr;
 
@@ -859,8 +869,13 @@ void print_hirq(uint8_t hirq) {
   #define print_hirq(hirq)
 #endif
 
+// ESP32 out-of-sync
+#ifdef ARDUINO_ARCH_ESP32
+void hcd_int_handler_esp32(uint8_t rhport, bool in_isr) {
+#else
 // Interrupt handler
 void hcd_int_handler(uint8_t rhport, bool in_isr) {
+#endif
   uint8_t hirq = reg_read(rhport, HIRQ_ADDR, in_isr) & _hcd_data.hien;
   if (!hirq) return;
 //  print_hirq(hirq);
