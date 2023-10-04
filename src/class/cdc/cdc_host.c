@@ -24,6 +24,11 @@
  * This file is part of the TinyUSB stack.
  */
 
+// ESP32 out-of-sync
+#ifdef ARDUINO_ARCH_ESP32
+#include "arduino/ports/esp32/tusb_config_esp32.h"
+#endif
+
 #include "tusb_option.h"
 
 #if (CFG_TUH_ENABLED && CFG_TUH_CDC)
@@ -31,7 +36,12 @@
 #include "host/usbh.h"
 #include "host/usbh_pvt.h"
 
+// ESP32 out-of-sync
+#ifdef ARDUINO_ARCH_ESP32
+#endif
+
 #include "cdc_host.h"
+
 
 // Level where CFG_TUSB_DEBUG must be at least for this driver is logged
 #ifndef CFG_TUH_CDC_LOG_LEVEL

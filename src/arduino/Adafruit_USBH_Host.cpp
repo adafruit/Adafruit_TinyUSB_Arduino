@@ -124,11 +124,18 @@ TU_ATTR_WEAK void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
 //--------------------------------------------------------------------+
 #if CFG_TUH_ENABLED && defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
 
+#if defined(ARDUINO_ARCH_ESP32) && !defined(PLATFORMIO)
+extern "C" void hcd_int_handler_esp32(uint8_t rhport, bool in_isr);
+#endif
+
 static void max3421_isr(void) {
   // ESP32 out-of-sync
 #if defined(ARDUINO_ARCH_ESP32)
-  extern "C" void hcd_int_handler_esp32(uint8_t rhport, bool in_isr);
+#if defined(PLATFORMIO)
+  tuh_int_handler(1, false);
+#else
   hcd_int_handler_esp32(1, false);
+#endif
 #else
   tuh_int_handler(1, true);
 #endif
