@@ -117,7 +117,7 @@ enum { TUSB_INDEX_INVALID_8 = 0xFFu };
 //--------------------------------------------------------------------
 
 // Enable host stack with MAX3421E (host shield)
-#define CFG_TUH_ENABLED 0
+#define CFG_TUH_ENABLED 1
 #define CFG_TUH_MAX_SPEED OPT_MODE_HIGH_SPEED
 #ifndef TUH_OPT_HIGH_SPEED
 #define TUH_OPT_HIGH_SPEED 0

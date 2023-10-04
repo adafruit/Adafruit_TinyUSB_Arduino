@@ -36,6 +36,14 @@
 #include "host/usbh.h"
 #include "host/usbh_pvt.h"
 
+// ESP32 out-of-sync
+#if defined(ARDUINO_ARCH_ESP32) && !defined(PLATFORMIO) && ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 4, 5)
+typedef struct {
+  uint8_t daddr;
+  tusb_desc_interface_t desc;
+} tuh_itf_info_t;
+#endif
+
 #include "hid_host.h"
 
 // Level where CFG_TUSB_DEBUG must be at least for this driver is logged
