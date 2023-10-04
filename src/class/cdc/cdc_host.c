@@ -39,7 +39,8 @@
 //--------------------------------------------------------------------+
 // ESP32 out-of-sync
 //--------------------------------------------------------------------+
-#if defined(ARDUINO_ARCH_ESP32) && !defined(PLATFORMIO) && ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 4, 5)
+#if defined(ARDUINO_ARCH_ESP32) && !defined(PLATFORMIO)
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 4, 5)
 typedef struct {
   uint8_t daddr;
   tusb_desc_interface_t desc;
@@ -148,7 +149,7 @@ TU_ATTR_ALWAYS_INLINE static inline
 bool tu_edpt_stream_peek(tu_edpt_stream_t* s, uint8_t* ch) {
   return tu_fifo_peek(&s->ff, ch);
 }
-
+#endif
 #endif
 
 #include "cdc_host.h"
