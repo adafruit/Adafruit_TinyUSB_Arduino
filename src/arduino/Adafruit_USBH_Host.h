@@ -36,7 +36,7 @@
 extern "C" {
 void tuh_max3421_spi_cs_api(uint8_t rhport, bool active);
 bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
-                              size_t tx_len, uint8_t *rx_buf, size_t rx_len);
+                              uint8_t *rx_buf, size_t xfer_bytes);
 void tuh_max3421_int_api(uint8_t rhport, bool enabled);
 }
 
@@ -66,17 +66,9 @@ public:
   static Adafruit_USBH_Host *_instance;
 
 private:
-  //  uint16_t const *descrip`tor_string_cb(uint8_t index, uint16_t langid);
-  //
-  //  friend uint8_t const *tud_descriptor_device_cb(void);
-  //  friend uint8_t const *tud_descriptor_configuration_cb(uint8_t index);
-  //  friend uint16_t const *tud_descriptor_string_cb(uint8_t index,
-  //                                                  uint16_t langid);
-
   friend void tuh_max3421_spi_cs_api(uint8_t rhport, bool active);
   friend bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
-                                       size_t tx_len, uint8_t *rx_buf,
-                                       size_t rx_len);
+                                       uint8_t *rx_buf, size_t xfer_bytes);
   friend void tuh_max3421_int_api(uint8_t rhport, bool enabled);
 };
 

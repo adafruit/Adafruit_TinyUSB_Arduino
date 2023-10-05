@@ -153,7 +153,7 @@ void tuh_max3421_spi_cs_api(uint8_t rhport, bool active) {
 }
 
 bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
-                              size_t tx_len, uint8_t *rx_buf, size_t rx_len) {
+                              uint8_t *rx_buf, size_t xfer_bytes) {
   (void)rhport;
 
   if (!Adafruit_USBH_Host::_instance) {
@@ -167,27 +167,32 @@ bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
   // SAMD 21/51 can only work reliably at 12MHz
   uint32_t const max_clock = 12000000ul;
 #else
-  uint32_t const max_clock = 26000000ul;
+  // uint32_t const max_clock = 26000000ul;
+  uint32_t const max_clock = 4000000ul;
 #endif
 
   SPISettings config(max_clock, MSBFIRST, SPI_MODE0);
   host->_spi->beginTransaction(config);
 
-  // TODO improve spi speed with burst transfer
-  for (size_t count = 0; count < tx_len || count < rx_len; count++) {
+#ifdef ARDUINO_ARCH_SAMD
+  // SAMD cannot use transfer(tx_buf, rx_buf, len) API since it default to use
+  // DMA. However, since this can be invoked within EIC_Handler (ISR) which may
+  // have priority higher than DMA ISR. That will cause blocking wait for
+  // dma_busy not working
+  for (size_t count = 0; count < xfer_bytes; count++) {
     uint8_t data = 0x00;
-
-    // TX
-    if (count < tx_len) {
+    if (tx_buf) {
       data = tx_buf[count];
     }
     data = host->_spi->transfer(data);
 
-    // RX
-    if (count < rx_len) {
+    if (rx_buf) {
       rx_buf[count] = data;
     }
   }
+#else
+  host->_spi->transfer(tx_buf, rx_buf, xfer_bytes);
+#endif
 
   host->_spi->endTransaction();
   return true;
@@ -241,7 +246,8 @@ void tuh_max3421_int_api(uint8_t rhport, bool enabled) {
 #error "MAX3421e host is not Unsupported by this architecture"
 #endif
 }
-}
+
+} // extern C
 #endif
 
 #endif
