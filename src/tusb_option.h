@@ -271,9 +271,7 @@
 #define TUSB_OPT_HOST_ENABLED   CFG_TUH_ENABLED
 
 // highspeed support indicator
-#ifndef TUH_OPT_HIGH_SPEED
 #define TUH_OPT_HIGH_SPEED    (CFG_TUH_MAX_SPEED ? (CFG_TUH_MAX_SPEED & OPT_MODE_HIGH_SPEED) : TUP_RHPORT_HIGHSPEED)
-#endif
 
 //--------------------------------------------------------------------+
 // TODO move later

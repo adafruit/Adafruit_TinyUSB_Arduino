@@ -45,6 +45,10 @@ extern "C" {
 //--------------------------------------------------------------------+
 #include "esp_arduino_version.h"
 
+#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(2, 0, 7)
+#error "ESP32 Arduino core version 2.0.7 or later is required"
+#endif
+
 #ifndef CFG_TUD_LOG_LEVEL
 #define CFG_TUD_LOG_LEVEL 2
 #endif
@@ -74,11 +78,6 @@ extern "C" {
 // Enable host stack with MAX3421E (host shield)
 #define CFG_TUH_ENABLED 1
 #define CFG_TUH_MAX_SPEED OPT_MODE_FULL_SPEED
-
-#ifndef TUH_OPT_HIGH_SPEED
-#define TUH_OPT_HIGH_SPEED 0
-#endif
-
 #define CFG_TUH_MAX3421 1
 
 #ifndef CFG_TUH_MAX3421_ENDPOINT_TOTAL
