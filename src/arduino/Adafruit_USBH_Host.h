@@ -41,17 +41,26 @@ void tuh_max3421_int_api(uint8_t rhport, bool enabled);
 }
 
 class Adafruit_USBH_Host {
+
+#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
 private:
   SPIClass *_spi;
   int8_t _cs;
   int8_t _intr;
 
+  // for esp32 or using softwareSPI
+  int8_t _sck, _mosi, _miso;
+
+public:
+  // constructor for using MAX3421E (host shield)
+  Adafruit_USBH_Host(SPIClass *spi, int8_t cs, int8_t intr);
+  Adafruit_USBH_Host(int8_t sck, int8_t mosi, int8_t miso, int8_t cs,
+                     int8_t intr);
+#endif
+
 public:
   // default constructor
   Adafruit_USBH_Host(void);
-
-  // constructor for using MAX3421E (host shield)
-  Adafruit_USBH_Host(SPIClass *spi, int8_t cs, int8_t intr);
 
   bool configure(uint8_t rhport, uint32_t cfg_id, const void *cfg_param);
 

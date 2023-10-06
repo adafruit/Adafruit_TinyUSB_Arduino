@@ -35,24 +35,41 @@
 #include "Adafruit_TinyUSB_API.h"
 #include "Adafruit_USBH_Host.h"
 
-#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
-static void max3421_isr(void);
-#endif
-
 Adafruit_USBH_Host *Adafruit_USBH_Host::_instance = NULL;
 
 Adafruit_USBH_Host::Adafruit_USBH_Host(void) {
   Adafruit_USBH_Host::_instance = this;
   _spi = NULL;
-  _cs = _intr = -1;
+  _cs = _intr = _sck = _mosi = _miso = -1;
 }
+
+#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
+static void max3421_isr(void);
+
+#if defined(ARDUINO_ARCH_ESP32)
+SemaphoreHandle_t max3421_intr_sem;
+static void max3421_intr_task(void *param);
+#endif
 
 Adafruit_USBH_Host::Adafruit_USBH_Host(SPIClass *spi, int8_t cs, int8_t intr) {
   Adafruit_USBH_Host::_instance = this;
   _spi = spi;
   _cs = cs;
   _intr = intr;
+  _sck = _mosi = _miso = -1;
 }
+
+Adafruit_USBH_Host::Adafruit_USBH_Host(int8_t sck, int8_t mosi, int8_t miso,
+                                       int8_t cs, int8_t intr) {
+  Adafruit_USBH_Host::_instance = this;
+  _spi = NULL;
+  _cs = cs;
+  _intr = intr;
+  _sck = sck;
+  _mosi = mosi;
+  _miso = miso;
+}
+#endif
 
 bool Adafruit_USBH_Host::configure(uint8_t rhport, uint32_t cfg_id,
                                    const void *cfg_param) {
@@ -68,7 +85,7 @@ bool Adafruit_USBH_Host::configure_pio_usb(uint8_t rhport,
 
 bool Adafruit_USBH_Host::begin(uint8_t rhport) {
 #if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
-  if (_spi == NULL || _intr < 0 || _cs < 0) {
+  if (_intr < 0 || _cs < 0) {
     return false;
   }
 
@@ -77,7 +94,25 @@ bool Adafruit_USBH_Host::begin(uint8_t rhport) {
   digitalWrite(_cs, HIGH);
 
   // SPI init
-  SPI.begin();
+  if (_spi) {
+    _spi->begin();
+  } else {
+#ifdef ARDUINO_ARCH_ESP32
+    // ESP32 SPI assign pins when init instead of declaration as standard API
+    _spi = new SPIClass(HSPI);
+    _spi->begin(_sck, _miso, _mosi, -1);
+#else
+    // Software SPI is not supported yet
+    return false;
+#endif
+  }
+
+#ifdef ARDUINO_ARCH_ESP32
+  // Create an task for executing interrupt handler in thread mode
+  max3421_intr_sem = xSemaphoreCreateBinary();
+  xTaskCreateUniversal(max3421_intr_task, "max3421 intr", 2048, NULL, 2, NULL,
+                       ARDUINO_RUNNING_CORE);
+#endif
 
   // Interrupt pin
   pinMode(_intr, INPUT_PULLUP);
@@ -124,22 +159,37 @@ TU_ATTR_WEAK void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
 //--------------------------------------------------------------------+
 #if CFG_TUH_ENABLED && defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
 
-#if defined(ARDUINO_ARCH_ESP32) && !defined(PLATFORMIO)
+#if defined(ARDUINO_ARCH_ESP32)
+
+#ifdef PLATFORMIO
+#define tuh_int_handler_esp32 tuh_int_handler
+#else
 extern "C" void hcd_int_handler_esp32(uint8_t rhport, bool in_isr);
+#define tuh_int_handler_esp32 hcd_int_handler_esp32
 #endif
 
-static void max3421_isr(void) {
-  // ESP32 out-of-sync
-#if defined(ARDUINO_ARCH_ESP32)
-#if defined(PLATFORMIO)
-  tuh_int_handler(1, false);
-#else
-  hcd_int_handler_esp32(1, false);
-#endif
-#else
-  tuh_int_handler(1, true);
-#endif
+static void max3421_intr_task(void *param) {
+  (void)param;
+
+  while (1) {
+    xSemaphoreTake(max3421_intr_sem, portMAX_DELAY);
+    tuh_int_handler_esp32(1, false);
+  }
 }
+
+static void max3421_isr(void) {
+  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+  xSemaphoreGiveFromISR(max3421_intr_sem, &xHigherPriorityTaskWoken);
+  if (xHigherPriorityTaskWoken) {
+    portYIELD_FROM_ISR();
+  }
+}
+
+#else
+
+static void max3421_isr(void) { tuh_int_handler(1, true); }
+
+#endif // ESP32
 
 extern "C" {
 
@@ -167,8 +217,8 @@ bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
   // SAMD 21/51 can only work reliably at 12MHz
   uint32_t const max_clock = 12000000ul;
 #else
-  // uint32_t const max_clock = 26000000ul;
-  uint32_t const max_clock = 4000000ul;
+  uint32_t const max_clock = 26000000ul;
+//  uint32_t const max_clock = 4000000ul;
 #endif
 
   SPISettings config(max_clock, MSBFIRST, SPI_MODE0);
@@ -190,6 +240,8 @@ bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
       rx_buf[count] = data;
     }
   }
+#elif defined(ARDUINO_ARCH_ESP32)
+  host->_spi->transferBytes(tx_buf, rx_buf, xfer_bytes);
 #else
   host->_spi->transfer(tx_buf, rx_buf, xfer_bytes);
 #endif
