@@ -50,8 +50,14 @@
 
 #if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
   #include "SPI.h"
+
+  #ifdef ARDUINO_ARCH_ESP32
+  // ESP32 specify SCK, MOSI, MISO, CS, INT
+  Adafruit_USBH_Host USBHost(36, 35, 37, 15, 14);
+  #else
   // USB Host using MAX3421E: SPI, CS, INT
   Adafruit_USBH_Host USBHost(&SPI, 10, 9);
+  #endif
 #else
   Adafruit_USBH_Host USBHost;
 #endif
