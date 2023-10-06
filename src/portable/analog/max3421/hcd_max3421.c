@@ -677,7 +677,7 @@ bool hcd_setup_send(uint8_t rhport, uint8_t daddr, uint8_t const setup_packet[8]
 }
 
 // ESP32 out-of-sync
-#if defined(ARDUINO_ARCH_ESP32) && ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(2, 0, 14) && !defined(PLATFORMIO)
+#if defined(ARDUINO_ARCH_ESP32) && ESP_ARDUINO_VERSION < 0x020014 && !defined(PLATFORMIO)
 bool hcd_edpt_clear_stall(uint8_t dev_addr, uint8_t ep_addr) {
 #else
 // clear stall, data toggle is also reset to DATA0
@@ -875,7 +875,7 @@ void print_hirq(uint8_t hirq) {
 #endif
 
 // ESP32 out-of-sync
-#if defined(ARDUINO_ARCH_ESP32) && ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(2, 0, 14) && !defined(PLATFORMIO)
+#if defined(ARDUINO_ARCH_ESP32) && ESP_ARDUINO_VERSION < 0x020014 && !defined(PLATFORMIO)
 void hcd_int_handler_esp32(uint8_t rhport, bool in_isr) {
 #else
 // Interrupt handler
