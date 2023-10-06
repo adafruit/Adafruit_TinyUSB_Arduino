@@ -45,8 +45,8 @@ extern "C" {
 //--------------------------------------------------------------------+
 #include "esp_arduino_version.h"
 
-#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(2, 0, 7)
-#error "ESP32 Arduino core version 2.0.7 or later is required"
+#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(2, 0, 8)
+#error "ESP32 Arduino core version 2.0.8 or later is required"
 #endif
 
 #ifndef CFG_TUD_LOG_LEVEL
