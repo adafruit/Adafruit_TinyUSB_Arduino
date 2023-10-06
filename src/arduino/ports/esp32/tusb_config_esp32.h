@@ -43,64 +43,19 @@ extern "C" {
 //--------------------------------------------------------------------+
 // ESP32 out-of-sync
 //--------------------------------------------------------------------+
-#include "esp_idf_version.h"
-
-// IDF 4.4.4 and prior is using tinyusb 0.14.0
-#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 4, 5)
-#include <stddef.h>
-#include <string.h>
-
-#define tu_static static
-static inline int tu_memset_s(void *dest, size_t destsz, int ch, size_t count) {
-  if (count > destsz) {
-    return -1;
-  }
-  memset(dest, ch, count);
-  return 0;
-}
-static inline int tu_memcpy_s(void *dest, size_t destsz, const void *src,
-                              size_t count) {
-  if (count > destsz) {
-    return -1;
-  }
-  memcpy(dest, src, count);
-  return 0;
-}
-
-enum {
-  TUSB_EPSIZE_BULK_FS = 64,
-  TUSB_EPSIZE_BULK_HS = 512,
-
-  TUSB_EPSIZE_ISO_FS_MAX = 1023,
-  TUSB_EPSIZE_ISO_HS_MAX = 1024,
-};
-
-enum { TUSB_INDEX_INVALID_8 = 0xFFu };
-#endif
-
-#ifndef CFG_TUD_MEM_SECTION
-#define CFG_TUD_MEM_SECTION CFG_TUSB_MEM_SECTION
-#endif
-
-#ifndef CFG_TUH_MEM_SECTION
-#define CFG_TUH_MEM_SECTION CFG_TUSB_MEM_SECTION
-#endif
-
-#ifndef CFG_TUH_MEM_ALIGN
-#define CFG_TUH_MEM_ALIGN CFG_TUSB_MEM_ALIGN
-#endif
+#include "esp_arduino_version.h"
 
 #ifndef CFG_TUD_LOG_LEVEL
 #define CFG_TUD_LOG_LEVEL 2
 #endif
 
-// #ifndef CFG_TUH_LOG_LEVEL
-// #define CFG_TUH_LOG_LEVEL 2
-// #endif
-
-#ifndef CFG_TUSB_DEBUG
-#define CFG_TUSB_DEBUG 0
+#ifndef CFG_TUH_LOG_LEVEL
+#define CFG_TUH_LOG_LEVEL 2
 #endif
+
+// #ifndef CFG_TUSB_DEBUG
+// #define CFG_TUSB_DEBUG 0
+// #endif
 
 // For selectively disable device log (when > CFG_TUSB_DEBUG)
 // #define CFG_TUD_LOG_LEVEL 3
@@ -118,7 +73,8 @@ enum { TUSB_INDEX_INVALID_8 = 0xFFu };
 
 // Enable host stack with MAX3421E (host shield)
 #define CFG_TUH_ENABLED 1
-#define CFG_TUH_MAX_SPEED OPT_MODE_HIGH_SPEED
+#define CFG_TUH_MAX_SPEED OPT_MODE_FULL_SPEED
+
 #ifndef TUH_OPT_HIGH_SPEED
 #define TUH_OPT_HIGH_SPEED 0
 #endif

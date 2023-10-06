@@ -25,6 +25,7 @@
 // ESP32 out-of-sync
 #ifdef ARDUINO_ARCH_ESP32
 #include "arduino/ports/esp32/tusb_config_esp32.h"
+#include "driver/gpio.h"
 #define MSBFIRST SPI_MSBFIRST
 #endif
 
@@ -39,8 +40,11 @@ Adafruit_USBH_Host *Adafruit_USBH_Host::_instance = NULL;
 
 Adafruit_USBH_Host::Adafruit_USBH_Host(void) {
   Adafruit_USBH_Host::_instance = this;
+
+#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
   _spi = NULL;
   _cs = _intr = _sck = _mosi = _miso = -1;
+#endif
 }
 
 #if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
@@ -161,11 +165,12 @@ TU_ATTR_WEAK void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
 
 #if defined(ARDUINO_ARCH_ESP32)
 
-#ifdef PLATFORMIO
-#define tuh_int_handler_esp32 tuh_int_handler
-#else
+#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(2, 0, 14) &&                 \
+    !defined(PLATFORMIO)
 extern "C" void hcd_int_handler_esp32(uint8_t rhport, bool in_isr);
 #define tuh_int_handler_esp32 hcd_int_handler_esp32
+#else
+#define tuh_int_handler_esp32 tuh_int_handler
 #endif
 
 static void max3421_intr_task(void *param) {

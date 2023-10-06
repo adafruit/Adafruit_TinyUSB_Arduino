@@ -54,6 +54,11 @@
 // ESP32 out-of-sync
 //--------------------------------------------------------------------+
 #ifdef ARDUINO_ARCH_ESP32
+
+#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(2, 0, 14) && !defined(PLATFORMIO)
+extern bool hcd_edpt_abort_xfer(uint8_t rhport, uint8_t dev_addr, uint8_t ep_addr);
+#endif
+
 #ifndef TU_LOG_BUF
 #if CFG_TUSB_DEBUG >= CFG_TUH_LOG_LEVEL
   static inline void tu_print_buf(uint8_t const* buf, uint32_t bufsize) {
@@ -65,8 +70,7 @@
 #endif
 #endif
 
-extern bool hcd_edpt_abort_xfer(uint8_t rhport, uint8_t dev_addr, uint8_t ep_addr);
-#endif
+#endif // ESP32
 
 #ifndef TU_LOG_USBH
   #define TU_LOG_USBH(...)   TU_LOG(CFG_TUH_LOG_LEVEL, __VA_ARGS__)
