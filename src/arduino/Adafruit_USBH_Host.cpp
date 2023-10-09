@@ -36,14 +36,6 @@
 #include "Adafruit_TinyUSB_API.h"
 #include "Adafruit_USBH_Host.h"
 
-#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
-static void max3421_isr(void);
-
-#if defined(ARDUINO_ARCH_ESP32)
-SemaphoreHandle_t max3421_intr_sem;
-static void max3421_intr_task(void *param);
-#endif
-
 Adafruit_USBH_Host *Adafruit_USBH_Host::_instance = NULL;
 
 Adafruit_USBH_Host::Adafruit_USBH_Host(void) {
@@ -54,6 +46,14 @@ Adafruit_USBH_Host::Adafruit_USBH_Host(void) {
   _cs = _intr = _sck = _mosi = _miso = -1;
 #endif
 }
+
+#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
+static void max3421_isr(void);
+
+#if defined(ARDUINO_ARCH_ESP32)
+SemaphoreHandle_t max3421_intr_sem;
+static void max3421_intr_task(void *param);
+#endif
 
 Adafruit_USBH_Host::Adafruit_USBH_Host(SPIClass *spi, int8_t cs, int8_t intr) {
   Adafruit_USBH_Host::_instance = this;
