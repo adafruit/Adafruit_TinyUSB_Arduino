@@ -114,7 +114,7 @@ bool Adafruit_USBH_Host::begin(uint8_t rhport) {
 #ifdef ARDUINO_ARCH_ESP32
   // Create an task for executing interrupt handler in thread mode
   max3421_intr_sem = xSemaphoreCreateBinary();
-  xTaskCreateUniversal(max3421_intr_task, "max3421 intr", 2048, NULL, 2, NULL,
+  xTaskCreateUniversal(max3421_intr_task, "max3421 intr", 2048, NULL, 5, NULL,
                        ARDUINO_RUNNING_CORE);
 #endif
 

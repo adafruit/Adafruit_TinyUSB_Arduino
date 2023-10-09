@@ -71,16 +71,18 @@ void forward_serial(void) {
 //--------------------------------------------------------------------+
 
 #ifdef USE_FREERTOS
+
+#ifdef ARDUINO_ARCH_ESP32
+  #define USBH_STACK_SZ 2048
+#else
+  #define USBH_STACK_SZ 200
+#endif
+
 void usbhost_rtos_task(void *param) {
   (void) param;
   while (1) {
     USBHost.task();
   }
-}
-
-void create_usbhost_rtos_task(void) {
-  const uint32_t usbh_stack_size = 200;
-  xTaskCreate(usbhost_rtos_task, "usbh", usbh_stack_size, NULL, TASK_PRIO_HIGH, NULL);
 }
 #endif
 
@@ -94,7 +96,8 @@ void setup() {
   SerialHost.begin(115200);
 
 #ifdef USE_FREERTOS
-  create_usbhost_rtos_task();
+  // Create a task to run USBHost.task() in background
+  xTaskCreate(usbhost_rtos_task, "usbh", USBH_STACK_SZ, NULL, 3, NULL);
 #endif
 
 //  while ( !Serial ) delay(10);   // wait for native usb
