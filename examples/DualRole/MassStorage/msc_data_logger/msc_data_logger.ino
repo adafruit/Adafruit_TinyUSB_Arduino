@@ -65,8 +65,8 @@ void data_log(void) {
     return;
   }
 
-  static uint32_t last_ms = 0;
-  uint32_t ms = millis();
+  static unsigned long last_ms = 0;
+  unsigned long ms = millis();
 
   if ( ms - last_ms < LOG_INTERVAL ) {
     return;
@@ -82,8 +82,8 @@ void data_log(void) {
   } else {
     int value = analogRead(analogPin);
 
-    Serial.printf("%u,%d\r\n", ms, value);
-    f_log.printf("%u,%d\r\n", ms, value);
+    Serial.printf("%lu,%d\r\n", ms, value);
+    f_log.printf("%lu,%d\r\n", ms, value);
 
     f_log.close();
   }
