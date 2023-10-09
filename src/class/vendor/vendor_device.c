@@ -24,16 +24,14 @@
  * This file is part of the TinyUSB stack.
  */
 
+// ESP32 out-of-sync
+#ifdef ARDUINO_ARCH_ESP32
+#include "arduino/ports/esp32/tusb_config_esp32.h"
+#endif
+
 #include "tusb_option.h"
 
 #if (CFG_TUD_ENABLED && CFG_TUD_VENDOR)
-
-// ESP32 out-of-sync
-// Somehow we have linking issue: multiple definition of vendor APIs with arduino-esp32 master
-// skip this driver entirely and used the pre-compiled libarduino_tinyusb.a instead
-#ifdef ARDUINO_ARCH_ESP32
-#include "arduino/ports/esp32/tusb_config_esp32.h"
-#else
 
 #include "device/usbd.h"
 #include "device/usbd_pvt.h"
@@ -291,5 +289,4 @@ bool vendord_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint
   return true;
 }
 
-#endif
 #endif

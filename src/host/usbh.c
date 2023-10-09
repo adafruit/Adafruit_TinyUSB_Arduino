@@ -24,6 +24,11 @@
  * This file is part of the TinyUSB stack.
  */
 
+// ESP32 out-of-sync
+#ifdef ARDUINO_ARCH_ESP32
+#include "arduino/ports/esp32/tusb_config_esp32.h"
+#endif
+
 #include "tusb_option.h"
 
 #if CFG_TUH_ENABLED
@@ -43,6 +48,32 @@
 
 #ifndef CFG_TUH_INTERFACE_MAX
   #define CFG_TUH_INTERFACE_MAX   8
+#endif
+
+//--------------------------------------------------------------------+
+// ESP32 out-of-sync
+//--------------------------------------------------------------------+
+#ifdef ARDUINO_ARCH_ESP32
+
+#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(2, 0, 14) && !defined(PLATFORMIO)
+extern bool hcd_edpt_abort_xfer(uint8_t rhport, uint8_t dev_addr, uint8_t ep_addr);
+#endif
+
+#ifndef TU_LOG_BUF
+#if CFG_TUSB_DEBUG >= CFG_TUH_LOG_LEVEL
+  static inline void tu_print_buf(uint8_t const* buf, uint32_t bufsize) {
+    for(uint32_t i=0; i<bufsize; i++) tu_printf("%02X ", buf[i]);
+  }
+  #define TU_LOG_BUF(lvl, _buf, _bufsize)  tu_print_buf(_buf, _bufsize)
+#else
+  #define TU_LOG_BUF(lvl, _buf, _bufsize)
+#endif
+#endif
+
+#endif // ESP32
+
+#ifndef TU_LOG_USBH
+  #define TU_LOG_USBH(...)   TU_LOG(CFG_TUH_LOG_LEVEL, __VA_ARGS__)
 #endif
 
 //--------------------------------------------------------------------+
@@ -660,7 +691,7 @@ static bool usbh_control_xfer_cb (uint8_t dev_addr, uint8_t ep_addr, xfer_result
 
   if (XFER_RESULT_SUCCESS != result) {
     TU_LOG1("[%u:%u] Control %s, xferred_bytes = %lu\r\n", rhport, dev_addr, result == XFER_RESULT_STALLED ? "STALLED" : "FAILED", xferred_bytes);
-    TU_LOG1_BUF(request, 8);
+    TU_LOG_BUF(1, request, 8);
     TU_LOG1("\r\n");
 
     // terminate transfer if any stage failed

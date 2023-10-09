@@ -22,6 +22,11 @@
  * THE SOFTWARE.
  */
 
+// ESP32 out-of-sync
+#ifdef ARDUINO_ARCH_ESP32
+#include "arduino/ports/esp32/tusb_config_esp32.h"
+#endif
+
 #include "tusb_option.h"
 
 #if CFG_TUH_ENABLED && CFG_TUH_MSC

@@ -24,6 +24,11 @@
  * This file is part of the TinyUSB stack.
  */
 
+// ESP32 out-of-sync
+#ifdef ARDUINO_ARCH_ESP32
+#include "arduino/ports/esp32/tusb_config_esp32.h"
+#endif
+
 #include "tusb_option.h"
 
 #if CFG_TUH_ENABLED && defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
@@ -210,16 +215,21 @@ static max3421_data_t _hcd_data;
 // API: SPI transfer with MAX3421E, must be implemented by application
 //--------------------------------------------------------------------+
 
-void tuh_max3421_spi_cs_api(uint8_t rhport, bool active);
-bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const * tx_buf, size_t tx_len, uint8_t * rx_buf, size_t rx_len);
-void tuh_max3421_int_api(uint8_t rhport, bool enabled);
+// API to control MAX3421 SPI CS
+extern void tuh_max3421_spi_cs_api(uint8_t rhport, bool active);
 
-static void handle_connect_irq(uint8_t rhport, bool in_isr);
-static inline void hirq_write(uint8_t rhport, uint8_t data, bool in_isr);
+// API to transfer data with MAX3421 SPI
+// Either tx_buf or rx_buf can be NULL, which means transfer is write or read only
+extern bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const* tx_buf, uint8_t* rx_buf, size_t xfer_bytes);
+
+// API to enable/disable MAX3421 INTR pin interrupt
+extern void tuh_max3421_int_api(uint8_t rhport, bool enabled);
 
 //--------------------------------------------------------------------+
 // SPI Helper
 //--------------------------------------------------------------------+
+static void handle_connect_irq(uint8_t rhport, bool in_isr);
+static inline void hirq_write(uint8_t rhport, uint8_t data, bool in_isr);
 
 static void max3421_spi_lock(uint8_t rhport, bool in_isr) {
   // disable interrupt and mutex lock (for pre-emptive RTOS) if not in_isr
@@ -249,9 +259,9 @@ static void fifo_write(uint8_t rhport, uint8_t reg, uint8_t const * buffer, uint
 
   max3421_spi_lock(rhport, in_isr);
 
-  tuh_max3421_spi_xfer_api(rhport, &reg, 1, &hirq, 1);
+  tuh_max3421_spi_xfer_api(rhport, &reg, &hirq, 1);
   _hcd_data.hirq = hirq;
-  tuh_max3421_spi_xfer_api(rhport, buffer, len, NULL, 0);
+  tuh_max3421_spi_xfer_api(rhport, buffer, NULL, len);
 
   max3421_spi_unlock(rhport, in_isr);
 
@@ -263,9 +273,9 @@ static void fifo_read(uint8_t rhport, uint8_t * buffer, uint16_t len, bool in_is
 
   max3421_spi_lock(rhport, in_isr);
 
-  tuh_max3421_spi_xfer_api(rhport, &reg, 1, &hirq, 1);
+  tuh_max3421_spi_xfer_api(rhport, &reg, &hirq, 1);
   _hcd_data.hirq = hirq;
-  tuh_max3421_spi_xfer_api(rhport, NULL, 0, buffer, len);
+  tuh_max3421_spi_xfer_api(rhport, NULL, buffer, len);
 
   max3421_spi_unlock(rhport, in_isr);
 }
@@ -276,7 +286,7 @@ static void reg_write(uint8_t rhport, uint8_t reg, uint8_t data, bool in_isr) {
 
   max3421_spi_lock(rhport, in_isr);
 
-  tuh_max3421_spi_xfer_api(rhport, tx_buf, 2, rx_buf, 2);
+  tuh_max3421_spi_xfer_api(rhport, tx_buf, rx_buf, 2);
 
   max3421_spi_unlock(rhport, in_isr);
 
@@ -290,7 +300,7 @@ static uint8_t reg_read(uint8_t rhport, uint8_t reg, bool in_isr) {
 
   max3421_spi_lock(rhport, in_isr);
 
-  bool ret = tuh_max3421_spi_xfer_api(rhport, tx_buf, 2, rx_buf, 2);
+  bool ret = tuh_max3421_spi_xfer_api(rhport, tx_buf, rx_buf, 2);
 
   max3421_spi_unlock(rhport, in_isr);
 
@@ -666,9 +676,14 @@ bool hcd_setup_send(uint8_t rhport, uint8_t daddr, uint8_t const setup_packet[8]
   return true;
 }
 
+// ESP32 out-of-sync
+#if defined(ARDUINO_ARCH_ESP32) && ESP_ARDUINO_VERSION < 0x02000E && !defined(PLATFORMIO)
+bool hcd_edpt_clear_stall(uint8_t dev_addr, uint8_t ep_addr) {
+#else
 // clear stall, data toggle is also reset to DATA0
 bool hcd_edpt_clear_stall(uint8_t rhport, uint8_t dev_addr, uint8_t ep_addr) {
   (void) rhport;
+#endif
   (void) dev_addr;
   (void) ep_addr;
 
@@ -859,8 +874,13 @@ void print_hirq(uint8_t hirq) {
   #define print_hirq(hirq)
 #endif
 
+// ESP32 out-of-sync
+#if defined(ARDUINO_ARCH_ESP32) && ESP_ARDUINO_VERSION < 0x02000E && !defined(PLATFORMIO)
+void hcd_int_handler_esp32(uint8_t rhport, bool in_isr) {
+#else
 // Interrupt handler
 void hcd_int_handler(uint8_t rhport, bool in_isr) {
+#endif
   uint8_t hirq = reg_read(rhport, HIRQ_ADDR, in_isr) & _hcd_data.hien;
   if (!hirq) return;
 //  print_hirq(hirq);

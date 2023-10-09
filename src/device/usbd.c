@@ -24,6 +24,11 @@
  * This file is part of the TinyUSB stack.
  */
 
+// ESP32 out-of-sync
+#ifdef ARDUINO_ARCH_ESP32
+#include "arduino/ports/esp32/tusb_config_esp32.h"
+#endif
+
 #include "tusb_option.h"
 
 #if CFG_TUD_ENABLED
@@ -38,12 +43,7 @@
 //--------------------------------------------------------------------+
 // ESP32 out-of-sync
 //--------------------------------------------------------------------+
-#ifdef ARDUINO_ARCH_ESP32
-#include "arduino/ports/esp32/tusb_config_esp32.h"
-
-TU_ATTR_WEAK bool dcd_edpt_iso_alloc(uint8_t rhport, uint8_t ep_addr, uint16_t largest_packet_size);
-TU_ATTR_WEAK bool dcd_edpt_iso_activate(uint8_t rhport,  tusb_desc_endpoint_t const * p_endpoint_desc);
-
+#if defined(ARDUINO_ARCH_ESP32) && !defined(PLATFORMIO)
 #ifndef TU_LOG_BUF
 #if CFG_TUSB_DEBUG >= CFG_TUD_LOG_LEVEL
   static inline void tu_print_buf(uint8_t const* buf, uint32_t bufsize) {

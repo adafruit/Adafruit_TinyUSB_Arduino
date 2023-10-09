@@ -273,7 +273,6 @@
 // highspeed support indicator
 #define TUH_OPT_HIGH_SPEED    (CFG_TUH_MAX_SPEED ? (CFG_TUH_MAX_SPEED & OPT_MODE_HIGH_SPEED) : TUP_RHPORT_HIGHSPEED)
 
-
 //--------------------------------------------------------------------+
 // TODO move later
 //--------------------------------------------------------------------+

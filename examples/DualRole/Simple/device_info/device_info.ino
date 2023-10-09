@@ -57,7 +57,7 @@
 typedef struct {
   tusb_desc_device_t desc_device;
   uint16_t manufacturer[32];
-  uint16_t product[32];
+  uint16_t product[48];
   uint16_t serial[16];
   bool mounted;
 } dev_info_t;

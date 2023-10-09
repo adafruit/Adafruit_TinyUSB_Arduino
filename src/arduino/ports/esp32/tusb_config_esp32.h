@@ -22,8 +22,8 @@
  * THE SOFTWARE.
  */
 
-#ifndef _TUSB_CONFIG_ESP32_H_
-#define _TUSB_CONFIG_ESP32_H_
+#ifndef TUSB_CONFIG_ESP32_H_
+#define TUSB_CONFIG_ESP32_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,73 +43,46 @@ extern "C" {
 //--------------------------------------------------------------------+
 // ESP32 out-of-sync
 //--------------------------------------------------------------------+
-#ifndef tu_static
-#define tu_static static
+#include "esp_arduino_version.h"
 
-#include <stddef.h>
-#include <string.h>
-static inline int tu_memset_s(void *dest, size_t destsz, int ch, size_t count) {
-  if (count > destsz) {
-    return -1;
-  }
-  memset(dest, ch, count);
-  return 0;
-}
-static inline int tu_memcpy_s(void *dest, size_t destsz, const void *src,
-                              size_t count) {
-  if (count > destsz) {
-    return -1;
-  }
-  memcpy(dest, src, count);
-  return 0;
-}
-#endif
-
-#ifndef CFG_TUD_MEM_SECTION
-#define CFG_TUD_MEM_SECTION CFG_TUSB_MEM_SECTION
+#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(2, 0, 8)
+#error "ESP32 Arduino core version 2.0.8 or later is required"
 #endif
 
 #ifndef CFG_TUD_LOG_LEVEL
 #define CFG_TUD_LOG_LEVEL 2
 #endif
 
-#if 0
-//--------------------------------------------------------------------
-// COMMON CONFIGURATION
-//--------------------------------------------------------------------
-#define CFG_TUSB_MCU OPT_MCU_NRF5X
-
-#define CFG_TUSB_OS OPT_OS_FREERTOS
-#define CFG_TUSB_MEM_SECTION
-#define CFG_TUSB_MEM_ALIGN __attribute__((aligned(4)))
-
-#ifndef CFG_TUSB_DEBUG
-#define CFG_TUSB_DEBUG 0
+#ifndef CFG_TUH_LOG_LEVEL
+#define CFG_TUH_LOG_LEVEL 2
 #endif
+
+// #ifndef CFG_TUSB_DEBUG
+// #define CFG_TUSB_DEBUG 0
+// #endif
 
 // For selectively disable device log (when > CFG_TUSB_DEBUG)
 // #define CFG_TUD_LOG_LEVEL 3
-
-#ifdef USE_TINYUSB
-// Enable device stack
-#define CFG_TUD_ENABLED 1
-
-// Enable host stack with MAX3421E (host shield)
-#define CFG_TUH_ENABLED 1
-#define CFG_TUH_MAX3421 1
-
-#else
-#define CFG_TUD_ENABLED 0
-#define CFG_TUH_ENABLED 0
-#endif
 
 //--------------------------------------------------------------------
 // DEVICE CONFIGURATION
 //--------------------------------------------------------------------
 
+// device configuration is configured in BSP
+// sdk/include/arduino_tinyusb/include/tusb_config.h
+
 //--------------------------------------------------------------------
 // Host Configuration
 //--------------------------------------------------------------------
+
+// Enable host stack with MAX3421E (host shield)
+#define CFG_TUH_ENABLED 1
+#define CFG_TUH_MAX_SPEED OPT_MODE_FULL_SPEED
+#define CFG_TUH_MAX3421 1
+
+#ifndef CFG_TUH_MAX3421_ENDPOINT_TOTAL
+#define CFG_TUH_MAX3421_ENDPOINT_TOTAL (8 + 4 * (CFG_TUH_DEVICE_MAX - 1))
+#endif
 
 // Size of buffer to hold descriptors and other data used for enumeration
 #define CFG_TUH_ENUMERATION_BUFSIZE 256
@@ -149,8 +122,6 @@ static inline int tu_memcpy_s(void *dest, size_t destsz, const void *src,
 // This need Pico-PIO-USB at least 0.5.1
 #define CFG_TUH_CDC_LINE_CODING_ON_ENUM                                        \
   { 115200, CDC_LINE_CONDING_STOP_BITS_1, CDC_LINE_CODING_PARITY_NONE, 8 }
-
-#endif
 
 #ifdef __cplusplus
 }

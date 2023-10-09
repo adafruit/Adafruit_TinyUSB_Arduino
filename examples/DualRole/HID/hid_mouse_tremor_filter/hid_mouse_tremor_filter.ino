@@ -168,7 +168,6 @@ butterworth_coeffs_t butterworth_lowpass(float cutoff_frequency, float sampling_
   butterworth_coeffs_t coe;
 
   float omega = 2.0 * PI * cutoff_frequency / sampling_frequency;
-  float c = cos(omega);
   float s = sin(omega);
   float t = tan(omega / 2.0);
   float alpha = s / (2.0 * t);

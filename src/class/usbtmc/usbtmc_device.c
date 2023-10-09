@@ -67,14 +67,14 @@
 // Ability to defer status byte transmission
 // Transmission of status byte in response to USB488 SRQ condition
 
-#include "tusb_option.h"
-
-#if (CFG_TUD_ENABLED && CFG_TUD_USBTMC)
-
 // ESP32 out-of-sync
 #ifdef ARDUINO_ARCH_ESP32
 #include "arduino/ports/esp32/tusb_config_esp32.h"
 #endif
+
+#include "tusb_option.h"
+
+#if (CFG_TUD_ENABLED && CFG_TUD_USBTMC)
 
 #include "device/usbd.h"
 #include "device/usbd_pvt.h"
