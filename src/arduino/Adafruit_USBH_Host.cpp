@@ -63,10 +63,10 @@ Adafruit_USBH_Host::Adafruit_USBH_Host(SPIClass *spi, int8_t cs, int8_t intr) {
   _sck = _mosi = _miso = -1;
 }
 
-Adafruit_USBH_Host::Adafruit_USBH_Host(int8_t sck, int8_t mosi, int8_t miso,
-                                       int8_t cs, int8_t intr) {
+Adafruit_USBH_Host::Adafruit_USBH_Host(SPIClass *spi, int8_t sck, int8_t mosi,
+                                       int8_t miso, int8_t cs, int8_t intr) {
   Adafruit_USBH_Host::_instance = this;
-  _spi = NULL;
+  _spi = spi;
   _cs = cs;
   _intr = intr;
   _sck = sck;
@@ -89,7 +89,7 @@ bool Adafruit_USBH_Host::configure_pio_usb(uint8_t rhport,
 
 bool Adafruit_USBH_Host::begin(uint8_t rhport) {
 #if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
-  if (_intr < 0 || _cs < 0) {
+  if (_intr < 0 || _cs < 0 || !_spi) {
     return false;
   }
 
@@ -98,18 +98,13 @@ bool Adafruit_USBH_Host::begin(uint8_t rhport) {
   digitalWrite(_cs, HIGH);
 
   // SPI init
-  if (_spi) {
-    _spi->begin();
-  } else {
+  // Software SPI is not supported yet
 #ifdef ARDUINO_ARCH_ESP32
-    // ESP32 SPI assign pins when init instead of declaration as standard API
-    _spi = new SPIClass(HSPI);
-    _spi->begin(_sck, _miso, _mosi, -1);
+  // ESP32 SPI assign pins when begin() of declaration as standard API
+  _spi->begin(_sck, _miso, _mosi, -1);
 #else
-    // Software SPI is not supported yet
-    return false;
+  _spi->begin();
 #endif
-  }
 
 #ifdef ARDUINO_ARCH_ESP32
   // Create an task for executing interrupt handler in thread mode
