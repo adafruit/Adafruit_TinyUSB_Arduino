@@ -121,7 +121,9 @@ bool Adafruit_USBH_Host::begin(uint8_t rhport) {
   return tuh_init(rhport);
 }
 
-void Adafruit_USBH_Host::task(void) { tuh_task(); }
+void Adafruit_USBH_Host::task(uint32_t timeout_ms, bool in_isr) {
+  tuh_task_ext(timeout_ms, in_isr);
+}
 
 // Invoked when device with hid interface is mounted
 // Report descriptor is also available for use.

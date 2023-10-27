@@ -69,7 +69,7 @@ public:
 #endif
 
   bool begin(uint8_t rhport);
-  void task(void);
+  void task(uint32_t timeout_ms = UINT32_MAX, bool in_isr = false);
 
   //------------- internal usage -------------//
   static Adafruit_USBH_Host *_instance;
