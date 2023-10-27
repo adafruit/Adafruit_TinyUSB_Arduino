@@ -54,8 +54,8 @@ private:
 public:
   // constructor for using MAX3421E (host shield)
   Adafruit_USBH_Host(SPIClass *spi, int8_t cs, int8_t intr);
-  Adafruit_USBH_Host(int8_t sck, int8_t mosi, int8_t miso, int8_t cs,
-                     int8_t intr);
+  Adafruit_USBH_Host(SPIClass *spi, int8_t sck, int8_t mosi, int8_t miso,
+                     int8_t cs, int8_t intr);
 #endif
 
 public:
@@ -69,7 +69,7 @@ public:
 #endif
 
   bool begin(uint8_t rhport);
-  void task(void);
+  void task(uint32_t timeout_ms = UINT32_MAX, bool in_isr = false);
 
   //------------- internal usage -------------//
   static Adafruit_USBH_Host *_instance;
