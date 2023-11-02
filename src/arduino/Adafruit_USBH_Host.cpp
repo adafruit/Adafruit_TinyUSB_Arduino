@@ -202,6 +202,7 @@ void tuh_max3421_spi_cs_api(uint8_t rhport, bool active) {
     return;
   }
   Adafruit_USBH_Host *host = Adafruit_USBH_Host::_instance;
+  SPIClass *spi = host->_spi;
 
   if (active) {
     // MAX3421e max clock is 26MHz
@@ -213,10 +214,10 @@ void tuh_max3421_spi_cs_api(uint8_t rhport, bool active) {
     uint32_t const max_clock = 26000000ul;
 #endif
 
-    host->_spi->beginTransaction(SPISettings(max_clock, MSBFIRST, SPI_MODE0));
+    spi->beginTransaction(SPISettings(max_clock, MSBFIRST, SPI_MODE0));
     digitalWrite(Adafruit_USBH_Host::_instance->_cs, LOW);
   } else {
-    host->_spi->endTransaction();
+    spi->endTransaction();
     digitalWrite(Adafruit_USBH_Host::_instance->_cs, HIGH);
   }
 }
@@ -229,6 +230,7 @@ bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
     return false;
   }
   Adafruit_USBH_Host *host = Adafruit_USBH_Host::_instance;
+  SPIClass *spi = host->_spi;
 
 #ifdef ARDUINO_ARCH_SAMD
   // SAMD cannot use transfer(tx_buf, rx_buf, len) API since it default to use
@@ -240,16 +242,16 @@ bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
     if (tx_buf) {
       data = tx_buf[count];
     }
-    data = host->_spi->transfer(data);
+    data = spi->transfer(data);
 
     if (rx_buf) {
       rx_buf[count] = data;
     }
   }
 #elif defined(ARDUINO_ARCH_ESP32)
-  host->_spi->transferBytes(tx_buf, rx_buf, xfer_bytes);
+  spi->transferBytes(tx_buf, rx_buf, xfer_bytes);
 #else
-  host->_spi->transfer(tx_buf, rx_buf, xfer_bytes);
+  spi->transfer(tx_buf, rx_buf, xfer_bytes);
 #endif
 
   return true;
