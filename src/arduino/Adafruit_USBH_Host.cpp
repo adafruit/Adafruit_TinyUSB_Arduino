@@ -197,11 +197,28 @@ extern "C" {
 
 void tuh_max3421_spi_cs_api(uint8_t rhport, bool active) {
   (void)rhport;
+
   if (!Adafruit_USBH_Host::_instance) {
     return;
   }
+  Adafruit_USBH_Host *host = Adafruit_USBH_Host::_instance;
 
-  digitalWrite(Adafruit_USBH_Host::_instance->_cs, active ? LOW : HIGH);
+  if (active) {
+    // MAX3421e max clock is 26MHz
+    // Depending on mcu ports, it may need to be clipped down
+#ifdef ARDUINO_ARCH_SAMD
+    // SAMD 21/51 can only work reliably at 12MHz
+    uint32_t const max_clock = 12000000ul;
+#else
+    uint32_t const max_clock = 26000000ul;
+#endif
+
+    host->_spi->beginTransaction(SPISettings(max_clock, MSBFIRST, SPI_MODE0));
+    digitalWrite(Adafruit_USBH_Host::_instance->_cs, LOW);
+  } else {
+    host->_spi->endTransaction();
+    digitalWrite(Adafruit_USBH_Host::_instance->_cs, HIGH);
+  }
 }
 
 bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
@@ -212,19 +229,6 @@ bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
     return false;
   }
   Adafruit_USBH_Host *host = Adafruit_USBH_Host::_instance;
-
-  // MAX3421e max clock is 26MHz
-  // Depending on mcu ports, it may need to be clipped down
-#ifdef ARDUINO_ARCH_SAMD
-  // SAMD 21/51 can only work reliably at 12MHz
-  uint32_t const max_clock = 12000000ul;
-#else
-  uint32_t const max_clock = 26000000ul;
-//  uint32_t const max_clock = 4000000ul;
-#endif
-
-  SPISettings config(max_clock, MSBFIRST, SPI_MODE0);
-  host->_spi->beginTransaction(config);
 
 #ifdef ARDUINO_ARCH_SAMD
   // SAMD cannot use transfer(tx_buf, rx_buf, len) API since it default to use
@@ -248,7 +252,6 @@ bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
   host->_spi->transfer(tx_buf, rx_buf, xfer_bytes);
 #endif
 
-  host->_spi->endTransaction();
   return true;
 }
 
