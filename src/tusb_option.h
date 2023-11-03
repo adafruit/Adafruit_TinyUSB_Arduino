@@ -174,10 +174,10 @@
 // NXP LPC MCX
 #define OPT_MCU_MCXN9            2300  ///< NXP MCX N9 Series
 
-// Helper to check if configured MCU is one of listed
+// Check if configured MCU is one of listed
 // Apply _TU_CHECK_MCU with || as separator to list of input
-#define _TU_CHECK_MCU(_m)   (CFG_TUSB_MCU == _m)
-#define TU_CHECK_MCU(...)   (TU_ARGS_APPLY(_TU_CHECK_MCU, ||, __VA_ARGS__))
+#define _TU_CHECK_MCU(_m)    (CFG_TUSB_MCU == _m)
+#define TU_CHECK_MCU(...)    (TU_ARGS_APPLY(_TU_CHECK_MCU, ||, __VA_ARGS__))
 
 //--------------------------------------------------------------------+
 // Supported OS
@@ -272,6 +272,7 @@
 
 // highspeed support indicator
 #define TUH_OPT_HIGH_SPEED    (CFG_TUH_MAX_SPEED ? (CFG_TUH_MAX_SPEED & OPT_MODE_HIGH_SPEED) : TUP_RHPORT_HIGHSPEED)
+
 
 //--------------------------------------------------------------------+
 // TODO move later
