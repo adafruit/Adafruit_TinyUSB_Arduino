@@ -40,7 +40,7 @@ Adafruit_USBH_Host *Adafruit_USBH_Host::_instance = NULL;
 
 Adafruit_USBH_Host::Adafruit_USBH_Host(void) {
   Adafruit_USBH_Host::_instance = this;
-
+  _rhport = 0;
 #if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
   _spi = NULL;
   _cs = _intr = _sck = _mosi = _miso = -1;
@@ -48,6 +48,15 @@ Adafruit_USBH_Host::Adafruit_USBH_Host(void) {
 }
 
 #if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
+
+// API to read MAX3421's register. Implemented by TinyUSB
+extern "C" uint8_t tuh_max3421_reg_read(uint8_t rhport, uint8_t reg,
+                                        bool in_isr);
+
+// API to write MAX3421's register. Implemented by TinyUSB
+extern "C" bool tuh_max3421_reg_write(uint8_t rhport, uint8_t reg, uint8_t data,
+                                      bool in_isr);
+
 static void max3421_isr(void);
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -57,6 +66,7 @@ static void max3421_intr_task(void *param);
 
 Adafruit_USBH_Host::Adafruit_USBH_Host(SPIClass *spi, int8_t cs, int8_t intr) {
   Adafruit_USBH_Host::_instance = this;
+  _rhport = 0;
   _spi = spi;
   _cs = cs;
   _intr = intr;
@@ -66,6 +76,7 @@ Adafruit_USBH_Host::Adafruit_USBH_Host(SPIClass *spi, int8_t cs, int8_t intr) {
 Adafruit_USBH_Host::Adafruit_USBH_Host(SPIClass *spi, int8_t sck, int8_t mosi,
                                        int8_t miso, int8_t cs, int8_t intr) {
   Adafruit_USBH_Host::_instance = this;
+  _rhport = 0;
   _spi = spi;
   _cs = cs;
   _intr = intr;
@@ -73,6 +84,16 @@ Adafruit_USBH_Host::Adafruit_USBH_Host(SPIClass *spi, int8_t sck, int8_t mosi,
   _mosi = mosi;
   _miso = miso;
 }
+
+uint8_t Adafruit_USBH_Host::max3421_readRegister(uint8_t reg, bool in_isr) {
+  return tuh_max3421_reg_read(_rhport, reg, in_isr);
+}
+
+bool Adafruit_USBH_Host::max3421_writeRegister(uint8_t reg, uint8_t data,
+                                               bool in_isr) {
+  return tuh_max3421_reg_write(_rhport, reg, data, in_isr);
+}
+
 #endif
 
 bool Adafruit_USBH_Host::configure(uint8_t rhport, uint32_t cfg_id,
@@ -118,6 +139,7 @@ bool Adafruit_USBH_Host::begin(uint8_t rhport) {
   attachInterrupt(_intr, max3421_isr, FALLING);
 #endif
 
+  _rhport = rhport;
   return tuh_init(rhport);
 }
 
