@@ -68,10 +68,13 @@ dev_info_t dev_info[CFG_TUH_DEVICE_MAX] = { 0 };
 void setup() {
   Serial.begin(115200);
 
-#ifndef ARDUINO_ARCH_RP2040
+#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
   // init host stack on controller (rhport) 1
   // For rp2040: this is called in core1's setup1()
   USBHost.begin(1);
+
+  // FeatherWing USB Host use MAX3421E's GPIO0 as VBUS enable (active high)
+  USBHost.max3421_writeIOPINS1(0x01, false);
 #endif
 
 //  while ( !Serial ) delay(10);   // wait for native usb
@@ -94,7 +97,6 @@ void loop() {
 
 //------------- Core0 -------------//
 void loop() {
-
 }
 
 //------------- Core1 -------------//

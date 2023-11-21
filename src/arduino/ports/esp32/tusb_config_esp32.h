@@ -57,6 +57,12 @@ extern "C" {
 #define CFG_TUH_LOG_LEVEL 2
 #endif
 
+//--------------------------------------------------------------------
+// COMMON CONFIGURATION
+// Note: it is possible to use tinyusb + max3421e as host controller
+// with no OTG USB MCU such as eps32, c3 etc...
+//--------------------------------------------------------------------
+
 // #ifndef CFG_TUSB_DEBUG
 // #define CFG_TUSB_DEBUG 0
 // #endif

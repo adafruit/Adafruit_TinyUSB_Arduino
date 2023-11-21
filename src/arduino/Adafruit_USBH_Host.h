@@ -56,6 +56,17 @@ public:
   Adafruit_USBH_Host(SPIClass *spi, int8_t cs, int8_t intr);
   Adafruit_USBH_Host(SPIClass *spi, int8_t sck, int8_t mosi, int8_t miso,
                      int8_t cs, int8_t intr);
+
+  uint8_t max3421_readRegister(uint8_t reg, bool in_isr);
+  bool max3421_writeRegister(uint8_t reg, uint8_t data, bool in_isr);
+  bool max3421_writeIOPINS1(uint8_t data, bool in_isr) {
+    enum { IOPINS1_ADDR = 20u << 3 }; // 0xA0
+    return max3421_writeRegister(IOPINS1_ADDR, data, in_isr);
+  }
+  bool max3421_writeIOPINS2(uint8_t data, bool in_isr) {
+    enum { IOPINS2_ADDR = 21u << 3 }; // 0xA8
+    return max3421_writeRegister(IOPINS2_ADDR, data, in_isr);
+  }
 #endif
 
 public:
@@ -75,6 +86,8 @@ public:
   static Adafruit_USBH_Host *_instance;
 
 private:
+  uint8_t _rhport;
+
   friend void tuh_max3421_spi_cs_api(uint8_t rhport, bool active);
   friend bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
                                        uint8_t *rx_buf, size_t xfer_bytes);
