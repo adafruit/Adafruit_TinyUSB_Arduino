@@ -42,7 +42,11 @@
   // Note: when compiling core Arduino IDEs will include tusb_config.h in the BSP
   // sdk/include/arduino_tinyusb/include. While compiling .c file in this library this
   // file will be used instead. For consistency: include the one in BSP here as well
-  #include "../../arduino_tinyusb/include/tusb_config.h"
+  #if CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
+    #include "../../arduino_tinyusb/include/tusb_config.h"
+  #else
+    #include "arduino/ports/esp32/tusb_config_esp32.h"
+  #endif
 
   // Note: For platformio prioritize this file over the one in BSP in all cases
 

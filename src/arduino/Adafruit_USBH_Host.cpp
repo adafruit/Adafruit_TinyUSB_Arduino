@@ -26,6 +26,7 @@
 #ifdef ARDUINO_ARCH_ESP32
 #include "arduino/ports/esp32/tusb_config_esp32.h"
 #include "driver/gpio.h"
+#include <Arduino.h>
 #define MSBFIRST SPI_MSBFIRST
 #endif
 
@@ -123,15 +124,13 @@ bool Adafruit_USBH_Host::begin(uint8_t rhport) {
 #ifdef ARDUINO_ARCH_ESP32
   // ESP32 SPI assign pins when begin() of declaration as standard API
   _spi->begin(_sck, _miso, _mosi, -1);
-#else
-  _spi->begin();
-#endif
 
-#ifdef ARDUINO_ARCH_ESP32
   // Create an task for executing interrupt handler in thread mode
   max3421_intr_sem = xSemaphoreCreateBinary();
   xTaskCreateUniversal(max3421_intr_task, "max3421 intr", 2048, NULL, 5, NULL,
                        ARDUINO_RUNNING_CORE);
+#else
+  _spi->begin();
 #endif
 
   // Interrupt pin
