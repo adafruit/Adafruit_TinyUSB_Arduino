@@ -27,7 +27,6 @@
 #include "arduino/ports/esp32/tusb_config_esp32.h"
 #include "driver/gpio.h"
 #include <Arduino.h>
-#define MSBFIRST SPI_MSBFIRST
 #endif
 
 #include "tusb_option.h"

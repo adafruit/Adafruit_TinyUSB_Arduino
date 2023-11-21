@@ -63,14 +63,6 @@ extern "C" {
 // with no OTG USB MCU such as eps32, c3 etc...
 //--------------------------------------------------------------------
 
-#ifndef CFG_TUSB_OS
-#define CFG_TUSB_OS OPT_OS_FREERTOS
-
-// clang-format off
-#define CFG_TUSB_OS_INC_PATH freertos/
-// clang-format on
-#endif
-
 // #ifndef CFG_TUSB_DEBUG
 // #define CFG_TUSB_DEBUG 0
 // #endif
