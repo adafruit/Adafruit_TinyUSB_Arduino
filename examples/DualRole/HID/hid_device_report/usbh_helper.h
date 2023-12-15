@@ -41,12 +41,9 @@
     Adafruit_USBH_Host USBHost(&SPI, 15, 14);
   #elif defined(ARDUINO_ADAFRUIT_FEATHER_ESP32_V2)
     Adafruit_USBH_Host USBHost(&SPI, 27, 33);
-  #elif defined(ARDUINO_METRO_ESP32S3) || defined(ADAFRUIT_METRO_M4_EXPRESS) || defined(ADAFRUIT_METRO_M0_EXPRESS)
-    // For Metro shape CS and INT are pin 10, 9 (host shield default)
-    Adafruit_USBH_Host USBHost(&SPI, 10, 9);
   #else
-    // default to FeatherWing USB Host MAX3421E: CS and INT are pin D11, D10
-    Adafruit_USBH_Host USBHost(&SPI, 11, 10);
+    // Default CS and INT are pin 10, 9
+    Adafruit_USBH_Host USBHost(&SPI, 10, 9);
   #endif
 #else
   // Native USB Host such as rp2040
