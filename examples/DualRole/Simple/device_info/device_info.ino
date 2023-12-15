@@ -72,9 +72,6 @@ void setup() {
   // init host stack on controller (rhport) 1
   // For rp2040: this is called in core1's setup1()
   USBHost.begin(1);
-
-  // FeatherWing USB Host use MAX3421E's GPIO0 as VBUS enable (active high)
-  USBHost.max3421_writeIOPINS1(0x01, false);
 #endif
 
 //  while ( !Serial ) delay(10);   // wait for native usb
