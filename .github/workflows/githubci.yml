@@ -16,13 +16,13 @@ jobs:
         python-version: '3.x'
 
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Run pre-commit
       uses: pre-commit/action@v3.0.0
 
     - name: Checkout adafruit/ci-arduino
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
          repository: adafruit/ci-arduino
          path: ci
@@ -46,17 +46,15 @@ jobs:
       fail-fast: false
       matrix:
         arduino-platform:
-           # ESP32S3
-           - 'feather_esp32s3'
-           # ESP32S2
+           # ESP32
            - 'feather_esp32s2'
+           - 'feather_esp32s3'
            # nRF52
            - 'cpb'
            - 'nrf52840'
            # RP2040
            - 'feather_rp2040_tinyusb'
            # SAMD
-           - 'feather_m4_can_tinyusb'
            - 'metro_m0_tinyusb'
            - 'metro_m4_tinyusb'
 
@@ -67,10 +65,10 @@ jobs:
         python-version: '3.x'
 
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Checkout adafruit/ci-arduino
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
          repository: adafruit/ci-arduino
          path: ci

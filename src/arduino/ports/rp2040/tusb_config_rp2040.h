@@ -32,9 +32,14 @@ extern "C" {
 //--------------------------------------------------------------------
 // COMMON CONFIGURATION
 //--------------------------------------------------------------------
-#define CFG_TUSB_RHPORT0_MODE OPT_MODE_DEVICE
 
-// Enable device stack
+#ifdef USE_TINYUSB_HOST
+// native as host
+#define CFG_TUD_ENABLED 0
+#define CFG_TUH_ENABLED 1
+#define CFG_TUH_RPI_PIO_USB 0
+#else
+// native as device
 #define CFG_TUD_ENABLED 1
 
 // Enable host stack with pio-usb if Pico-PIO-USB library is available
@@ -42,11 +47,15 @@ extern "C" {
 #define CFG_TUH_ENABLED 1
 #define CFG_TUH_RPI_PIO_USB 1
 #endif
+#endif
 
 #ifndef CFG_TUSB_MCU
 #define CFG_TUSB_MCU OPT_MCU_RP2040
 #endif
+
+#ifndef CFG_TUSB_OS
 #define CFG_TUSB_OS OPT_OS_PICO
+#endif
 
 #ifndef CFG_TUSB_DEBUG
 #define CFG_TUSB_DEBUG 0
@@ -130,7 +139,7 @@ extern "C" {
 // bit rate = 115200, 1 stop bit, no parity, 8 bit data width
 // This need Pico-PIO-USB at least 0.5.1
 #define CFG_TUH_CDC_LINE_CODING_ON_ENUM                                        \
-  { 115200, CDC_LINE_CONDING_STOP_BITS_1, CDC_LINE_CODING_PARITY_NONE, 8 }
+  { 115200, CDC_LINE_CODING_STOP_BITS_1, CDC_LINE_CODING_PARITY_NONE, 8 }
 
 #ifdef __cplusplus
 }

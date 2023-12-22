@@ -33,6 +33,7 @@
 #include "esp32-hal-tinyusb.h"
 #endif
 
+#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
 extern "C" {
 void tuh_max3421_spi_cs_api(uint8_t rhport, bool active);
 bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
@@ -41,8 +42,6 @@ void tuh_max3421_int_api(uint8_t rhport, bool enabled);
 }
 
 class Adafruit_USBH_Host {
-
-#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
 private:
   SPIClass *_spi;
   int8_t _cs;
@@ -67,6 +66,15 @@ public:
     enum { IOPINS2_ADDR = 21u << 3 }; // 0xA8
     return max3421_writeRegister(IOPINS2_ADDR, data, in_isr);
   }
+
+private:
+  friend void tuh_max3421_spi_cs_api(uint8_t rhport, bool active);
+  friend bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
+                                       uint8_t *rx_buf, size_t xfer_bytes);
+  friend void tuh_max3421_int_api(uint8_t rhport, bool enabled);
+#else
+
+class Adafruit_USBH_Host {
 #endif
 
 public:
@@ -87,11 +95,6 @@ public:
 
 private:
   uint8_t _rhport;
-
-  friend void tuh_max3421_spi_cs_api(uint8_t rhport, bool active);
-  friend bool tuh_max3421_spi_xfer_api(uint8_t rhport, uint8_t const *tx_buf,
-                                       uint8_t *rx_buf, size_t xfer_bytes);
-  friend void tuh_max3421_int_api(uint8_t rhport, bool enabled);
 };
 
 #endif
