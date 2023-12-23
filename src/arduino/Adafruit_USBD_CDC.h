@@ -43,7 +43,7 @@ class Adafruit_USBD_CDC : public Stream, public Adafruit_USBD_Interface {
 public:
   Adafruit_USBD_CDC(void);
 
-  static uint8_t getInstanceCount(void);
+  static uint8_t getInstanceCount(void) { return _instance_count; }
 
   // from Adafruit_USBD_Interface
   virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
