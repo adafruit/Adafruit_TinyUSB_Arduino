@@ -186,8 +186,10 @@ TU_ATTR_WEAK void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
     !defined(PLATFORMIO)
 extern "C" void hcd_int_handler_esp32(uint8_t rhport, bool in_isr);
 #define tuh_int_handler_esp32 hcd_int_handler_esp32
+
 #else
 #define tuh_int_handler_esp32 tuh_int_handler
+
 #endif
 
 static void max3421_intr_task(void *param) {
@@ -321,8 +323,13 @@ void tuh_max3421_int_api(uint8_t rhport, bool enabled) {
   } else {
     gpio_intr_disable((gpio_num_t)host->_intr);
   }
+
+#elif defined(ARDUINO_ARCH_RP2040)
+  //--- RP2040 ---//
+  irq_set_enabled(IO_IRQ_BANK0, enabled);
+
 #else
-#error "MAX3421e host is not Unsupported by this architecture"
+#error "MAX3421e host is not supported by this architecture"
 #endif
 }
 

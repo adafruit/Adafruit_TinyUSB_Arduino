@@ -38,16 +38,23 @@ extern "C" {
 #define CFG_TUD_ENABLED 0
 #define CFG_TUH_ENABLED 1
 #define CFG_TUH_RPI_PIO_USB 0
+
 #else
 // native as device
 #define CFG_TUD_ENABLED 1
 
-// Enable host stack with pio-usb if Pico-PIO-USB library is available
 #if __has_include("pio_usb.h")
+// Enable host stack with pio-usb if Pico-PIO-USB library is available
 #define CFG_TUH_ENABLED 1
 #define CFG_TUH_RPI_PIO_USB 1
-#endif
-#endif
+
+#else
+// Otherwise enable host controller with MAX3421E
+#define CFG_TUH_ENABLED 1
+#define CFG_TUH_MAX3421 1
+
+#endif // pio_usb.h
+#endif // USE_TINYUSB_HOST
 
 #ifndef CFG_TUSB_MCU
 #define CFG_TUSB_MCU OPT_MCU_RP2040
