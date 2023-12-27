@@ -9,7 +9,6 @@
  any redistribution
 *********************************************************************/
 
-
 /* This example demonstrates use of both device and host, where
  * - Device run on native usb controller (roothub port0)
  * - Host run on MAX3421E controller (roothub port1) tested with:
@@ -20,8 +19,7 @@
  * - SPI instance, CS pin, INT pin are correctly configured
  */
 
-/* Host example will get device descriptors of attached devices and print it out via
- * device cdc (Serial) as follows:
+/* Host example will get device descriptors of attached devices and print it out:
  *    Device 1: ID 046d:c52f
       Device Descriptor:
         bLength             18
@@ -41,21 +39,16 @@
  *
  */
 #include "Adafruit_TinyUSB.h"
-
-// USBHost is defined in usbh_helper.h
-// USB Host using MAX3421E: SPI, CS, INT
 #include "SPI.h"
 
+// USB Host using MAX3421E: SPI, CS, INT
 #if defined(ARDUINO_METRO_ESP32S2)
-Adafruit_USBH_Host USBHost(&SPI, 15, 14);
-
+  Adafruit_USBH_Host USBHost(&SPI, 15, 14);
 #elif defined(ARDUINO_ADAFRUIT_FEATHER_ESP32_V2)
-Adafruit_USBH_Host USBHost(&SPI, 27, 33);
-
+  Adafruit_USBH_Host USBHost(&SPI, 33, 15);
 #else
-
-// Default CS and INT are pin 10, 9
-Adafruit_USBH_Host USBHost(&SPI, 10, 9);
+  // Default CS and INT are pin 10, 9
+  Adafruit_USBH_Host USBHost(&SPI, 10, 9);
 #endif
 
 // Language ID: English
@@ -72,11 +65,13 @@ typedef struct {
 // CFG_TUH_DEVICE_MAX is defined by tusb_config header
 dev_info_t dev_info[CFG_TUH_DEVICE_MAX] = { 0 };
 
+//--------------------------------------------------------------------+
+// setup() & loop()
+//--------------------------------------------------------------------+
 void setup() {
   Serial.begin(115200);
 
   // init host stack on controller (rhport) 1
-  // For rp2040: this is called in core1's setup1()
   USBHost.begin(1);
 
 //  while ( !Serial ) delay(10);   // wait for native usb
