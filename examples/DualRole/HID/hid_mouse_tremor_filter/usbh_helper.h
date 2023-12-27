@@ -40,7 +40,7 @@
   #if defined(ARDUINO_METRO_ESP32S2)
     Adafruit_USBH_Host USBHost(&SPI, 15, 14);
   #elif defined(ARDUINO_ADAFRUIT_FEATHER_ESP32_V2)
-    Adafruit_USBH_Host USBHost(&SPI, 27, 33);
+    Adafruit_USBH_Host USBHost(&SPI, 33, 15);
   #else
     // Default CS and INT are pin 10, 9
     Adafruit_USBH_Host USBHost(&SPI, 10, 9);

@@ -55,6 +55,9 @@ dev_info_t dev_info[CFG_TUH_DEVICE_MAX] = { 0 };
 
 Adafruit_USBH_Host USBHost;
 
+//--------------------------------------------------------------------+
+// setup() & loop()
+//--------------------------------------------------------------------+
 void setup() {
   Serial1.begin(115200);
   Serial1.println("TinyUSB Host: Device Info Example");
@@ -63,7 +66,6 @@ void setup() {
   USBHost.begin(0);
 }
 
-//------------- Core0 -------------//
 void loop() {
   USBHost.task();
   Serial1.flush();
