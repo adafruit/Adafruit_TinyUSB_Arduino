@@ -85,6 +85,7 @@ static cdch_interface_t cdch_data[CFG_TUH_CDC];
 //--------------------------------------------------------------------+
 
 //------------- ACM prototypes -------------//
+static bool acm_open(uint8_t daddr, tusb_desc_interface_t const *itf_desc, uint16_t max_len);
 static void acm_process_config(tuh_xfer_t* xfer);
 
 static bool acm_set_line_coding(cdch_interface_t* p_cdc, cdc_line_coding_t const* line_coding, tuh_xfer_cb_t complete_cb, uintptr_t user_data);
@@ -610,8 +611,6 @@ bool cdch_xfer_cb(uint8_t daddr, uint8_t ep_addr, xfer_result_t event, uint32_t 
 // Enumeration
 //--------------------------------------------------------------------+
 
-static bool acm_open(uint8_t daddr, tusb_desc_interface_t const *itf_desc, uint16_t max_len);
-
 static bool open_ep_stream_pair(cdch_interface_t* p_cdc, tusb_desc_endpoint_t const *desc_ep)
 {
   for(size_t i=0; i<2; i++)
@@ -647,7 +646,7 @@ bool cdch_open(uint8_t rhport, uint8_t daddr, tusb_desc_interface_t const *itf_d
     return acm_open(daddr, itf_desc, max_len);
   }
   #if CFG_TUH_CDC_FTDI || CFG_TUH_CDC_CP210X
-  else if ( 0xff == itf_desc->bInterfaceClass )
+  else if ( TUSB_CLASS_VENDOR_SPECIFIC == itf_desc->bInterfaceClass )
   {
     uint16_t vid, pid;
     TU_VERIFY(tuh_vid_pid_get(daddr, &vid, &pid));
