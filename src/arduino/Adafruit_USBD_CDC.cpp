@@ -266,7 +266,7 @@ void tud_cdc_line_state_cb(uint8_t instance, bool dtr, bool rts) {
 #else
 
 // Device stack is not enabled (probably in host mode)
-#warning "NO_USB selected. No output to Serial will occur!"
+#warning "TinyUSB Host selected. No output to Serial will occur!"
 
 uint16_t Adafruit_USBD_CDC::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
                                                    uint16_t bufsize) {
