@@ -114,6 +114,7 @@ extern "C" {
 #define CFG_TUH_CDC 1
 #define CFG_TUH_CDC_FTDI 1
 #define CFG_TUH_CDC_CP210X 1
+#define CFG_TUH_CDC_CH34X 1
 
 // RX & TX fifo size
 #define CFG_TUH_CDC_RX_BUFSIZE 64
