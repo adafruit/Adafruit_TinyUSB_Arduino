@@ -244,11 +244,21 @@ bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface &itf) {
   }
 
   // Parse interface descriptor to update
-  // - Interface Number & string descriptor
-  // - Endpoint address
+  // - IAD: interface number
+  // - Interface: number & string descriptor
+  // - Endpoint: address
   while (desc < desc_end) {
-    if (tu_desc_type(desc) == TUSB_DESC_INTERFACE) {
+    switch (tu_desc_type(desc)) {
+    case TUSB_DESC_INTERFACE_ASSOCIATION: {
+      tusb_desc_interface_assoc_t *desc_iad =
+          (tusb_desc_interface_assoc_t *)desc;
+      desc_iad->bFirstInterface = _itf_count;
+      break;
+    }
+
+    case TUSB_DESC_INTERFACE: {
       tusb_desc_interface_t *desc_itf = (tusb_desc_interface_t *)desc;
+      desc_itf->bInterfaceNumber = _itf_count;
       if (desc_itf->bAlternateSetting == 0) {
         _itf_count++;
         if (desc_str && (_desc_str_count < STRING_DESCRIPTOR_MAX)) {
@@ -258,12 +268,22 @@ bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface &itf) {
 
           // only assign string index to first interface
           desc_str = NULL;
+        } else {
+          desc_itf->iInterface = 0;
         }
       }
-    } else if (tu_desc_type(desc) == TUSB_DESC_ENDPOINT) {
+      break;
+    }
+
+    case TUSB_DESC_ENDPOINT: {
       tusb_desc_endpoint_t *desc_ep = (tusb_desc_endpoint_t *)desc;
       desc_ep->bEndpointAddress |=
           (desc_ep->bEndpointAddress & 0x80) ? _epin_count++ : _epout_count++;
+      break;
+    }
+
+    default:
+      break;
     }
 
     if (desc[0] == 0) {
