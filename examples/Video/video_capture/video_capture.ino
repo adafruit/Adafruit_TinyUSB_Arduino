@@ -17,7 +17,7 @@
 //--------------------------------------------------------------------+
 #define FRAME_WIDTH   128
 #define FRAME_HEIGHT  96
-#define FRAME_RATE    10
+#define FRAME_RATE    30
 
 uint8_t const desc_video[] = {
   TUD_VIDEO_CAPTURE_DESCRIPTOR_UNCOMPR_BULK(0, 0x80, FRAME_WIDTH, FRAME_HEIGHT, FRAME_RATE, 64)
@@ -41,7 +41,6 @@ static void fill_color_bar(uint8_t* buffer, unsigned start_position);
 
 void setup() {
   Serial.begin(115200);
-//  Serial.end();
   usb_video.begin();
 }
 

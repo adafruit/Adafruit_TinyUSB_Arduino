@@ -34,6 +34,7 @@ Adafruit_USBD_Video::Adafruit_USBD_Video(uint8_t const *desc_itf,
                                          size_t desc_len) {
   _desc_itf = desc_itf;
   _desc_len = desc_len;
+  _vc_id = 0;
 }
 
 bool Adafruit_USBD_Video::begin() {
@@ -56,5 +57,13 @@ uint16_t Adafruit_USBD_Video::getInterfaceDescriptor(uint8_t itfnum,
   memcpy(buf, _desc_itf, _desc_len);
   return _desc_len;
 }
+
+//--------------------------------------------------------------------+
+// API
+//--------------------------------------------------------------------+
+
+// bool Adafruit_USBD_Video::isStreaming(uint8_t stream_idx) {
+//   return tud_video_n_streaming(_vc_id, stream_idx);
+// }
 
 #endif
