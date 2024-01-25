@@ -259,6 +259,34 @@ bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface &itf) {
     case TUSB_DESC_INTERFACE: {
       tusb_desc_interface_t *desc_itf = (tusb_desc_interface_t *)desc;
       desc_itf->bInterfaceNumber = _itf_count;
+
+#if CFG_TUD_VIDEO && CFG_TUD_VIDEO_STREAMING
+      if (TUSB_CLASS_VIDEO == desc_itf->bInterfaceClass) {
+        desc += tu_desc_len(desc); // next to CS Interface
+
+        if (TUSB_DESC_CS_INTERFACE == tu_desc_type(desc)) {
+          uint8_t const subtype = desc[2];
+
+          if (VIDEO_SUBCLASS_CONTROL == desc_itf->bInterfaceSubClass) {
+            // Adjust stream interface number in VC Header
+            if (subtype == VIDEO_CS_ITF_VC_HEADER) {
+              uint8_t const vs_count = desc[11];
+              for (uint8_t i = 0; i < vs_count; i++) {
+                desc[12 + i] += _itf_count;
+              }
+            }
+          } else if (VIDEO_SUBCLASS_STREAMING == desc_itf->bInterfaceSubClass) {
+            // Adjust the endpoint address in CS VS Input/Output Header
+            if (subtype == VIDEO_CS_ITF_VS_INPUT_HEADER) {
+              desc[6] = 0x80 | _epin_count;
+            } else if (subtype == VIDEO_CS_ITF_VS_OUTPUT_HEADER) {
+              desc[6] = _epout_count;
+            }
+          }
+        }
+      }
+#endif
+
       if (desc_itf->bAlternateSetting == 0) {
         _itf_count++;
         if (desc_str && (_desc_str_count < STRING_DESCRIPTOR_MAX)) {
@@ -272,6 +300,7 @@ bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface &itf) {
           desc_itf->iInterface = 0;
         }
       }
+
       break;
     }
 
