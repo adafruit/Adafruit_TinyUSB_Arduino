@@ -80,8 +80,7 @@ public:
   operator bool();
 
   // from Adafruit_USBD_Interface
-  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum_deprecated,
-                                          uint8_t *buf, uint16_t bufsize);
+  virtual uint16_t getInterfaceDescriptor(uint8_t *buf, uint16_t bufsize);
 
 private:
   enum { INVALID_INSTANCE = 0xffu };

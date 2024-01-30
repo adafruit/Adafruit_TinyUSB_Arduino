@@ -46,8 +46,7 @@ Adafruit_USBD_CDC::Adafruit_USBD_CDC(void) { _instance = INVALID_INSTANCE; }
 
 #if CFG_TUD_ENABLED
 
-uint16_t Adafruit_USBD_CDC::getInterfaceDescriptor(uint8_t itfnum_deprecated,
-                                                   uint8_t *buf,
+uint16_t Adafruit_USBD_CDC::getInterfaceDescriptor(uint8_t *buf,
                                                    uint16_t bufsize) {
   // CDC is mostly always existed for DFU
   uint8_t itfnum = 0;

@@ -76,8 +76,7 @@ uint16_t Adafruit_USBD_MSC::makeItfDesc(uint8_t itfnum, uint8_t *buf,
   return len;
 }
 
-uint16_t Adafruit_USBD_MSC::getInterfaceDescriptor(uint8_t itfnum_deprecated,
-                                                   uint8_t *buf,
+uint16_t Adafruit_USBD_MSC::getInterfaceDescriptor(uint8_t *buf,
                                                    uint16_t bufsize) {
   // null buffer is used to get the length of descriptor only
   if (!buf) {
@@ -85,7 +84,6 @@ uint16_t Adafruit_USBD_MSC::getInterfaceDescriptor(uint8_t itfnum_deprecated,
   }
 
   uint8_t const itfnum = TinyUSBDevice.allocInterface(1);
-  ;
   uint8_t const ep_in = TinyUSBDevice.allocEndpoint(TUSB_DIR_IN);
   uint8_t const ep_out = TinyUSBDevice.allocEndpoint(TUSB_DIR_OUT);
 
