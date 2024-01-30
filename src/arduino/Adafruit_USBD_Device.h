@@ -71,15 +71,25 @@ public:
 
   //------------- Configuration descriptor -------------//
 
-  // Add an new interface
+  // Add a new interface
   bool addInterface(Adafruit_USBD_Interface &itf);
 
   // Clear/Reset configuration descriptor
   void clearConfiguration(void);
 
-  // Provide user buffer for configuration descriptor, needed if total length >
-  // 256
+  // Provide user buffer for configuration descriptor, if total length > 256
   void setConfigurationBuffer(uint8_t *buf, uint32_t buflen);
+
+  // Allocate a new interface number
+  uint8_t allocInterface(uint8_t count = 1) {
+    uint8_t ret = _itf_count;
+    _itf_count += count;
+    return ret;
+  }
+
+  uint8_t allocEndpoint(uint8_t in) {
+    return in ? (0x80 | _epin_count++) : _epout_count++;
+  }
 
   //------------- String descriptor -------------//
   void setLanguageDescriptor(uint16_t language_id);

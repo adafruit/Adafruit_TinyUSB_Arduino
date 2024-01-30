@@ -60,8 +60,8 @@ public:
   bool readPacket(uint8_t packet[4]);
 
   // from Adafruit_USBD_Interface
-  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
-                                          uint16_t bufsize);
+  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum_deprecated,
+                                          uint8_t *buf, uint16_t bufsize);
 
   // internal use only
   uint16_t makeItfDesc(uint8_t itfnum, uint8_t *buf, uint16_t bufsize,

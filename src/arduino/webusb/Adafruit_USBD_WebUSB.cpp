@@ -36,8 +36,6 @@
 //--------------------------------------------------------------------+
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
 //--------------------------------------------------------------------+
-#define EPOUT 0x00
-#define EPIN 0x80
 #define EPSIZE 64
 
 enum { VENDOR_REQUEST_WEBUSB = 1, VENDOR_REQUEST_MICROSOFT = 2 };
@@ -134,8 +132,7 @@ static uint16_t webusb_load_descriptor(uint8_t *dst, uint8_t *itf) {
   TU_VERIFY(ep_in && ep_out);
   ep_in |= 0x80;
 
-  uint16_t desc_len = _webusb_dev->getInterfaceDescriptor(0, NULL, 0);
-
+  uint16_t desc_len = _webusb_dev->getInterfaceDescriptorLen();
   desc_len = _webusb_dev->makeItfDesc(*itf, dst, desc_len, ep_in, ep_out);
 
   *itf += 1;
@@ -155,7 +152,7 @@ Adafruit_USBD_WebUSB::Adafruit_USBD_WebUSB(const void *url) {
   USB.usbVersion(0x0210);
 
   _webusb_dev = this;
-  uint16_t const desc_len = getInterfaceDescriptor(0, NULL, 0);
+  uint16_t const desc_len = getInterfaceDescriptorLen();
   tinyusb_enable_interface(USB_INTERFACE_VENDOR, desc_len,
                            webusb_load_descriptor);
 #endif
@@ -185,7 +182,8 @@ void Adafruit_USBD_WebUSB::setLineStateCallback(linestate_callback_t fp) {
 uint16_t Adafruit_USBD_WebUSB::makeItfDesc(uint8_t itfnum, uint8_t *buf,
                                            uint16_t bufsize, uint8_t ep_in,
                                            uint8_t ep_out) {
-  uint8_t desc[] = {TUD_VENDOR_DESCRIPTOR(itfnum, 0, ep_out, ep_in, EPSIZE)};
+  uint8_t desc[] = {
+      TUD_VENDOR_DESCRIPTOR(itfnum, _strid, ep_out, ep_in, EPSIZE)};
   uint16_t const len = sizeof(desc);
 
   // null buffer for length only
@@ -204,11 +202,21 @@ uint16_t Adafruit_USBD_WebUSB::makeItfDesc(uint8_t itfnum, uint8_t *buf,
   return len;
 }
 
-uint16_t Adafruit_USBD_WebUSB::getInterfaceDescriptor(uint8_t itfnum,
+uint16_t Adafruit_USBD_WebUSB::getInterfaceDescriptor(uint8_t itfnum_deprecated,
                                                       uint8_t *buf,
                                                       uint16_t bufsize) {
-  // usb core will automatically update endpoint number
-  return makeItfDesc(itfnum, buf, bufsize, EPIN, EPOUT);
+  (void)itfnum_deprecated;
+
+  if (!buf) {
+    return TUD_VENDOR_DESC_LEN;
+  }
+
+  uint8_t const itfnum = TinyUSBDevice.allocInterface(1);
+  ;
+  uint8_t const ep_in = TinyUSBDevice.allocEndpoint(TUSB_DIR_IN);
+  uint8_t const ep_out = TinyUSBDevice.allocEndpoint(TUSB_DIR_OUT);
+
+  return makeItfDesc(itfnum, buf, bufsize, ep_in, ep_out);
 }
 
 bool Adafruit_USBD_WebUSB::connected(void) {

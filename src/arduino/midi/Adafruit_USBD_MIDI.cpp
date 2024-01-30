@@ -31,8 +31,6 @@
 //--------------------------------------------------------------------+
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
 //--------------------------------------------------------------------+
-#define EPOUT 0x00
-#define EPIN 0x80
 #define EPSIZE 64
 
 // TODO multiple instances
@@ -47,8 +45,7 @@ static uint16_t midi_load_descriptor(uint8_t *dst, uint8_t *itf) {
   TU_VERIFY(ep_in && ep_out);
   ep_in |= 0x80;
 
-  uint16_t desc_len = _midi_dev->getInterfaceDescriptor(0, NULL, 0);
-
+  uint16_t desc_len = _midi_dev->getInterfaceDescriptorLen();
   desc_len = _midi_dev->makeItfDesc(*itf, dst, desc_len, ep_in, ep_out);
 
   *itf += 2;
@@ -63,7 +60,7 @@ Adafruit_USBD_MIDI::Adafruit_USBD_MIDI(uint8_t n_cables) {
 #ifdef ARDUINO_ARCH_ESP32
   // ESP32 requires setup configuration descriptor within constructor
   _midi_dev = this;
-  uint16_t const desc_len = getInterfaceDescriptor(0, NULL, 0);
+  uint16_t const desc_len = getInterfaceDescriptorLen();
   tinyusb_enable_interface(USB_INTERFACE_MIDI, desc_len, midi_load_descriptor);
 #endif
 }
@@ -110,7 +107,7 @@ uint16_t Adafruit_USBD_MIDI::makeItfDesc(uint8_t itfnum, uint8_t *buf,
 
   // Header
   {
-    uint8_t desc[] = {TUD_MIDI_DESC_HEAD(itfnum, 0, _n_cables)};
+    uint8_t desc[] = {TUD_MIDI_DESC_HEAD(itfnum, _strid, _n_cables)};
     memcpy(buf + len, desc, sizeof(desc));
     len += sizeof(desc);
   }
@@ -156,10 +153,23 @@ uint16_t Adafruit_USBD_MIDI::makeItfDesc(uint8_t itfnum, uint8_t *buf,
   return desc_len;
 }
 
-uint16_t Adafruit_USBD_MIDI::getInterfaceDescriptor(uint8_t itfnum,
+uint16_t Adafruit_USBD_MIDI::getInterfaceDescriptor(uint8_t itfnum_deprecated,
                                                     uint8_t *buf,
                                                     uint16_t bufsize) {
-  return makeItfDesc(itfnum, buf, bufsize, EPIN, EPOUT);
+  (void)itfnum_deprecated;
+
+  uint8_t itfnum = 0;
+  uint8_t ep_in = 0;
+  uint8_t ep_out = 0;
+
+  // null buffer is used to get the length of descriptor only
+  if (buf) {
+    itfnum = TinyUSBDevice.allocInterface(2);
+    ep_in = TinyUSBDevice.allocEndpoint(TUSB_DIR_IN);
+    ep_out = TinyUSBDevice.allocEndpoint(TUSB_DIR_OUT);
+  }
+
+  return makeItfDesc(itfnum, buf, bufsize, ep_in, ep_out);
 }
 
 int Adafruit_USBD_MIDI::read(void) {

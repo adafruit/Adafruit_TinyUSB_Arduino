@@ -235,13 +235,14 @@ bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface &itf) {
   uint8_t *desc = _desc_cfg + _desc_cfg_len;
   uint16_t const len = itf.getInterfaceDescriptor(
       _itf_count, desc, _desc_cfg_maxlen - _desc_cfg_len);
-  uint8_t *desc_end = desc + len;
-
-  const char *desc_str = itf.getStringDescriptor();
 
   if (!len) {
     return false;
   }
+
+#if 0
+  uint8_t *desc_end = desc + len;
+  const char *desc_str = itf.getStringDescriptor();
 
   // Parse interface descriptor to update
   // - IAD: interface number
@@ -321,6 +322,7 @@ bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface &itf) {
 
     desc += tu_desc_len(desc);
   }
+#endif
 
   _desc_cfg_len += len;
 

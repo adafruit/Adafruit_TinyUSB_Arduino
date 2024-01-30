@@ -45,10 +45,6 @@ public:
 
   static uint8_t getInstanceCount(void) { return _instance_count; }
 
-  // from Adafruit_USBD_Interface
-  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
-                                          uint16_t bufsize);
-
   void setPins(uint8_t pin_rx, uint8_t pin_tx) {
     (void)pin_rx;
     (void)pin_tx;
@@ -82,6 +78,10 @@ public:
   virtual int availableForWrite(void);
   using Print::write; // pull in write(str) from Print
   operator bool();
+
+  // from Adafruit_USBD_Interface
+  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum_deprecated,
+                                          uint8_t *buf, uint16_t bufsize);
 
 private:
   enum { INVALID_INSTANCE = 0xffu };

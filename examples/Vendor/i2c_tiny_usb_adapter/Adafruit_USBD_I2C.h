@@ -88,10 +88,12 @@
 class Adafruit_USBD_I2C : public Adafruit_USBD_Interface {
 public:
   Adafruit_USBD_I2C(TwoWire* wire);
-  uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize);
   bool begin(uint8_t* buffer, size_t bufsize);
 
   bool handleControlTransfer(uint8_t rhport, uint8_t stage, tusb_control_request_t const* request);
+
+  // from Adafruit_USBD_Interface
+  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize);
 
 private:
   TwoWire* _wire;

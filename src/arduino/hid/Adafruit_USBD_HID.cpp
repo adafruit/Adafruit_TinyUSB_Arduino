@@ -28,9 +28,6 @@
 
 #include "Adafruit_USBD_HID.h"
 
-#define EPOUT 0x00
-#define EPIN 0x80
-
 uint8_t const _ascii2keycode[128][2] = {HID_ASCII_TO_KEYCODE};
 static Adafruit_USBD_HID *_hid_instances[CFG_TUD_HID] = {0};
 
@@ -94,7 +91,7 @@ Adafruit_USBD_HID::Adafruit_USBD_HID(uint8_t const *desc_report, uint16_t len,
   _instance = _instance_count++;
   _hid_instances[_instance] = this;
 
-  uint16_t const desc_len = getInterfaceDescriptor(0, NULL, 0);
+  uint16_t const desc_len = getInterfaceDescriptorLen();
   tinyusb_enable_interface(USB_INTERFACE_HID, desc_len, hid_load_descriptor);
 #endif
 }
@@ -132,11 +129,11 @@ uint16_t Adafruit_USBD_HID::makeItfDesc(uint8_t itfnum, uint8_t *buf,
     return 0;
   }
 
-  uint8_t const desc_inout[] = {
-      TUD_HID_INOUT_DESCRIPTOR(itfnum, 0, _protocol, _desc_report_len, ep_in,
-                               ep_out, CFG_TUD_HID_EP_BUFSIZE, _interval_ms)};
+  uint8_t const desc_inout[] = {TUD_HID_INOUT_DESCRIPTOR(
+      itfnum, _strid, _protocol, _desc_report_len, ep_in, ep_out,
+      CFG_TUD_HID_EP_BUFSIZE, _interval_ms)};
   uint8_t const desc_in_only[] = {
-      TUD_HID_DESCRIPTOR(itfnum, 0, _protocol, _desc_report_len, ep_in,
+      TUD_HID_DESCRIPTOR(itfnum, _strid, _protocol, _desc_report_len, ep_in,
                          CFG_TUD_HID_EP_BUFSIZE, _interval_ms)};
 
   uint8_t const *desc;
@@ -155,17 +152,32 @@ uint16_t Adafruit_USBD_HID::makeItfDesc(uint8_t itfnum, uint8_t *buf,
     if (bufsize < len) {
       return 0;
     }
-
     memcpy(buf, desc, len);
   }
 
   return len;
 }
 
-uint16_t Adafruit_USBD_HID::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
+uint16_t Adafruit_USBD_HID::getInterfaceDescriptor(uint8_t itfnum_deprecated,
+                                                   uint8_t *buf,
                                                    uint16_t bufsize) {
-  // usb core will automatically update endpoint number
-  return makeItfDesc(itfnum, buf, bufsize, EPIN, EPOUT);
+  (void)itfnum_deprecated;
+
+  uint8_t itfnum = 0;
+  uint8_t ep_in = 0;
+  uint8_t ep_out = 0;
+
+  // null buffer is used to get the length of descriptor only
+  if (buf) {
+    itfnum = TinyUSBDevice.allocInterface(1);
+    ep_in = TinyUSBDevice.allocEndpoint(TUSB_DIR_IN);
+
+    if (_out_endpoint) {
+      TinyUSBDevice.allocEndpoint(TUSB_DIR_OUT);
+    }
+  }
+
+  return makeItfDesc(itfnum, buf, bufsize, ep_in, ep_out);
 }
 
 bool Adafruit_USBD_HID::begin(void) {
