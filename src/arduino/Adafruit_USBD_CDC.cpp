@@ -49,6 +49,8 @@ Adafruit_USBD_CDC::Adafruit_USBD_CDC(void) { _instance = INVALID_INSTANCE; }
 uint16_t Adafruit_USBD_CDC::getInterfaceDescriptor(uint8_t itfnum_deprecated,
                                                    uint8_t *buf,
                                                    uint16_t bufsize) {
+  (void)itfnum_deprecated;
+
   // CDC is mostly always existed for DFU
   uint8_t itfnum = 0;
   uint8_t ep_notif = 0;
@@ -281,9 +283,10 @@ void tud_cdc_line_state_cb(uint8_t instance, bool dtr, bool rts) {
 // Device stack is not enabled (probably in host mode)
 #warning "TinyUSB Host selected. No output to Serial will occur!"
 
-uint16_t Adafruit_USBD_CDC::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
+uint16_t Adafruit_USBD_CDC::getInterfaceDescriptor(uint8_t itfnum_deprecated,
+                                                   uint8_t *buf,
                                                    uint16_t bufsize) {
-  (void)itfnum;
+  (void)itfnum_deprecated;
   (void)buf;
   (void)bufsize;
 

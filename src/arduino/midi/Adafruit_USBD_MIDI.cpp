@@ -156,6 +156,8 @@ uint16_t Adafruit_USBD_MIDI::makeItfDesc(uint8_t itfnum, uint8_t *buf,
 uint16_t Adafruit_USBD_MIDI::getInterfaceDescriptor(uint8_t itfnum_deprecated,
                                                     uint8_t *buf,
                                                     uint16_t bufsize) {
+  (void)itfnum_deprecated;
+
   uint8_t itfnum = 0;
   uint8_t ep_in = 0;
   uint8_t ep_out = 0;
