@@ -37,10 +37,11 @@ public:
 
   // Get Interface Descriptor
   // Fill the descriptor (if buf is not NULL) and return its length
-  virtual uint16_t getInterfaceDescriptor(uint8_t *buf, uint16_t bufsize) = 0;
+  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
+                                          uint16_t bufsize) = 0;
   // Get Interface Descriptor Length
   uint16_t getInterfaceDescriptorLen() {
-    return getInterfaceDescriptor(NULL, 0);
+    return getInterfaceDescriptor(0, NULL, 0);
   }
 
   void setStringDescriptor(const char *str);

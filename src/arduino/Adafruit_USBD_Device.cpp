@@ -233,8 +233,8 @@ void Adafruit_USBD_Device::clearConfiguration(void) {
 // - Endpoint number is updated to be unique
 bool Adafruit_USBD_Device::addInterface(Adafruit_USBD_Interface &itf) {
   uint8_t *desc = _desc_cfg + _desc_cfg_len;
-  uint16_t const len =
-      itf.getInterfaceDescriptor(desc, _desc_cfg_maxlen - _desc_cfg_len);
+  uint16_t const len = itf.getInterfaceDescriptor(
+      _itf_count, desc, _desc_cfg_maxlen - _desc_cfg_len);
 
   if (!len) {
     return false;

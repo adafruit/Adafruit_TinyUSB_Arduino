@@ -158,7 +158,8 @@ uint16_t Adafruit_USBD_HID::makeItfDesc(uint8_t itfnum, uint8_t *buf,
   return len;
 }
 
-uint16_t Adafruit_USBD_HID::getInterfaceDescriptor(uint8_t *buf,
+uint16_t Adafruit_USBD_HID::getInterfaceDescriptor(uint8_t itfnum_deprecated,
+                                                   uint8_t *buf,
                                                    uint16_t bufsize) {
   uint8_t itfnum = 0;
   uint8_t ep_in = 0;

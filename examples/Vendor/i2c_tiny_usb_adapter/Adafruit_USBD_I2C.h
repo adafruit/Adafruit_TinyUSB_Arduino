@@ -93,7 +93,7 @@ public:
   bool handleControlTransfer(uint8_t rhport, uint8_t stage, tusb_control_request_t const* request);
 
   // from Adafruit_USBD_Interface
-  virtual uint16_t getInterfaceDescriptor(uint8_t* buf, uint16_t bufsize);
+  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize);
 
 private:
   TwoWire* _wire;

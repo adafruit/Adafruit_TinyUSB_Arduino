@@ -39,7 +39,8 @@ public:
   //  bool isStreaming(uint8_t stream_idx);
 
   // from Adafruit_USBD_Interface
-  virtual uint16_t getInterfaceDescriptor(uint8_t *buf, uint16_t bufsize);
+  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
+                                          uint16_t bufsize);
 
 private:
   uint8_t const *_desc_itf;
