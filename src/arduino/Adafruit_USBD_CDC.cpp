@@ -64,8 +64,14 @@ uint16_t Adafruit_USBD_CDC::getInterfaceDescriptor(uint8_t itfnum_deprecated,
     ep_out = TinyUSBDevice.allocEndpoint(TUSB_DIR_OUT);
   }
 
+#if TINYUSB_API_VERSION < 20400
+  // backward compatible for core that include pre-2.4.0 TinyUSB
+  uint8_t _strid = 0;
+#endif
+
   uint8_t const desc[] = {
       TUD_CDC_DESCRIPTOR(itfnum, _strid, ep_notif, 8, ep_out, ep_in, 64)};
+
   uint16_t const len = sizeof(desc);
 
   // null buffer is used to get the length of descriptor only
