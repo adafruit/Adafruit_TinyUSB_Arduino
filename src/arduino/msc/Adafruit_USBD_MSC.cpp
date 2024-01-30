@@ -28,8 +28,6 @@
 
 #include "Adafruit_USBD_MSC.h"
 
-#define EPOUT 0x00
-#define EPIN 0x80
 #define EPSIZE 64 // TODO must be 512 for highspeed device
 
 static Adafruit_USBD_MSC *_msc_dev = NULL;
@@ -44,13 +42,10 @@ static uint16_t msc_load_descriptor(uint8_t *dst, uint8_t *itf) {
   TU_VERIFY(ep_in && ep_out);
   ep_in |= 0x80;
 
-  uint8_t const descriptor[TUD_MSC_DESC_LEN] = {
-      // Interface number, string index, EP Out & EP In address, EP size
-      TUD_MSC_DESCRIPTOR(*itf, str_index, ep_out, ep_in, EPSIZE)};
-
+  uint16_t const desc_len =
+      _msc_dev->makeItfDesc(*itf, dst, TUD_MSC_DESC_LEN, ep_in, ep_out);
   *itf += 1;
-  memcpy(dst, descriptor, TUD_MSC_DESC_LEN);
-  return TUD_MSC_DESC_LEN;
+  return desc_len;
 }
 #endif
 
@@ -60,23 +55,41 @@ Adafruit_USBD_MSC::Adafruit_USBD_MSC(void) {
 
 #ifdef ARDUINO_ARCH_ESP32
   // ESP32 requires setup configuration descriptor on declaration
+  _msc_dev = this;
   tinyusb_enable_interface(USB_INTERFACE_MSC, TUD_MSC_DESC_LEN,
                            msc_load_descriptor);
 #endif
 }
 
-uint16_t Adafruit_USBD_MSC::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
-                                                   uint16_t bufsize) {
-  // usb core will automatically update endpoint number
-  uint8_t const desc[] = {TUD_MSC_DESCRIPTOR(itfnum, 0, EPOUT, EPIN, EPSIZE)};
+uint16_t Adafruit_USBD_MSC::makeItfDesc(uint8_t itfnum, uint8_t *buf,
+                                        uint16_t bufsize, uint8_t ep_in,
+                                        uint8_t ep_out) {
+  uint8_t const desc[] = {
+      TUD_MSC_DESCRIPTOR(itfnum, _strid, ep_out, ep_in, EPSIZE)};
   uint16_t const len = sizeof(desc);
 
   if (bufsize < len) {
     return 0;
   }
-
   memcpy(buf, desc, len);
+
   return len;
+}
+
+uint16_t Adafruit_USBD_MSC::getInterfaceDescriptor(uint8_t itfnum_deprecated,
+                                                   uint8_t *buf,
+                                                   uint16_t bufsize) {
+  // null buffer is used to get the length of descriptor only
+  if (!buf) {
+    return TUD_MSC_DESC_LEN;
+  }
+
+  uint8_t const itfnum = TinyUSBDevice.allocInterface(1);
+  ;
+  uint8_t const ep_in = TinyUSBDevice.allocEndpoint(TUSB_DIR_IN);
+  uint8_t const ep_out = TinyUSBDevice.allocEndpoint(TUSB_DIR_OUT);
+
+  return makeItfDesc(itfnum, buf, bufsize, ep_in, ep_out);
 }
 
 void Adafruit_USBD_MSC::setMaxLun(uint8_t maxlun) { _maxlun = maxlun; }

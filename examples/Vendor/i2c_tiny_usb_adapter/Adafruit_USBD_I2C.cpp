@@ -64,15 +64,28 @@ Adafruit_USBD_I2C::Adafruit_USBD_I2C(TwoWire* wire) {
   setStringDescriptor("I2C Interface");
 }
 
-uint16_t Adafruit_USBD_I2C::getInterfaceDescriptor(uint8_t itfnum, uint8_t* buf, uint16_t bufsize) {
-  uint8_t desc[] = { TUD_VENDOR_DESCRIPTOR(itfnum, 0, 0x00, 0x80, 64) };
+uint16_t Adafruit_USBD_I2C::getInterfaceDescriptor(uint8_t itfnum_deprecated, uint8_t* buf, uint16_t bufsize) {
+  uint8_t itfnum = 0;
+  uint8_t ep_in = 0;
+  uint8_t ep_out = 0;
+
+  // null buffer is used to get the length of descriptor only
+  if (buf) {
+    itfnum = TinyUSBDevice.allocInterface(1);
+    ep_in = TinyUSBDevice.allocEndpoint(TUSB_DIR_IN);
+    ep_out = TinyUSBDevice.allocEndpoint(TUSB_DIR_OUT);
+  }
+
+  uint8_t const desc[] = { TUD_VENDOR_DESCRIPTOR(itfnum, _strid, ep_out, ep_in, 64) };
   uint16_t const len = sizeof(desc);
+
   if (buf) {
     if (bufsize < len) {
       return 0;
     }
     memcpy(buf, desc, len);
   }
+
   return len;
 }
 

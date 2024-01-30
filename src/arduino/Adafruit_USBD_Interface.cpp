@@ -22,29 +22,14 @@
  * THE SOFTWARE.
  */
 
-#ifndef ADAFRUIT_USBD_INTERFACE_H_
-#define ADAFRUIT_USBD_INTERFACE_H_
+#include "tusb_option.h"
 
-#include <stddef.h>
-#include <stdint.h>
+#if CFG_TUD_ENABLED
 
-class Adafruit_USBD_Interface {
-protected:
-  uint8_t _strid;
+#include "Adafruit_USBD_Device.h"
 
-public:
-  Adafruit_USBD_Interface(void) { _strid = 0; }
-
-  // Get Interface Descriptor
-  // Fill the descriptor (if buf is not NULL) and return its length
-  virtual uint16_t getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
-                                          uint16_t bufsize) = 0;
-  // Get Interface Descriptor Length
-  uint16_t getInterfaceDescriptorLen() {
-    return getInterfaceDescriptor(0, NULL, 0);
-  }
-
-  void setStringDescriptor(const char *str);
-};
+void Adafruit_USBD_Interface::setStringDescriptor(const char *str) {
+  _strid = TinyUSBDevice.addStringDescriptor(str);
+}
 
 #endif

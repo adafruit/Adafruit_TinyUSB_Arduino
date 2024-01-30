@@ -46,21 +46,34 @@ Adafruit_USBD_CDC::Adafruit_USBD_CDC(void) { _instance = INVALID_INSTANCE; }
 
 #if CFG_TUD_ENABLED
 
-#define EPOUT 0x00
-#define EPIN 0x80
-
-uint16_t Adafruit_USBD_CDC::getInterfaceDescriptor(uint8_t itfnum, uint8_t *buf,
+uint16_t Adafruit_USBD_CDC::getInterfaceDescriptor(uint8_t itfnum_deprecated,
+                                                   uint8_t *buf,
                                                    uint16_t bufsize) {
   // CDC is mostly always existed for DFU
-  // usb core will automatically update endpoint number
-  uint8_t desc[] = {TUD_CDC_DESCRIPTOR(itfnum, 0, EPIN, 8, EPOUT, EPIN, 64)};
-  uint16_t const len = sizeof(desc);
+  uint8_t itfnum = 0;
+  uint8_t ep_notif = 0;
+  uint8_t ep_in = 0;
+  uint8_t ep_out = 0;
 
-  if (bufsize < len) {
-    return 0;
+  if (buf) {
+    itfnum = TinyUSBDevice.allocInterface(2);
+    ep_notif = TinyUSBDevice.allocEndpoint(TUSB_DIR_IN);
+    ep_in = TinyUSBDevice.allocEndpoint(TUSB_DIR_IN);
+    ep_out = TinyUSBDevice.allocEndpoint(TUSB_DIR_OUT);
   }
 
-  memcpy(buf, desc, len);
+  uint8_t const desc[] = {
+      TUD_CDC_DESCRIPTOR(itfnum, _strid, ep_notif, 8, ep_out, ep_in, 64)};
+  uint16_t const len = sizeof(desc);
+
+  // null buffer is used to get the length of descriptor only
+  if (buf) {
+    if (bufsize < len) {
+      return 0;
+    }
+    memcpy(buf, desc, len);
+  }
+
   return len;
 }
 
