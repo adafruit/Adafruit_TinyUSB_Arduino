@@ -31,21 +31,48 @@
 
 class Adafruit_USBD_Video : public Adafruit_USBD_Interface {
 public:
-  Adafruit_USBD_Video(uint8_t const *desc_itf, size_t desc_len);
+  Adafruit_USBD_Video(void);
 
   bool begin();
 
-  //------------- API -------------//
+  //------------- Video Control -------------//
   //  bool isStreaming(uint8_t stream_idx);
+  bool
+  addTerminal(tusb_desc_video_control_camera_terminal_t const *camera_terminal);
+  bool
+  addTerminal(tusb_desc_video_control_output_terminal_t const *output_terminal);
+
+  //------------- Video Streaming -------------//
+  //  bool setIsochronousStreaming(bool enabled);
+
+  // Add format descriptor, return format index
+  bool addFormat(tusb_desc_video_format_uncompressed_t const *format);
+  bool addFrame(tusb_desc_video_frame_uncompressed_continuous_t const *frame);
+  void
+  addColorMatching(tusb_desc_video_streaming_color_matching_t const *color);
 
   // from Adafruit_USBD_Interface
   virtual uint16_t getInterfaceDescriptor(uint8_t itfnum_deprecated,
                                           uint8_t *buf, uint16_t bufsize);
 
 private:
-  uint8_t const *_desc_itf;
-  size_t _desc_len;
   uint8_t _vc_id;
+
+  tusb_desc_video_control_camera_terminal_t _camera_terminal;
+  tusb_desc_video_control_output_terminal_t _output_terminal;
+
+  // currently only support 1 format
+  union {
+    tusb_desc_video_format_uncompressed_t uncompressed;
+    tusb_desc_video_format_mjpeg_t mjpeg;
+  } _format;
+
+  union {
+    tusb_desc_video_frame_uncompressed_continuous_t uncompressed_cont;
+    tusb_desc_video_frame_mjpeg_continuous_t mjpeg;
+  } _frame;
+
+  tusb_desc_video_streaming_color_matching_t _color_matching;
 };
 
 #endif
