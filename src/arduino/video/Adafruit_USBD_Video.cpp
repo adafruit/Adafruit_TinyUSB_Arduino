@@ -31,7 +31,7 @@
 #include "Adafruit_USBD_Video.h"
 
 #ifdef ARDUINO_ARCH_ESP32
-static uint16_t hid_load_descriptor(uint8_t *dst, uint8_t *itf) {}
+// static uint16_t hid_load_descriptor(uint8_t *dst, uint8_t *itf) {}
 #endif
 
 Adafruit_USBD_Video::Adafruit_USBD_Video(void) {
@@ -39,7 +39,7 @@ Adafruit_USBD_Video::Adafruit_USBD_Video(void) {
   memset(&_camera_terminal, 0, sizeof(_camera_terminal));
 
 #ifdef ARDUINO_ARCH_ESP32
-  tinyusb_enable_interface(USB_INTERFACE_HID, desc_len, hid_load_descriptor);
+//  tinyusb_enable_interface(USB_INTERFACE_HID, desc_len, hid_load_descriptor);
 #endif
 }
 
