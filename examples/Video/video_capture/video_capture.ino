@@ -156,6 +156,9 @@ void loop() {
   tud_video_n_frame_xfer(0, 0, (void*) frame_buffer, FRAME_WIDTH * FRAME_HEIGHT * 16 / 8);
 }
 
+//--------------------------------------------------------------------+
+// TinyUSB Video Callbacks
+//--------------------------------------------------------------------+
 void tud_video_frame_xfer_complete_cb(uint_fast8_t ctl_idx, uint_fast8_t stm_idx) {
   (void) ctl_idx;
   (void) stm_idx;
