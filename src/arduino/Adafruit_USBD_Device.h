@@ -88,7 +88,18 @@ public:
   }
 
   uint8_t allocEndpoint(uint8_t in) {
-    return in ? (0x80 | _epin_count++) : _epout_count++;
+    uint8_t ret = in ? (0x80 | _epin_count++) : _epout_count++;
+#if defined(ARDUINO_ARCH_ESP32) && ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE
+    // ESP32 reserves 0x03, 0x84, 0x85 for CDC Serial
+    if (ret == 0x03) {
+      ret = _epout_count++;
+    } else if (ret == 0x84 || ret == 0x85) {
+      // Note: ESP32 does not have this much of EP IN
+      _epin_count = 6;
+      ret = 0x86;
+    }
+#endif
+    return ret;
   }
 
   //------------- String descriptor -------------//
