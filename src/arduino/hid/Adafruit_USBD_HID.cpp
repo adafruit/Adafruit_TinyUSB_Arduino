@@ -131,7 +131,7 @@ uint16_t Adafruit_USBD_HID::getInterfaceDescriptor(uint8_t itfnum_deprecated,
     ep_in = TinyUSBDevice.allocEndpoint(TUSB_DIR_IN);
 
     if (_out_endpoint) {
-      TinyUSBDevice.allocEndpoint(TUSB_DIR_OUT);
+      ep_out = TinyUSBDevice.allocEndpoint(TUSB_DIR_OUT);
     }
   }
 

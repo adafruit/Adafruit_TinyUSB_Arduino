@@ -20,8 +20,7 @@
 
 // HID report descriptor using TinyUSB's template
 // Single Report (no ID) descriptor
-uint8_t const desc_hid_report[] =
-{
+uint8_t const desc_hid_report[] = {
   TUD_HID_REPORT_DESC_KEYBOARD()
 };
 
@@ -73,11 +72,11 @@ void setup()
   TinyUSB_Device_Init(0);
 #endif
 
-  // Notes: following commented-out functions has no affect on ESP32
-  // usb_hid.setBootProtocol(HID_ITF_PROTOCOL_KEYBOARD);
-  // usb_hid.setPollInterval(2);
-  // usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
-  // usb_hid.setStringDescriptor("TinyUSB Keyboard");
+  // Setup HID
+  usb_hid.setBootProtocol(HID_ITF_PROTOCOL_KEYBOARD);
+  usb_hid.setPollInterval(2);
+  usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
+  usb_hid.setStringDescriptor("TinyUSB Keyboard");
 
   // Set up output report (on control endpoint) for Capslock indicator
   usb_hid.setReportCallback(NULL, hid_report_callback);

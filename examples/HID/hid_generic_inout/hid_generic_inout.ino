@@ -39,14 +39,12 @@
 
 // HID report descriptor using TinyUSB's template
 // Generic In Out with 64 bytes report (max)
-uint8_t const desc_hid_report[] =
-{
+uint8_t const desc_hid_report[] = {
   TUD_HID_REPORT_DESC_GENERIC_INOUT(64)
 };
 
-// USB HID object. For ESP32 these values cannot be changed after this declaration
-// desc report, desc len, protocol, interval, use out endpoint
-Adafruit_USBD_HID usb_hid(desc_hid_report, sizeof(desc_hid_report), HID_ITF_PROTOCOL_NONE, 2, true);
+// USB HID object
+Adafruit_USBD_HID usb_hid;
 
 // the setup function runs once when you press reset or power the board
 void setup()
@@ -57,10 +55,10 @@ void setup()
 #endif
 
   // Notes: following commented-out functions has no affect on ESP32
-  // usb_hid.enableOutEndpoint(true);
-  // usb_hid.setPollInterval(2);
-  // usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
-  // usb_hid.setStringDescriptor("TinyUSB HID Generic");
+  usb_hid.enableOutEndpoint(true);
+  usb_hid.setPollInterval(2);
+  usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
+  usb_hid.setStringDescriptor("TinyUSB HID Generic");
 
   usb_hid.setReportCallback(get_report_callback, set_report_callback);
   usb_hid.begin();
