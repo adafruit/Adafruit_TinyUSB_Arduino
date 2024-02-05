@@ -49,6 +49,13 @@ extern "C" {
 #error "ESP32 Arduino core version 2.0.8 or later is required"
 #endif
 
+#ifndef CFG_TUSB_OS
+#define CFG_TUSB_OS OPT_OS_FREERTOS
+// clang-format off
+#define CFG_TUSB_OS_INC_PATH freertos/
+// clang-format on
+#endif
+
 #ifndef CFG_TUD_LOG_LEVEL
 #define CFG_TUD_LOG_LEVEL 2
 #endif
