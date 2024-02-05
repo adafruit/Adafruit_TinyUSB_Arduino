@@ -79,7 +79,8 @@ extern "C" {
 // Device Configuration
 //--------------------------------------------------------------------
 
-#define CFG_TUD_ENDOINT0_SIZE 64
+// This is the default
+// #define CFG_TUD_ENDPOINT0_SIZE 64
 
 #define CFG_TUD_CDC 1
 #define CFG_TUD_MSC 1
