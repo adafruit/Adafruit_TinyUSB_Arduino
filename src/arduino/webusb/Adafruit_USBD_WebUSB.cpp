@@ -122,40 +122,10 @@ TU_VERIFY_STATIC(sizeof(desc_ms_os_20) == MS_OS_20_DESC_LEN, "Incorrect size");
 //--------------------------------------------------------------------+
 // IMPLEMENTATION
 //--------------------------------------------------------------------+
-
-#ifdef ARDUINO_ARCH_ESP32
-static uint16_t webusb_load_descriptor(uint8_t *dst, uint8_t *itf) {
-  // uint8_t str_index = tinyusb_add_string_descriptor("TinyUSB MSC");
-
-  uint8_t ep_in = tinyusb_get_free_in_endpoint();
-  uint8_t ep_out = tinyusb_get_free_out_endpoint();
-  TU_VERIFY(ep_in && ep_out);
-  ep_in |= 0x80;
-
-  uint16_t desc_len = _webusb_dev->getInterfaceDescriptorLen();
-  desc_len = _webusb_dev->makeItfDesc(*itf, dst, desc_len, ep_in, ep_out);
-
-  *itf += 1;
-  return desc_len;
-}
-#endif
-
 Adafruit_USBD_WebUSB::Adafruit_USBD_WebUSB(const void *url) {
   _connected = false;
   _url = (const uint8_t *)url;
   _linestate_cb = NULL;
-
-#ifdef ARDUINO_ARCH_ESP32
-  // ESP32 requires setup configuration descriptor within constructor
-
-  // WebUSB requires USB version at least 2.1 (or 3.x)
-  USB.usbVersion(0x0210);
-
-  _webusb_dev = this;
-  uint16_t const desc_len = getInterfaceDescriptorLen();
-  tinyusb_enable_interface(USB_INTERFACE_VENDOR, desc_len,
-                           webusb_load_descriptor);
-#endif
 }
 
 bool Adafruit_USBD_WebUSB::begin(void) {
@@ -179,29 +149,6 @@ void Adafruit_USBD_WebUSB::setLineStateCallback(linestate_callback_t fp) {
   _linestate_cb = fp;
 }
 
-uint16_t Adafruit_USBD_WebUSB::makeItfDesc(uint8_t itfnum, uint8_t *buf,
-                                           uint16_t bufsize, uint8_t ep_in,
-                                           uint8_t ep_out) {
-  uint8_t desc[] = {
-      TUD_VENDOR_DESCRIPTOR(itfnum, _strid, ep_out, ep_in, EPSIZE)};
-  uint16_t const len = sizeof(desc);
-
-  // null buffer for length only
-  if (buf) {
-    if (bufsize < len) {
-      return 0;
-    }
-
-    memcpy(buf, desc, len);
-
-    // update the bFirstInterface in MS OS 2.0 descriptor
-    // that is binded to WinUSB driver
-    desc_ms_os_20[0x0a + 0x08 + 4] = itfnum;
-  }
-
-  return len;
-}
-
 uint16_t Adafruit_USBD_WebUSB::getInterfaceDescriptor(uint8_t itfnum_deprecated,
                                                       uint8_t *buf,
                                                       uint16_t bufsize) {
@@ -212,11 +159,25 @@ uint16_t Adafruit_USBD_WebUSB::getInterfaceDescriptor(uint8_t itfnum_deprecated,
   }
 
   uint8_t const itfnum = TinyUSBDevice.allocInterface(1);
-  ;
   uint8_t const ep_in = TinyUSBDevice.allocEndpoint(TUSB_DIR_IN);
   uint8_t const ep_out = TinyUSBDevice.allocEndpoint(TUSB_DIR_OUT);
 
-  return makeItfDesc(itfnum, buf, bufsize, ep_in, ep_out);
+  uint8_t desc[] = {
+      TUD_VENDOR_DESCRIPTOR(itfnum, _strid, ep_out, ep_in, EPSIZE)};
+  uint16_t const len = sizeof(desc);
+
+  // null buffer for length only
+  if (bufsize < len) {
+    return 0;
+  }
+
+  memcpy(buf, desc, len);
+
+  // update the bFirstInterface in MS OS 2.0 descriptor
+  // that is bound to WinUSB driver
+  desc_ms_os_20[0x0a + 0x08 + 4] = itfnum;
+
+  return len;
 }
 
 bool Adafruit_USBD_WebUSB::connected(void) {
