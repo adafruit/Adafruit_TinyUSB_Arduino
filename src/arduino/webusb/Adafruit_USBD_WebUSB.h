@@ -67,6 +67,7 @@ public:
   // from Adafruit_USBD_Interface
   virtual uint16_t getInterfaceDescriptor(uint8_t itfnum_deprecated,
                                           uint8_t *buf, uint16_t bufsize);
+
 private:
   bool _connected;
   const uint8_t *_url;
