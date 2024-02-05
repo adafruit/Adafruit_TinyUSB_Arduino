@@ -24,8 +24,7 @@
 
 #include "tusb_option.h"
 
-// ESP32 will use the arduino-esp32 core initialization and Serial
-#if CFG_TUD_ENABLED && !defined(ARDUINO_ARCH_ESP32)
+#if CFG_TUD_ENABLED
 
 #include "Adafruit_TinyUSB.h"
 #include "Arduino.h"
@@ -48,6 +47,7 @@ void TinyUSB_Device_Task(void) {
 }
 #endif
 
+#ifndef ARDUINO_ARCH_ESP32
 void TinyUSB_Device_FlushCDC(void) {
   uint8_t const cdc_instance = Adafruit_USBD_CDC::getInstanceCount();
   for (uint8_t instance = 0; instance < cdc_instance; instance++) {
@@ -88,8 +88,9 @@ __attribute__((used)) int CFG_TUSB_DEBUG_PRINTF(const char *__restrict format,
   va_end(ap);
   return len;
 }
-#endif
+#endif // CFG_TUSB_DEBUG
+
+#endif // ARDUINO_ARCH_ESP32
 
 } // extern C
-
 #endif

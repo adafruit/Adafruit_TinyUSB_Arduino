@@ -62,7 +62,7 @@
 
 // Debug TinyUSB with Serial1
 #if CFG_TUSB_DEBUG
-#define CFG_TUSB_DEBUG_PRINTF serial1_printf
+#define CFG_TUSB_DEBUG_PRINTF log_printf
 #endif
 
 #ifdef __cplusplus
