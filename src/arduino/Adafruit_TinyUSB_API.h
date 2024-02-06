@@ -30,7 +30,7 @@
 
 // API Version, need to be updated when there is changes for
 // TinyUSB_API, USBD_CDC, USBD_Device, USBD_Interface,
-#define TINYUSB_API_VERSION 20400
+#define TINYUSB_API_VERSION 30000
 
 //--------------------------------------------------------------------+
 // Core API
