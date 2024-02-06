@@ -37,7 +37,7 @@ Following core has TinyUSB as either the primary usb stack or selectable via men
 - [earlephilhower/arduino-pico](https://github.com/earlephilhower/arduino-pico)
 - [espressif/arduino-esp32](https://github.com/espressif/arduino-esp32)
 
-  ESP32 port relies on Espressif's [esp32-hal-tinyusb.c](https://github.com/espressif/arduino-esp32/blob/master/cores/esp32/esp32-hal-tinyusb.c) for building usb descriptors which requires all descriptors must be specified in usb objects declaration i.e constructors. Therefore all descriptor-related fields must be part of object declaration and descriptor-related API have no effect afterwards for this port. 
+Note: For ESP32 port, verion before v3.0 requires all descriptors must be specified in usb objects declaration i.e constructors. Therefore all descriptor-related fields must be part of object declaration and descriptor-related API have no effect afterwards for this port. This limitation is not the case for version from v3.0 
 
 ### Cores without built-in support
 
