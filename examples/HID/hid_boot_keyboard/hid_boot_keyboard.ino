@@ -26,7 +26,7 @@ uint8_t const desc_hid_report[] = {
 
 // USB HID object. For ESP32 these values cannot be changed after this declaration
 // desc report, desc len, protocol, interval, use out endpoint
-Adafruit_USBD_HID usb_hid(desc_hid_report, sizeof(desc_hid_report), HID_ITF_PROTOCOL_KEYBOARD, 2, false);
+Adafruit_USBD_HID usb_hid;
 
 //------------- Input Pins -------------//
 // Array of pins and its keycode.
