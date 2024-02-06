@@ -33,36 +33,7 @@ static Adafruit_USBD_HID *_hid_instances[CFG_TUD_HID] = {0};
 
 uint8_t Adafruit_USBD_HID::_instance_count = 0;
 
-#ifdef ARDUINO_ARCH_ESP32
-static uint16_t hid_load_descriptor(uint8_t *dst, uint8_t *itf) {
-  // uint8_t str_index = tinyusb_add_string_descriptor("TinyUSB HID");
-
-  uint8_t const inst_count = Adafruit_USBD_HID::getInstanceCount();
-  TU_VERIFY(inst_count > 0, 0);
-
-  Adafruit_USBD_HID *p_hid = _hid_instances[inst_count - 1];
-  TU_VERIFY(p_hid);
-
-  uint8_t ep_in = tinyusb_get_free_in_endpoint();
-  TU_VERIFY(ep_in != 0);
-  ep_in |= 0x80;
-
-  uint8_t ep_out = 0;
-  if (p_hid->isOutEndpointEnabled()) {
-    ep_out = tinyusb_get_free_out_endpoint();
-    TU_VERIFY(ep_out != 0);
-  }
-
-  uint16_t const desc_len =
-      p_hid->makeItfDesc(*itf, dst, TUD_HID_INOUT_DESC_LEN, ep_in, ep_out);
-
-  *itf += 1;
-  return desc_len;
-}
-#endif
-
 //------------- IMPLEMENTATION -------------//
-
 Adafruit_USBD_HID::Adafruit_USBD_HID(void)
     : Adafruit_USBD_HID(NULL, 0, HID_ITF_PROTOCOL_NONE, 4, false) {}
 
@@ -81,19 +52,6 @@ Adafruit_USBD_HID::Adafruit_USBD_HID(uint8_t const *desc_report, uint16_t len,
 
   _get_report_cb = NULL;
   _set_report_cb = NULL;
-
-#ifdef ARDUINO_ARCH_ESP32
-  // ESP32 requires setup configuration descriptor within constructor
-  if (_instance_count >= CFG_TUD_HID) {
-    return;
-  }
-
-  _instance = _instance_count++;
-  _hid_instances[_instance] = this;
-
-  uint16_t const desc_len = getInterfaceDescriptorLen();
-  tinyusb_enable_interface(USB_INTERFACE_HID, desc_len, hid_load_descriptor);
-#endif
 }
 
 void Adafruit_USBD_HID::setPollInterval(uint8_t interval_ms) {
@@ -173,7 +131,7 @@ uint16_t Adafruit_USBD_HID::getInterfaceDescriptor(uint8_t itfnum_deprecated,
     ep_in = TinyUSBDevice.allocEndpoint(TUSB_DIR_IN);
 
     if (_out_endpoint) {
-      TinyUSBDevice.allocEndpoint(TUSB_DIR_OUT);
+      ep_out = TinyUSBDevice.allocEndpoint(TUSB_DIR_OUT);
     }
   }
 

@@ -46,11 +46,6 @@
   #if CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
     #include "../../arduino_tinyusb/include/tusb_config.h"
   #else
-    #define CFG_TUSB_OS OPT_OS_FREERTOS
-    // clang-format off
-    #define CFG_TUSB_OS_INC_PATH freertos/
-    // clang-format on
-
     #include "arduino/ports/esp32/tusb_config_esp32.h"
   #endif
 
@@ -62,7 +57,7 @@
 
 // Debug TinyUSB with Serial1
 #if CFG_TUSB_DEBUG
-#define CFG_TUSB_DEBUG_PRINTF serial1_printf
+#define CFG_TUSB_DEBUG_PRINTF log_printf
 #endif
 
 #ifdef __cplusplus

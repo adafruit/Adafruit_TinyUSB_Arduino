@@ -33,14 +33,12 @@ Adafruit_USBD_MSC usb_msc;
 
 // HID report descriptor using TinyUSB's template
 // Single Report (no ID) descriptor
-uint8_t const desc_hid_report[] =
-{
-  TUD_HID_REPORT_DESC_MOUSE()
+uint8_t const desc_hid_report[] = {
+    TUD_HID_REPORT_DESC_MOUSE()
 };
 
-// USB HID object. For ESP32 these values cannot be changed after this declaration
-// desc report, desc len, protocol, interval, use out endpoint
-Adafruit_USBD_HID usb_hid(desc_hid_report, sizeof(desc_hid_report), HID_ITF_PROTOCOL_NONE, 2, false);
+// USB HID object
+Adafruit_USBD_HID usb_hid;
 
 #if defined(ARDUINO_SAMD_CIRCUITPLAYGROUND_EXPRESS) || defined(ARDUINO_NRF52840_CIRCUITPLAY)
   const int pin = 4; // Left Button
@@ -52,6 +50,10 @@ Adafruit_USBD_HID usb_hid(desc_hid_report, sizeof(desc_hid_report), HID_ITF_PROT
 
 #elif defined PIN_BUTTON1
   const int pin = PIN_BUTTON1;
+  bool activeState = false;
+
+#elif defined(ARDUINO_ARCH_ESP32)
+  const int pin = 0;
   bool activeState = false;
 
 #else
@@ -84,9 +86,10 @@ void setup()
   // Set up button
   pinMode(pin, activeState ? INPUT_PULLDOWN : INPUT_PULLUP);
 
-  // Notes: following commented-out functions has no affect on ESP32
-  // usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
-
+  // Set up HID
+  usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
+  usb_hid.setBootProtocol(HID_ITF_PROTOCOL_NONE);
+  usb_hid.setPollInterval(2);
   usb_hid.begin();
 
   Serial.begin(115200);
