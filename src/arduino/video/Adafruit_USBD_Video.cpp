@@ -230,7 +230,7 @@ uint16_t Adafruit_USBD_Video::getInterfaceDescriptor(uint8_t itfnum_deprecated,
              .bDescriptorType = TUSB_DESC_ENDPOINT,
 
              .bEndpointAddress = ep_in,
-             .bmAttributes = {.xfer = TUSB_XFER_BULK, .sync = 0},
+             .bmAttributes = {.xfer = TUSB_XFER_BULK, .sync = 0, .usage = 0},
              .wMaxPacketSize = 64,
              .bInterval = 1}};
 
