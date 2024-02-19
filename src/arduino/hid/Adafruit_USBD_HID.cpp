@@ -175,6 +175,10 @@ bool Adafruit_USBD_HID::sendReport32(uint8_t report_id, uint32_t num) {
   return tud_hid_n_report(_instance, report_id, &num, sizeof(num));
 }
 
+uint8_t Adafruit_USBD_HID::getProtocol() {
+  return tud_hid_n_get_protocol(_instance);
+}
+
 //------------- TinyUSB callbacks -------------//
 extern "C" {
 

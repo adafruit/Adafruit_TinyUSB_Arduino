@@ -61,6 +61,8 @@ public:
   bool ready(void);
   bool sendReport(uint8_t report_id, void const *report, uint8_t len);
 
+  uint8_t getProtocol();
+
   // Report helpers
   bool sendReport8(uint8_t report_id, uint8_t num);
   bool sendReport16(uint8_t report_id, uint16_t num);
