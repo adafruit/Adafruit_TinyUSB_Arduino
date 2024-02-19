@@ -32,7 +32,7 @@
 #include "arduino/ports/esp32/tusb_config_esp32.h"
 
 #ifndef CFG_TUH_CDC_FTDI_VID_PID_LIST
-// List of product IDs that can use the FTDI CDC driver. 0x0403 is FTDI's VID
+  // List of product IDs that can use the FTDI CDC driver. 0x0403 is FTDI's VID
   #define CFG_TUH_CDC_FTDI_VID_PID_LIST \
     {0x0403, 0x6001}, {0x0403, 0x6006}, {0x0403, 0x6010}, {0x0403, 0x6011}, \
     {0x0403, 0x6014}, {0x0403, 0x6015}, {0x0403, 0x8372}, {0x0403, 0xFBFA}, \
@@ -40,13 +40,13 @@
 #endif
 
 #ifndef CFG_TUH_CDC_CP210X_VID_PID_LIST
-// List of product IDs that can use the CP210X CDC driver. 0x10C4 is Silicon Labs' VID
+  // List of product IDs that can use the CP210X CDC driver. 0x10C4 is Silicon Labs' VID
   #define CFG_TUH_CDC_CP210X_VID_PID_LIST \
     {0x10C4, 0xEA60}, {0x10C4, 0xEA70}
 #endif
 
 #ifndef CFG_TUH_CDC_CH34X_VID_PID_LIST
-// List of product IDs that can use the CH34X CDC driver
+  // List of product IDs that can use the CH34X CDC driver
   #define CFG_TUH_CDC_CH34X_VID_PID_LIST \
     { 0x1a86, 0x5523 }, /* ch341 chip */ \
     { 0x1a86, 0x7522 }, /* ch340k chip */ \

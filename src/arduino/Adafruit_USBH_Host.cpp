@@ -22,7 +22,6 @@
  * THE SOFTWARE.
  */
 
-// ESP32 out-of-sync
 #ifdef ARDUINO_ARCH_ESP32
 #include "arduino/ports/esp32/tusb_config_esp32.h"
 #include "driver/gpio.h"
@@ -182,6 +181,7 @@ TU_ATTR_WEAK void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
 
 #if defined(ARDUINO_ARCH_ESP32)
 
+// ESP32 out-of-sync
 #if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(2, 0, 14) &&                 \
     !defined(PLATFORMIO)
 extern "C" void hcd_int_handler_esp32(uint8_t rhport, bool in_isr);
