@@ -54,6 +54,7 @@ jobs:
            - 'nrf52840'
            # RP2040
            - 'feather_rp2040_tinyusb'
+           - 'pico_rp2040_tinyusb_host'
            # SAMD
            - 'metro_m0_tinyusb'
            - 'metro_m4_tinyusb'
