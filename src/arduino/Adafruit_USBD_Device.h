@@ -26,7 +26,8 @@
 #define ADAFRUIT_USBD_DEVICE_H_
 
 #include "Adafruit_USBD_Interface.h"
-#include "tusb.h"
+
+#include "../tusb.h" // use relative path to prevent ESP32 out-of-sync issue
 
 #ifdef ARDUINO_ARCH_ESP32
 #include "esp32-hal-tinyusb.h"
