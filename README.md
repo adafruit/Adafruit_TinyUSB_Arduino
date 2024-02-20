@@ -25,7 +25,7 @@ Host stack is available with either addition of MAX3421E hardware (e.g [Host Fea
 - Communication (CDC): including vendor usb2uart such as FTDI, CP210x, CH34x
 - MassStorage class
 
-Noe: Host stack is still work-in-progress
+Note: Host stack is still work-in-progress
 
 ## Supported Cores
 
