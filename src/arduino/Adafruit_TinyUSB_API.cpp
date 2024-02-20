@@ -24,16 +24,17 @@
 
 #include "tusb_option.h"
 
-#if CFG_TUD_ENABLED
+#if CFG_TUD_ENABLED || CFG_TUH_ENABLED
 
 #include "Adafruit_TinyUSB.h"
 #include "Arduino.h"
 
-//--------------------------------------------------------------------+
-// MACRO TYPEDEF CONSTANT ENUM DECLARATION
-//--------------------------------------------------------------------+
 extern "C" {
 
+//--------------------------------------------------------------------+
+// Device
+//--------------------------------------------------------------------+
+#if CFG_TUD_ENABLED
 void TinyUSB_Device_Init(uint8_t rhport) {
   // Init USB Device controller and stack
   TinyUSBDevice.begin(rhport);
@@ -54,9 +55,12 @@ void TinyUSB_Device_FlushCDC(void) {
     tud_cdc_n_write_flush(instance);
   }
 }
+#endif
+#endif // CFG_TUD_ENABLED
 
-// Debug log with Serial1
-#if CFG_TUSB_DEBUG && defined(CFG_TUSB_DEBUG_PRINTF)
+//------------- Debug log with Serial1 -------------//
+#if CFG_TUSB_DEBUG && defined(CFG_TUSB_DEBUG_PRINTF) &&                        \
+    !defined(ARDUINO_ARCH_ESP32)
 
 // #define USE_SEGGER_RTT
 #define SERIAL_TUSB_DEBUG Serial1
@@ -90,7 +94,6 @@ __attribute__((used)) int CFG_TUSB_DEBUG_PRINTF(const char *__restrict format,
 }
 #endif // CFG_TUSB_DEBUG
 
-#endif // ARDUINO_ARCH_ESP32
-
 } // extern C
-#endif
+
+#endif // CFG_TUD_ENABLED || CFG_TUH_ENABLED
