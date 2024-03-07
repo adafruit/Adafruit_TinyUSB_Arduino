@@ -68,6 +68,7 @@ uint16_t Adafruit_USBD_I2C::getInterfaceDescriptor(uint8_t itfnum_deprecated, ui
   uint8_t itfnum = 0;
   uint8_t ep_in = 0;
   uint8_t ep_out = 0;
+  (void) itfnum_deprecated;
 
   // null buffer is used to get the length of descriptor only
   if (buf) {
