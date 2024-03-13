@@ -67,13 +67,27 @@ extern "C" {
 #define CFG_TUD_ENDPOINT0_SIZE 64
 
 //------------- CLASS -------------//
+#ifndef CFG_TUD_CDC
 #define CFG_TUD_CDC 1
+#endif
+#ifndef CFG_TUD_MSC
 #define CFG_TUD_MSC 1
+#endif
+#ifndef CFG_TUD_HID
 #define CFG_TUD_HID 2
+#endif
+#ifndef CFG_TUD_MIDI
 #define CFG_TUD_MIDI 1
+#endif
+#ifndef CFG_TUD_VENDOR
 #define CFG_TUD_VENDOR 1
-#define CFG_TUD_VIDEO 1           // number of video control interfaces
+#endif
+#ifndef CFG_TUD_VIDEO
+#define CFG_TUD_VIDEO 1 // number of video control interfaces
+#endif
+#ifndef CFG_TUD_VIDEO_STREAMING
 #define CFG_TUD_VIDEO_STREAMING 1 // number of video streaming interfaces
+#endif
 
 // video streaming endpoint buffer size
 #define CFG_TUD_VIDEO_STREAMING_EP_BUFSIZE 256
