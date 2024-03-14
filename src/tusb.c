@@ -24,6 +24,11 @@
  * This file is part of the TinyUSB stack.
  */
 
+// ESP32 out-of-sync
+#ifdef ARDUINO_ARCH_ESP32
+#include "arduino/ports/esp32/tusb_config_esp32.h"
+#endif
+
 #include "tusb_option.h"
 
 #if CFG_TUH_ENABLED || CFG_TUD_ENABLED
@@ -112,8 +117,7 @@ uint8_t const * tu_desc_find3(uint8_t const* desc, uint8_t const* end, uint8_t b
 // Endpoint Helper for both Host and Device stack
 //--------------------------------------------------------------------+
 
-bool tu_edpt_claim(tu_edpt_state_t* ep_state, osal_mutex_t mutex)
-{
+bool tu_edpt_claim(tu_edpt_state_t* ep_state, osal_mutex_t mutex) {
   (void) mutex;
 
   // pre-check to help reducing mutex lock
@@ -122,8 +126,7 @@ bool tu_edpt_claim(tu_edpt_state_t* ep_state, osal_mutex_t mutex)
 
   // can only claim the endpoint if it is not busy and not claimed yet.
   bool const available = (ep_state->busy == 0) && (ep_state->claimed == 0);
-  if (available)
-  {
+  if (available) {
     ep_state->claimed = 1;
   }
 
@@ -132,16 +135,14 @@ bool tu_edpt_claim(tu_edpt_state_t* ep_state, osal_mutex_t mutex)
   return available;
 }
 
-bool tu_edpt_release(tu_edpt_state_t* ep_state, osal_mutex_t mutex)
-{
+bool tu_edpt_release(tu_edpt_state_t* ep_state, osal_mutex_t mutex) {
   (void) mutex;
 
   (void) osal_mutex_lock(mutex, OSAL_TIMEOUT_WAIT_FOREVER);
 
   // can only release the endpoint if it is claimed and not busy
   bool const ret = (ep_state->claimed == 1) && (ep_state->busy == 0);
-  if (ret)
-  {
+  if (ret) {
     ep_state->claimed = 0;
   }
 
@@ -419,7 +420,7 @@ uint32_t tu_edpt_stream_read(tu_edpt_stream_t* s, void* buffer, uint32_t bufsize
 #if CFG_TUSB_DEBUG
 #include <ctype.h>
 
-#if CFG_TUSB_DEBUG >= 2
+#if CFG_TUSB_DEBUG >= CFG_TUH_LOG_LEVEL || CFG_TUSB_DEBUG >= CFG_TUD_LOG_LEVEL
 
 char const* const tu_str_speed[] = { "Full", "Low", "High" };
 char const* const tu_str_std_request[] =
@@ -477,7 +478,7 @@ void tu_print_mem(void const *buf, uint32_t count, uint8_t indent)
   uint8_t const *buf8 = (uint8_t const *) buf;
 
   char format[] = "%00X";
-  format[2] += 2*size;
+  format[2] += (uint8_t) (2*size); // 1 byte = 2 hex digits
 
   const uint8_t item_per_line  = 16 / size;
 
