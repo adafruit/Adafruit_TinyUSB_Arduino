@@ -46,6 +46,10 @@
   Adafruit_USBH_Host USBHost(&SPI, 15, 14);
 #elif defined(ARDUINO_ADAFRUIT_FEATHER_ESP32_V2)
   Adafruit_USBH_Host USBHost(&SPI, 33, 15);
+#elif defined(ARDUINO_ADAFRUIT_FEATHER_ESP32C6)
+  Adafruit_USBH_Host USBHost(&SPI, 8, 7);
+#elif defined(ARDUINO_ESP32C3_DEV)
+  Adafruit_USBH_Host USBHost(&SPI, 10, 7);
 #else
   // Default CS and INT are pin 10, 9
   Adafruit_USBH_Host USBHost(&SPI, 10, 9);
