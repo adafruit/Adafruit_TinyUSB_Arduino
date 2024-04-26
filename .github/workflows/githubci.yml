@@ -119,6 +119,8 @@ jobs:
         run: |
           arduino-cli core install esp32:esp32 --additional-urls $BSP_URLS
           arduino-cli lib install "Adafruit SPIFlash" "MIDI Library" "Adafruit seesaw Library" "Adafruit NeoPixel" "SdFat - Adafruit Fork" "SD" "Adafruit Circuit Playground" "Adafruit InternalFlash" "Pico PIO USB"
+          arduino-cli core list
+          arduino-cli lib list
 
       - name: Create custom build script
         working-directory: ${{ github.workspace }}/ci
