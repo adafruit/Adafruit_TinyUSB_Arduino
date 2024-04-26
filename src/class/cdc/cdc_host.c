@@ -653,12 +653,11 @@ bool tuh_cdc_set_line_coding(uint8_t idx, cdc_line_coding_t const* line_coding, 
 // CLASS-USBH API
 //--------------------------------------------------------------------+
 
-void cdch_init(void) {
+bool cdch_init(void) {
+  TU_LOG_DRV("sizeof(cdch_interface_t) = %u\r\n", sizeof(cdch_interface_t));
   tu_memclr(cdch_data, sizeof(cdch_data));
-
   for (size_t i = 0; i < CFG_TUH_CDC; i++) {
     cdch_interface_t* p_cdc = &cdch_data[i];
-
     tu_edpt_stream_init(&p_cdc->stream.tx, true, true, false,
                         p_cdc->stream.tx_ff_buf, CFG_TUH_CDC_TX_BUFSIZE,
                         p_cdc->stream.tx_ep_buf, CFG_TUH_CDC_TX_EPSIZE);
@@ -667,6 +666,17 @@ void cdch_init(void) {
                         p_cdc->stream.rx_ff_buf, CFG_TUH_CDC_RX_BUFSIZE,
                         p_cdc->stream.rx_ep_buf, CFG_TUH_CDC_RX_EPSIZE);
   }
+
+  return true;
+}
+
+bool cdch_deinit(void) {
+  for (size_t i = 0; i < CFG_TUH_CDC; i++) {
+    cdch_interface_t* p_cdc = &cdch_data[i];
+    tu_edpt_stream_deinit(&p_cdc->stream.tx);
+    tu_edpt_stream_deinit(&p_cdc->stream.rx);
+  }
+  return true;
 }
 
 void cdch_close(uint8_t daddr) {
@@ -1101,7 +1111,7 @@ static uint32_t ftdi_232bm_baud_to_divisor(uint32_t baud) {
 
 static bool ftdi_sio_set_baudrate(cdch_interface_t* p_cdc, uint32_t baudrate, tuh_xfer_cb_t complete_cb, uintptr_t user_data) {
   uint16_t const divisor = (uint16_t) ftdi_232bm_baud_to_divisor(baudrate);
-  TU_LOG_DRV("CDC FTDI Set BaudRate = %lu, divisor = 0x%04x\r\n", baudrate, divisor);
+  TU_LOG_DRV("CDC FTDI Set BaudRate = %" PRIu32 ", divisor = 0x%04x\r\n", baudrate, divisor);
 
   p_cdc->user_control_cb = complete_cb;
   p_cdc->requested_line_coding.bit_rate = baudrate;
@@ -1244,7 +1254,7 @@ static bool cp210x_set_line_coding(cdch_interface_t* p_cdc, cdc_line_coding_t co
 }
 
 static bool cp210x_set_baudrate(cdch_interface_t* p_cdc, uint32_t baudrate, tuh_xfer_cb_t complete_cb, uintptr_t user_data) {
-  TU_LOG_DRV("CDC CP210x Set BaudRate = %lu\r\n", baudrate);
+  TU_LOG_DRV("CDC CP210x Set BaudRate = %" PRIu32 "\r\n", baudrate);
   uint32_t baud_le = tu_htole32(baudrate);
   p_cdc->user_control_cb = complete_cb;
   return cp210x_set_request(p_cdc, CP210X_SET_BAUDRATE, 0, (uint8_t *) &baud_le, 4,
