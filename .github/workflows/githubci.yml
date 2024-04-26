@@ -121,8 +121,7 @@ jobs:
           arduino-cli lib install "Adafruit SPIFlash" "MIDI Library" "Adafruit seesaw Library" "Adafruit NeoPixel" "SdFat - Adafruit Fork" "SD" "Adafruit Circuit Playground" "Adafruit InternalFlash" "Pico PIO USB"
 
       - name: Create custom build script
-        with:
-          working-directory: ${{ github.workspace }}/ci
+        working-directory: ${{ github.workspace }}/ci
         run: |
           echo 'import build_platform' > build_esp32_stable.py
           echo 'build_platform.test_examples_in_folder("'${{ matrix.arduino-platform }}'")' >> build_esp32_v2.py
