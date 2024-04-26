@@ -41,27 +41,6 @@
 #include "device/usbd_pvt.h"
 
 //--------------------------------------------------------------------+
-// ESP32 out-of-sync
-//--------------------------------------------------------------------+
-#if defined(ARDUINO_ARCH_ESP32) && !defined(PLATFORMIO)
-#ifndef TU_LOG_BUF
-#if CFG_TUSB_DEBUG >= CFG_TUD_LOG_LEVEL
-  static inline void tu_print_buf(uint8_t const* buf, uint32_t bufsize) {
-    for(uint32_t i=0; i<bufsize; i++) tu_printf("%02X ", buf[i]);
-  }
-  #define TU_LOG_BUF(lvl, _buf, _bufsize)  tu_print_buf(_buf, _bufsize)
-#else
-  #define TU_LOG_BUF(lvl, _buf, _bufsize)
-#endif
-#endif
-
-#endif
-
-#ifndef TU_LOG_USBD
-  #define TU_LOG_USBD(...)   TU_LOG(CFG_TUD_LOG_LEVEL, __VA_ARGS__)
-#endif
-
-//--------------------------------------------------------------------+
 // USBD Configuration
 //--------------------------------------------------------------------+
 #ifndef CFG_TUD_TASK_QUEUE_SZ
@@ -69,8 +48,13 @@
 #endif
 
 //--------------------------------------------------------------------+
-// Callback weak stubs (called if application does not provide)
+// Weak stubs: invoked if no strong implementation is available
 //--------------------------------------------------------------------+
+TU_ATTR_WEAK bool dcd_deinit(uint8_t rhport) {
+  (void) rhport;
+  return false;
+}
+
 TU_ATTR_WEAK void tud_event_hook_cb(uint8_t rhport, uint32_t eventid, bool in_isr) {
   (void)rhport;
   (void)eventid;
@@ -122,6 +106,7 @@ tu_static usbd_class_driver_t const _usbd_driver[] = {
     {
         DRIVER_NAME("CDC")
         .init             = cdcd_init,
+        .deinit           = cdcd_deinit,
         .reset            = cdcd_reset,
         .open             = cdcd_open,
         .control_xfer_cb  = cdcd_control_xfer_cb,
@@ -134,6 +119,7 @@ tu_static usbd_class_driver_t const _usbd_driver[] = {
     {
         DRIVER_NAME("MSC")
         .init             = mscd_init,
+        .deinit           = NULL,
         .reset            = mscd_reset,
         .open             = mscd_open,
         .control_xfer_cb  = mscd_control_xfer_cb,
@@ -144,121 +130,131 @@ tu_static usbd_class_driver_t const _usbd_driver[] = {
 
     #if CFG_TUD_HID
     {
-      DRIVER_NAME("HID")
-      .init             = hidd_init,
-      .reset            = hidd_reset,
-      .open             = hidd_open,
-      .control_xfer_cb  = hidd_control_xfer_cb,
-      .xfer_cb          = hidd_xfer_cb,
-      .sof              = NULL
+        DRIVER_NAME("HID")
+        .init             = hidd_init,
+        .deinit           = hidd_deinit,
+        .reset            = hidd_reset,
+        .open             = hidd_open,
+        .control_xfer_cb  = hidd_control_xfer_cb,
+        .xfer_cb          = hidd_xfer_cb,
+        .sof              = NULL
     },
     #endif
 
     #if CFG_TUD_AUDIO
     {
-      DRIVER_NAME("AUDIO")
-      .init             = audiod_init,
-      .reset            = audiod_reset,
-      .open             = audiod_open,
-      .control_xfer_cb  = audiod_control_xfer_cb,
-      .xfer_cb          = audiod_xfer_cb,
-      .sof              = audiod_sof_isr
+        DRIVER_NAME("AUDIO")
+        .init             = audiod_init,
+        .deinit           = audiod_deinit,
+        .reset            = audiod_reset,
+        .open             = audiod_open,
+        .control_xfer_cb  = audiod_control_xfer_cb,
+        .xfer_cb          = audiod_xfer_cb,
+        .sof              = audiod_sof_isr
     },
     #endif
 
     #if CFG_TUD_VIDEO
     {
-      DRIVER_NAME("VIDEO")
-      .init             = videod_init,
-      .reset            = videod_reset,
-      .open             = videod_open,
-      .control_xfer_cb  = videod_control_xfer_cb,
-      .xfer_cb          = videod_xfer_cb,
-      .sof              = NULL
+        DRIVER_NAME("VIDEO")
+        .init             = videod_init,
+        .deinit           = videod_deinit,
+        .reset            = videod_reset,
+        .open             = videod_open,
+        .control_xfer_cb  = videod_control_xfer_cb,
+        .xfer_cb          = videod_xfer_cb,
+        .sof              = NULL
     },
     #endif
 
     #if CFG_TUD_MIDI
     {
-      DRIVER_NAME("MIDI")
-      .init             = midid_init,
-      .open             = midid_open,
-      .reset            = midid_reset,
-      .control_xfer_cb  = midid_control_xfer_cb,
-      .xfer_cb          = midid_xfer_cb,
-      .sof              = NULL
+        DRIVER_NAME("MIDI")
+        .init             = midid_init,
+        .deinit           = midid_deinit,
+        .open             = midid_open,
+        .reset            = midid_reset,
+        .control_xfer_cb  = midid_control_xfer_cb,
+        .xfer_cb          = midid_xfer_cb,
+        .sof              = NULL
     },
     #endif
 
     #if CFG_TUD_VENDOR
     {
-      DRIVER_NAME("VENDOR")
-      .init             = vendord_init,
-      .reset            = vendord_reset,
-      .open             = vendord_open,
-      .control_xfer_cb  = tud_vendor_control_xfer_cb,
-      .xfer_cb          = vendord_xfer_cb,
-      .sof              = NULL
+        DRIVER_NAME("VENDOR")
+        .init             = vendord_init,
+        .deinit           = vendord_deinit,
+        .reset            = vendord_reset,
+        .open             = vendord_open,
+        .control_xfer_cb  = tud_vendor_control_xfer_cb,
+        .xfer_cb          = vendord_xfer_cb,
+        .sof              = NULL
     },
     #endif
 
     #if CFG_TUD_USBTMC
     {
-      DRIVER_NAME("TMC")
-      .init             = usbtmcd_init_cb,
-      .reset            = usbtmcd_reset_cb,
-      .open             = usbtmcd_open_cb,
-      .control_xfer_cb  = usbtmcd_control_xfer_cb,
-      .xfer_cb          = usbtmcd_xfer_cb,
-      .sof              = NULL
+        DRIVER_NAME("TMC")
+        .init             = usbtmcd_init_cb,
+        .deinit           = usbtmcd_deinit,
+        .reset            = usbtmcd_reset_cb,
+        .open             = usbtmcd_open_cb,
+        .control_xfer_cb  = usbtmcd_control_xfer_cb,
+        .xfer_cb          = usbtmcd_xfer_cb,
+        .sof              = NULL
     },
     #endif
 
     #if CFG_TUD_DFU_RUNTIME
     {
-      DRIVER_NAME("DFU-RUNTIME")
-      .init             = dfu_rtd_init,
-      .reset            = dfu_rtd_reset,
-      .open             = dfu_rtd_open,
-      .control_xfer_cb  = dfu_rtd_control_xfer_cb,
-      .xfer_cb          = NULL,
-      .sof              = NULL
+        DRIVER_NAME("DFU-RUNTIME")
+        .init             = dfu_rtd_init,
+        .deinit           = dfu_rtd_deinit,
+        .reset            = dfu_rtd_reset,
+        .open             = dfu_rtd_open,
+        .control_xfer_cb  = dfu_rtd_control_xfer_cb,
+        .xfer_cb          = NULL,
+        .sof              = NULL
     },
     #endif
 
     #if CFG_TUD_DFU
     {
-      DRIVER_NAME("DFU")
-      .init             = dfu_moded_init,
-      .reset            = dfu_moded_reset,
-      .open             = dfu_moded_open,
-      .control_xfer_cb  = dfu_moded_control_xfer_cb,
-      .xfer_cb          = NULL,
-      .sof              = NULL
+        DRIVER_NAME("DFU")
+        .init             = dfu_moded_init,
+        .deinit           = dfu_moded_deinit,
+        .reset            = dfu_moded_reset,
+        .open             = dfu_moded_open,
+        .control_xfer_cb  = dfu_moded_control_xfer_cb,
+        .xfer_cb          = NULL,
+        .sof              = NULL
     },
     #endif
 
     #if CFG_TUD_ECM_RNDIS || CFG_TUD_NCM
     {
-      DRIVER_NAME("NET")
-      .init             = netd_init,
-      .reset            = netd_reset,
-      .open             = netd_open,
-      .control_xfer_cb  = netd_control_xfer_cb,
-      .xfer_cb          = netd_xfer_cb,
-      .sof                  = NULL,
+        DRIVER_NAME("NET")
+        .init             = netd_init,
+        .deinit           = netd_deinit,
+        .reset            = netd_reset,
+        .open             = netd_open,
+        .control_xfer_cb  = netd_control_xfer_cb,
+        .xfer_cb          = netd_xfer_cb,
+        .sof                  = NULL,
     },
     #endif
 
     #if CFG_TUD_BTH
     {
-      DRIVER_NAME("BTH")
-      .init             = btd_init,
-      .reset            = btd_reset,
-      .open             = btd_open,
-      .control_xfer_cb  = btd_control_xfer_cb,
-      .xfer_cb          = btd_xfer_cb,
-      .sof              = NULL
+        DRIVER_NAME("BTH")
+        .init             = btd_init,
+        .deinit           = btd_deinit,
+        .reset            = btd_reset,
+        .open             = btd_open,
+        .control_xfer_cb  = btd_control_xfer_cb,
+        .xfer_cb          = btd_xfer_cb,
+        .sof              = NULL
     },
     #endif
 };
@@ -305,9 +301,9 @@ tu_static osal_queue_t _usbd_q;
 #endif
 
 TU_ATTR_ALWAYS_INLINE static inline bool queue_event(dcd_event_t const * event, bool in_isr) {
-  bool ret = osal_queue_send(_usbd_q, event, in_isr);
+  TU_ASSERT(osal_queue_send(_usbd_q, event, in_isr));
   tud_event_hook_cb(event->rhport, event->event_id, in_isr);
-  return ret;
+  return true;
 }
 
 //--------------------------------------------------------------------+
@@ -428,7 +424,7 @@ bool tud_init(uint8_t rhport) {
   // Init class drivers
   for (uint8_t i = 0; i < TOTAL_DRIVER_COUNT; i++) {
     usbd_class_driver_t const* driver = get_driver(i);
-    TU_ASSERT(driver);
+    TU_ASSERT(driver && driver->init);
     TU_LOG_USBD("%s init\r\n", driver->name);
     driver->init();
   }
@@ -438,6 +434,41 @@ bool tud_init(uint8_t rhport) {
   // Init device controller driver
   dcd_init(rhport);
   dcd_int_enable(rhport);
+
+  return true;
+}
+
+bool tud_deinit(uint8_t rhport) {
+  // skip if not initialized
+  if (!tud_inited()) return true;
+
+  TU_LOG_USBD("USBD deinit on controller %u\r\n", rhport);
+
+  // Deinit device controller driver
+  dcd_int_disable(rhport);
+  dcd_disconnect(rhport);
+  dcd_deinit(rhport);
+
+  // Deinit class drivers
+  for (uint8_t i = 0; i < TOTAL_DRIVER_COUNT; i++) {
+    usbd_class_driver_t const* driver = get_driver(i);
+    if(driver && driver->deinit) {
+      TU_LOG_USBD("%s deinit\r\n", driver->name);
+      driver->deinit();
+    }
+  }
+
+  // Deinit device queue & task
+  osal_queue_delete(_usbd_q);
+  _usbd_q = NULL;
+
+#if OSAL_MUTEX_REQUIRED
+  // TODO make sure there is no task waiting on this mutex
+  osal_mutex_delete(_usbd_mutex);
+  _usbd_mutex = NULL;
+#endif
+
+  _usbd_rhport = RHPORT_INVALID;
 
   return true;
 }
@@ -610,7 +641,7 @@ static bool invoke_class_control(uint8_t rhport, usbd_class_driver_t const * dri
 }
 
 // This handles the actual request and its response.
-// return false will cause its caller to stall control endpoint
+// Returns false if unable to complete the request, causing caller to stall control endpoints.
 static bool process_control_request(uint8_t rhport, tusb_control_request_t const * p_request) {
   usbd_control_set_complete_callback(NULL);
   TU_ASSERT(p_request->bmRequestType_bit.type < TUSB_REQ_TYPE_INVALID);
@@ -1207,6 +1238,11 @@ bool usbd_edpt_xfer(uint8_t rhport, uint8_t ep_addr, uint8_t* buffer, uint16_t t
   // TU_VERIFY(tud_ready());
 
   TU_LOG_USBD("  Queue EP %02X with %u bytes ...\r\n", ep_addr, total_bytes);
+#if CFG_TUD_LOG_LEVEL >= 3
+  if(dir == TUSB_DIR_IN) {
+    TU_LOG_MEM(CFG_TUD_LOG_LEVEL, buffer, total_bytes, 2);
+  }
+#endif
 
   // Attempt to transfer on a busy endpoint, sound like an race condition !
   TU_ASSERT(_usbd_dev.ep_status[epnum][dir].busy == 0);
@@ -1275,12 +1311,10 @@ void usbd_edpt_stall(uint8_t rhport, uint8_t ep_addr) {
   uint8_t const dir = tu_edpt_dir(ep_addr);
 
   // only stalled if currently cleared
-  if (!_usbd_dev.ep_status[epnum][dir].stalled) {
-    TU_LOG_USBD("    Stall EP %02X\r\n", ep_addr);
-    dcd_edpt_stall(rhport, ep_addr);
-    _usbd_dev.ep_status[epnum][dir].stalled = 1;
-    _usbd_dev.ep_status[epnum][dir].busy = 1;
-  }
+  TU_LOG_USBD("    Stall EP %02X\r\n", ep_addr);
+  dcd_edpt_stall(rhport, ep_addr);
+  _usbd_dev.ep_status[epnum][dir].stalled = 1;
+  _usbd_dev.ep_status[epnum][dir].busy = 1;
 }
 
 void usbd_edpt_clear_stall(uint8_t rhport, uint8_t ep_addr) {
@@ -1290,12 +1324,10 @@ void usbd_edpt_clear_stall(uint8_t rhport, uint8_t ep_addr) {
   uint8_t const dir = tu_edpt_dir(ep_addr);
 
   // only clear if currently stalled
-  if (_usbd_dev.ep_status[epnum][dir].stalled) {
-    TU_LOG_USBD("    Clear Stall EP %02X\r\n", ep_addr);
-    dcd_edpt_clear_stall(rhport, ep_addr);
-    _usbd_dev.ep_status[epnum][dir].stalled = 0;
-    _usbd_dev.ep_status[epnum][dir].busy = 0;
-  }
+  TU_LOG_USBD("    Clear Stall EP %02X\r\n", ep_addr);
+  dcd_edpt_clear_stall(rhport, ep_addr);
+  _usbd_dev.ep_status[epnum][dir].stalled = 0;
+  _usbd_dev.ep_status[epnum][dir].busy = 0;
 }
 
 bool usbd_edpt_stalled(uint8_t rhport, uint8_t ep_addr) {
