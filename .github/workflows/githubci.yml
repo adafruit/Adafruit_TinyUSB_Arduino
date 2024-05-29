@@ -10,16 +10,11 @@ jobs:
   pre-commit:
     runs-on: ubuntu-latest
     steps:
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.x'
-
     - name: Checkout code
       uses: actions/checkout@v4
 
     - name: Run pre-commit
-      uses: pre-commit/action@v3.0.0
+      uses: pre-commit/action@v3.0.1
 
     - name: Checkout adafruit/ci-arduino
       uses: actions/checkout@v4
@@ -60,11 +55,6 @@ jobs:
            - 'metro_m4_tinyusb'
 
     steps:
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.x'
-
     - name: Checkout code
       uses: actions/checkout@v4
 
@@ -72,6 +62,7 @@ jobs:
       uses: actions/checkout@v4
       with:
          repository: adafruit/ci-arduino
+         ref: importable-build_platform
          path: ci
 
     - name: pre-install
@@ -83,23 +74,20 @@ jobs:
     - name: test platforms
       run: python3 ci/build_platform.py ${{ matrix.arduino-platform }}
 
-  build-esp32-stable:
+  build-esp32-v2:
+    if: false
     runs-on: ubuntu-latest
     needs: pre-commit
     strategy:
       fail-fast: false
       matrix:
         arduino-platform:
-          # ESP32
           - 'feather_esp32s2'
           - 'feather_esp32s3'
+        esp32-version:
+          - '2.0.17'
 
     steps:
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -113,11 +101,11 @@ jobs:
       - name: pre-install
         run: bash ci/actions_install.sh
 
-      - name: Install arduino-esp32 stable and Libraries
+      - name: Install arduino-esp32 v2 and Libraries
         env:
           BSP_URLS: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
         run: |
-          arduino-cli core install esp32:esp32 --additional-urls $BSP_URLS
+          arduino-cli core install esp32:esp32@${{ matrix.esp32-version }} --additional-urls $BSP_URLS
           arduino-cli lib install "Adafruit SPIFlash" "MIDI Library" "Adafruit seesaw Library" "Adafruit NeoPixel" "SdFat - Adafruit Fork" "SD" "Adafruit Circuit Playground" "Adafruit InternalFlash" "Pico PIO USB"
           arduino-cli core list
           arduino-cli lib list
@@ -125,9 +113,11 @@ jobs:
       - name: Create custom build script
         working-directory: ${{ github.workspace }}/ci
         run: |
-          echo 'import build_platform' > build_esp32_stable.py
-          echo 'build_platform.test_examples_in_folder("'${{ matrix.arduino-platform }}'")' >> build_esp32_v2.py
+          echo 'import build_platform' > build_esp32_v2.py
+          echo 'build_platform.test_examples_in_folder("'${{ matrix.arduino-platform }}'", build_platform.BUILD_DIR)' >> build_esp32_v2.py
+          echo 'exit(build_platform.success)' >> build_esp32_v2.py
+          cat build_esp32_v2.py
 
       - name: test platforms
         run: |
-          python3 ci/build_esp32_stable.py
+          python3 ci/build_esp32_v2.py
