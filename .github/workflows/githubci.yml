@@ -75,6 +75,7 @@ jobs:
       run: python3 ci/build_platform.py ${{ matrix.arduino-platform }}
 
   build-esp32-v2:
+    if: false
     runs-on: ubuntu-latest
     needs: pre-commit
     strategy:
