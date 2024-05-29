@@ -10,16 +10,11 @@ jobs:
   pre-commit:
     runs-on: ubuntu-latest
     steps:
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.x'
-
     - name: Checkout code
       uses: actions/checkout@v4
 
     - name: Run pre-commit
-      uses: pre-commit/action@v3.0.0
+      uses: pre-commit/action@v3.0.1
 
     - name: Checkout adafruit/ci-arduino
       uses: actions/checkout@v4
@@ -60,11 +55,6 @@ jobs:
            - 'metro_m4_tinyusb'
 
     steps:
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.x'
-
     - name: Checkout code
       uses: actions/checkout@v4
 
@@ -72,6 +62,7 @@ jobs:
       uses: actions/checkout@v4
       with:
          repository: adafruit/ci-arduino
+         ref: importable-build_platform
          path: ci
 
     - name: pre-install
@@ -95,11 +86,6 @@ jobs:
           - 'feather_esp32s3'
 
     steps:
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
       - name: Checkout code
         uses: actions/checkout@v4
 
