@@ -24,5 +24,6 @@ def main(dir):
             click.echo(f"Updating {f}")
             shutil.copy(sample_file, f)
 
+
 if __name__ == '__main__':
     main()

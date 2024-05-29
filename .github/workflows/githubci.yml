@@ -112,9 +112,11 @@ jobs:
       - name: Create custom build script
         working-directory: ${{ github.workspace }}/ci
         run: |
-          echo 'import build_platform' > build_esp32_stable.py
-          echo 'build_platform.test_examples_in_folder("'${{ matrix.arduino-platform }}'")' >> build_esp32_v2.py
+          echo 'import build_platform' > build_esp32_v2.py
+          echo 'build_platform.test_examples_in_folder("'${{ matrix.arduino-platform }}'", build_platform.BUILD_DIR)' >> build_esp32_v2.py
+          echo 'exit(build_platform.success)' >> build_esp32_v2.py
+          cat build_esp32_v2.py
 
       - name: test platforms
         run: |
-          python3 ci/build_esp32_stable.py
+          python3 ci/build_esp32_v2.py
