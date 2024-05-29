@@ -74,16 +74,17 @@ jobs:
     - name: test platforms
       run: python3 ci/build_platform.py ${{ matrix.arduino-platform }}
 
-  build-esp32-stable:
+  build-esp32-v2:
     runs-on: ubuntu-latest
     needs: pre-commit
     strategy:
       fail-fast: false
       matrix:
         arduino-platform:
-          # ESP32
           - 'feather_esp32s2'
           - 'feather_esp32s3'
+        esp32-version:
+          - '2.0.17'
 
     steps:
       - name: Checkout code
@@ -99,11 +100,11 @@ jobs:
       - name: pre-install
         run: bash ci/actions_install.sh
 
-      - name: Install arduino-esp32 stable and Libraries
+      - name: Install arduino-esp32 v2 and Libraries
         env:
           BSP_URLS: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
         run: |
-          arduino-cli core install esp32:esp32 --additional-urls $BSP_URLS
+          arduino-cli core install esp32:esp32@${{ matrix.esp32-version }} --additional-urls $BSP_URLS
           arduino-cli lib install "Adafruit SPIFlash" "MIDI Library" "Adafruit seesaw Library" "Adafruit NeoPixel" "SdFat - Adafruit Fork" "SD" "Adafruit Circuit Playground" "Adafruit InternalFlash" "Pico PIO USB"
           arduino-cli core list
           arduino-cli lib list
