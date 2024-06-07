@@ -62,7 +62,6 @@ jobs:
       uses: actions/checkout@v4
       with:
          repository: adafruit/ci-arduino
-         ref: importable-build_platform
          path: ci
 
     - name: pre-install
@@ -95,7 +94,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: adafruit/ci-arduino
-          ref: importable-build_platform
           path: ci
 
       - name: pre-install

@@ -22,8 +22,8 @@
  * THE SOFTWARE.
  */
 
-#ifndef _TUSB_CONFIG_ARDUINO_H_
-#define _TUSB_CONFIG_ARDUINO_H_
+#ifndef TUSB_CONFIG_ARDUINO_H_
+#define TUSB_CONFIG_ARDUINO_H_
 
 #ifdef __cplusplus
  extern "C" {
@@ -51,6 +51,8 @@
 
   // Note: For platformio prioritize this file over the one in BSP in all cases
 
+#elif defined(CH32V20x) || defined(CH32V30x) // using build.series
+  #include "arduino/ports/ch32/tusb_config_ch32.h"
 #else
   #error TinyUSB Arduino Library does not support your core yet
 #endif
@@ -64,4 +66,4 @@
  }
 #endif
 
-#endif /* _TUSB_CONFIG_ARDUINO_H_ */
+#endif

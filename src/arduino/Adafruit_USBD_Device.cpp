@@ -269,6 +269,11 @@ bool Adafruit_USBD_Device::begin(uint8_t rhport) {
   return true;
 }
 
+bool Adafruit_USBD_Device::isInitialized(uint8_t rhport) {
+  (void)rhport;
+  return tud_inited();
+}
+
 static int strcpy_utf16(const char *s, uint16_t *buf, int bufsize);
 
 uint8_t Adafruit_USBD_Device::getSerialDescriptor(uint16_t *serial_utf16) {
