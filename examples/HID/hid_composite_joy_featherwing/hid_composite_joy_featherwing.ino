@@ -33,17 +33,15 @@ uint32_t button_mask = (1 << BUTTON_A) | (1 << BUTTON_B) |
 Adafruit_seesaw ss;
 
 // Report ID
-enum
-{
+enum {
   RID_KEYBOARD = 1,
   RID_MOUSE
 };
 
 // HID report descriptor using TinyUSB's template
-uint8_t const desc_hid_report[] =
-{
-  TUD_HID_REPORT_DESC_KEYBOARD( HID_REPORT_ID(RID_KEYBOARD) ),
-  TUD_HID_REPORT_DESC_MOUSE   ( HID_REPORT_ID(RID_MOUSE) )
+uint8_t const desc_hid_report[] = {
+    TUD_HID_REPORT_DESC_KEYBOARD(HID_REPORT_ID(RID_KEYBOARD)),
+    TUD_HID_REPORT_DESC_MOUSE   (HID_REPORT_ID(RID_MOUSE))
 };
 
 // USB HID object. For ESP32 these values cannot be changed after this declaration
@@ -53,20 +51,23 @@ Adafruit_USBD_HID usb_hid(desc_hid_report, sizeof(desc_hid_report), HID_ITF_PROT
 int last_x, last_y;
 
 // the setup function runs once when you press reset or power the board
-void setup()
-{
+void setup() {
+  // Manual begin() is required on core without built-in support e.g. mbed rp2040
+  if (!TinyUSBDevice.isInitialized()) {
+    TinyUSBDevice.begin(0);
+  }
+
   // Notes: following commented-out functions has no affect on ESP32
   // usb_hid.setPollInterval(2);
   // usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
-
   usb_hid.begin();
 
   Serial.begin(115200);
   Serial.println("Adafruit TinyUSB HID Mouse with Joy FeatherWing example");
 
-  if(!ss.begin(0x49)){
+  if (!ss.begin(0x49)) {
     Serial.println("ERROR! seesaw not found");
-    while(1);
+    while (1) {}
   } else {
     Serial.println("seesaw started");
     Serial.print("version: ");
@@ -77,16 +78,9 @@ void setup()
 
   last_y = ss.analogRead(2);
   last_x = ss.analogRead(3);
-
-  // wait until device mounted
-  while( !TinyUSBDevice.mounted() ) delay(1);
 }
 
-void loop()
-{
-  // poll gpio once each 10 ms
-  delay(10);
-
+void process_hid() {
   // If either analog stick or any buttons is pressed
   bool has_action = false;
 
@@ -98,12 +92,10 @@ void loop()
   int dx = (x - last_x) / 2;
   int dy = (y - last_y) / 2;
 
-  if ( (abs(dx) > 3) || (abs(dy) > 3) )
-  {
+  if ((abs(dx) > 3) || (abs(dy) > 3)) {
     has_action = true;
 
-    if ( usb_hid.ready() )
-    {
+    if (usb_hid.ready()) {
       usb_hid.mouseMove(RID_MOUSE, dx, dy); // no ID: right + down
 
       last_x = x;
@@ -114,31 +106,27 @@ void loop()
     }
   }
 
-
   /*------------- Keyboard -------------*/
   // button is active low, invert read value for convenience
   uint32_t buttons = ~ss.digitalReadBulk(button_mask);
 
-  if ( usb_hid.ready() )
-  {
+  if (usb_hid.ready()) {
     // use to prevent sending multiple consecutive zero report
     static bool has_key = false;
 
-    if ( buttons & button_mask )
-    {
+    if (buttons & button_mask) {
       has_action = true;
       has_key = true;
 
-      uint8_t keycode[6] = { 0 };
-      
-      if ( buttons & (1 << BUTTON_A) ) keycode[0] = HID_KEY_A;
-      if ( buttons & (1 << BUTTON_B) ) keycode[0] = HID_KEY_B;
-      if ( buttons & (1 << BUTTON_X) ) keycode[0] = HID_KEY_X;
-      if ( buttons & (1 << BUTTON_Y) ) keycode[0] = HID_KEY_Y;
+      uint8_t keycode[6] = {0};
+
+      if (buttons & (1 << BUTTON_A)) keycode[0] = HID_KEY_A;
+      if (buttons & (1 << BUTTON_B)) keycode[0] = HID_KEY_B;
+      if (buttons & (1 << BUTTON_X)) keycode[0] = HID_KEY_X;
+      if (buttons & (1 << BUTTON_Y)) keycode[0] = HID_KEY_Y;
 
       usb_hid.keyboardReport(RID_KEYBOARD, 0, keycode);
-    }else
-    {
+    } else {
       // send empty key report if previously has key pressed
       if (has_key) usb_hid.keyboardRelease(RID_KEYBOARD);
       has_key = false;
@@ -147,10 +135,28 @@ void loop()
 
   /*------------- Remote Wakeup -------------*/
   // Remote wakeup if PC is suspended and we has user interaction with joy feather wing
-  if ( has_action && TinyUSBDevice.suspended() )
-  {
+  if (has_action && TinyUSBDevice.suspended()) {
     // Wake up only works if REMOTE_WAKEUP feature is enable by host
     // Usually this is the case with Mouse/Keyboard device
     TinyUSBDevice.remoteWakeup();
+  }
+}
+
+void loop() {
+  #ifdef TINYUSB_NEED_POLLING_TASK
+  // Manual call tud_task since it isn't called by Core's background
+  TinyUSBDevice.task();
+  #endif
+
+  // not enumerated()/mounted() yet: nothing to do
+  if (!TinyUSBDevice.mounted()) {
+    return;
+  }
+
+  // poll gpio once each 10 ms
+  static uint32_t ms = 0;
+  if (millis() - ms > 10) {
+    ms = millis();
+    process_hid();
   }
 }

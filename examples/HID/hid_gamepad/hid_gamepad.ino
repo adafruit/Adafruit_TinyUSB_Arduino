@@ -23,7 +23,7 @@
 // HID report descriptor using TinyUSB's template
 // Single Report (no ID) descriptor
 uint8_t const desc_hid_report[] = {
-  TUD_HID_REPORT_DESC_GAMEPAD()
+    TUD_HID_REPORT_DESC_GAMEPAD()
 };
 
 // USB HID object
@@ -32,31 +32,35 @@ Adafruit_USBD_HID usb_hid;
 // Report payload defined in src/class/hid/hid.h
 // - For Gamepad Button Bit Mask see  hid_gamepad_button_bm_t
 // - For Gamepad Hat    Bit Mask see  hid_gamepad_hat_t
-hid_gamepad_report_t    gp;
+hid_gamepad_report_t gp;
 
-void setup() 
-{
-#if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
-  // Manual begin() is required on core without built-in support for TinyUSB such as mbed rp2040
-  TinyUSB_Device_Init(0);
-#endif
+void setup() {
+  // Manual begin() is required on core without built-in support e.g. mbed rp2040
+  if (!TinyUSBDevice.isInitialized()) {
+    TinyUSBDevice.begin(0);
+  }
 
   Serial.begin(115200);
-  
+
   // Setup HID
   usb_hid.setPollInterval(2);
   usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
-
   usb_hid.begin();
 
-  // wait until device mounted
-  while( !TinyUSBDevice.mounted() ) delay(1);
-  
   Serial.println("Adafruit TinyUSB HID Gamepad example");
 }
 
-void loop() 
-{ 
+void loop() {
+  #ifdef TINYUSB_NEED_POLLING_TASK
+  // Manual call tud_task since it isn't called by Core's background
+  TinyUSBDevice.task();
+  #endif
+
+  // not enumerated()/mounted() yet: nothing to do
+  if (!TinyUSBDevice.mounted()) {
+    return;
+  }
+
 //  // Remote wakeup
 //  if ( TinyUSBDevice.suspended() && btn )
 //  {
@@ -65,22 +69,22 @@ void loop()
 //    TinyUSBDevice.remoteWakeup();
 //  }
 
-  if ( !usb_hid.ready() ) return;
+  if (!usb_hid.ready()) return;
 
   // Reset buttons
   Serial.println("No pressing buttons");
-  gp.x       = 0;
-  gp.y       = 0;
-  gp.z       = 0;
-  gp.rz      = 0;
-  gp.rx      = 0;
-  gp.ry      = 0;
-  gp.hat     = 0;
+  gp.x = 0;
+  gp.y = 0;
+  gp.z = 0;
+  gp.rz = 0;
+  gp.rx = 0;
+  gp.ry = 0;
+  gp.hat = 0;
   gp.buttons = 0;
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
 
-  
+
   // Hat/DPAD UP
   Serial.println("Hat/DPAD UP");
   gp.hat = 1; // GAMEPAD_HAT_UP;
@@ -105,12 +109,12 @@ void loop()
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
 
-   // Hat/DPAD DOWN
+  // Hat/DPAD DOWN
   Serial.println("Hat/DPAD DOWN");
   gp.hat = 5; // GAMEPAD_HAT_DOWN;
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
-  
+
   // Hat/DPAD DOWN LEFT
   Serial.println("Hat/DPAD DOWN LEFT");
   gp.hat = 6; // GAMEPAD_HAT_DOWN_LEFT;
@@ -135,14 +139,14 @@ void loop()
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
 
-  
+
   // Joystick 1 UP
   Serial.println("Joystick 1 UP");
   gp.x = 0;
   gp.y = -127;
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
-  
+
   // Joystick 1 DOWN
   Serial.println("Joystick 1 DOWN");
   gp.x = 0;
@@ -156,7 +160,7 @@ void loop()
   gp.y = 0;
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
-  
+
   // Joystick 1 LEFT
   Serial.println("Joystick 1 LEFT");
   gp.x = -127;
@@ -174,35 +178,35 @@ void loop()
 
   // Joystick 2 UP
   Serial.println("Joystick 2 UP");
-  gp.z  = 0;
+  gp.z = 0;
   gp.rz = 127;
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
-  
+
   // Joystick 2 DOWN
   Serial.println("Joystick 2 DOWN");
-  gp.z  = 0;
+  gp.z = 0;
   gp.rz = -127;
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
 
   // Joystick 2 RIGHT
   Serial.println("Joystick 2 RIGHT");
-  gp.z  = 127;
+  gp.z = 127;
   gp.rz = 0;
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
-  
+
   // Joystick 2 LEFT
   Serial.println("Joystick 2 LEFT");
-  gp.z  = -127;
+  gp.z = -127;
   gp.rz = 0;
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
 
   // Joystick 2 CENTER
   Serial.println("Joystick 2 CENTER");
-  gp.z  = 0;
+  gp.z = 0;
   gp.rz = 0;
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
@@ -213,7 +217,7 @@ void loop()
   gp.rx = 127;
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
-  
+
   // Analog Trigger 1 DOWN
   Serial.println("Analog Trigger 1 DOWN");
   gp.rx = -127;
@@ -232,7 +236,7 @@ void loop()
   gp.ry = 127;
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
-  
+
   // Analog Trigger 2 DOWN
   Serial.println("Analog Trigger 2 DOWN");
   gp.ry = -127;
@@ -245,11 +249,11 @@ void loop()
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);
 
-  
+
   // Test buttons (up to 32 buttons)
-  for (int i=0; i<32; ++i)
-  {
-    Serial.print("Pressing button "); Serial.println(i);
+  for (int i = 0; i < 32; ++i) {
+    Serial.print("Pressing button ");
+    Serial.println(i);
     gp.buttons = (1U << i);
     usb_hid.sendReport(0, &gp, sizeof(gp));
     delay(1000);
@@ -258,13 +262,13 @@ void loop()
 
   // Random touch
   Serial.println("Random touch");
-  gp.x       = random(-127, 128);
-  gp.y       = random(-127, 128);
-  gp.z       = random(-127, 128);
-  gp.rz      = random(-127, 128);
-  gp.rx      = random(-127, 128);
-  gp.ry      = random(-127, 128);
-  gp.hat     = random(0,      9);
+  gp.x = random(-127, 128);
+  gp.y = random(-127, 128);
+  gp.z = random(-127, 128);
+  gp.rz = random(-127, 128);
+  gp.rx = random(-127, 128);
+  gp.ry = random(-127, 128);
+  gp.hat = random(0, 9);
   gp.buttons = random(0, 0xffff);
   usb_hid.sendReport(0, &gp, sizeof(gp));
   delay(2000);

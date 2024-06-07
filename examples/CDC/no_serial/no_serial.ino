@@ -23,6 +23,11 @@ int led = LED_BUILTIN;
 
 void setup()
 {
+  // Manual begin() is required on core without built-in support e.g. mbed rp2040
+  if (!TinyUSBDevice.isInitialized()) {
+    TinyUSBDevice.begin(0);
+  }
+
   // clear configuration will remove all USB interfaces including CDC (Serial)
   TinyUSBDevice.clearConfiguration();
 
@@ -31,8 +36,16 @@ void setup()
 
 void loop()
 {
-  digitalWrite(led, HIGH);
-  delay(1000);
-  digitalWrite(led, LOW);
-  delay(1000);
+  #ifdef TINYUSB_NEED_POLLING_TASK
+  // Manual call tud_task since it isn't called by Core's background
+  TinyUSBDevice.task();
+  #endif
+
+  // toggle LED
+  static uint32_t ms = 0;
+  static uint8_t led_state = 0;
+  if (millis() - ms > 1000) {
+    ms = millis();
+    digitalWrite(LED_BUILTIN, 1-led_state);
+  }
 }
