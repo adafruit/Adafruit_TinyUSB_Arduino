@@ -33,6 +33,7 @@
 
 // For ESP32 use USBCDC as it is compatible
 #define Adafruit_USBD_CDC USBCDC
+#define SerialTinyUSB Serial
 
 #else
 

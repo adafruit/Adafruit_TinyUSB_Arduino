@@ -3,11 +3,11 @@ name: Build
 on: [pull_request, push, repository_dispatch]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  ARDUINO_LIBS: "\"Adafruit SPIFlash\" \"MIDI Library\" \"Adafruit seesaw Library\" \"Adafruit NeoPixel\" \"SdFat - Adafruit Fork\" \"SD\" \"Adafruit Circuit Playground\" \"Adafruit InternalFlash\" \"Pico PIO USB\""
+  ARDUINO_LIBS: "\"Adafruit SPIFlash\" \"Adafruit seesaw Library\" \"Adafruit NeoPixel\" \"Adafruit Circuit Playground\" \"Adafruit InternalFlash\" \"SdFat - Adafruit Fork\" \"SD\" \"MIDI Library\" \"Pico PIO USB\""
 
 jobs:
   pre-commit:
@@ -77,9 +77,8 @@ jobs:
 
     - name: Install Libraries
       run: |
-        echo ${{ env.ARDUINO_LIBS }}    
-        # arduino-cli lib install "Adafruit SPIFlash" "MIDI Library" "Adafruit seesaw Library" "Adafruit NeoPixel" "SdFat - Adafruit Fork" "SD" "Adafruit Circuit Playground" "Adafruit InternalFlash" "Pico PIO USB"
         arduino-cli lib install ${{ env.ARDUINO_LIBS }}
+        arduino-cli lib list
 
     - name: test platforms
       run: python3 ci/build_platform.py ${{ matrix.arduino-platform }}
@@ -118,7 +117,7 @@ jobs:
           BSP_URLS: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
         run: |
           arduino-cli core install esp32:esp32@${{ matrix.esp32-version }} --additional-urls $BSP_URLS
-          arduino-cli lib install "Adafruit SPIFlash" "MIDI Library" "Adafruit seesaw Library" "Adafruit NeoPixel" "SdFat - Adafruit Fork" "SD" "Adafruit Circuit Playground" "Adafruit InternalFlash" "Pico PIO USB"
+          arduino-cli lib install ${{ env.ARDUINO_LIBS }}
           arduino-cli core list
           arduino-cli lib list
 
