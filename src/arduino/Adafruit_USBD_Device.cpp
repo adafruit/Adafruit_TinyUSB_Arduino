@@ -150,7 +150,16 @@ uint8_t Adafruit_USBD_Device::addStringDescriptor(const char *s) {
   return index;
 }
 
-void Adafruit_USBD_Device::task(void) { tud_task(); }
+void Adafruit_USBD_Device::task(void) {
+  tud_task();
+
+#ifdef TINYUSB_NEED_POLLING_TASK
+  // can also be used with port with built-in support
+  if (SerialTinyUSB) {
+    SerialTinyUSB.flush();
+  }
+#endif
+}
 
 bool Adafruit_USBD_Device::mounted(void) { return tud_mounted(); }
 

@@ -25,13 +25,6 @@
 #ifndef ADAFRUIT_TINYUSB_H_
 #define ADAFRUIT_TINYUSB_H_
 
-// Core that has built-in support: Adafruit SAMD, nRF, rp2040, esp32
-#if !(defined(ARDUINO_ARCH_SAMD) || defined(ARDUINO_NRF52_ADAFRUIT) ||         \
-      defined(ARDUINO_ARCH_ESP32) ||                                           \
-      (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)))
-#define TINYUSB_NEED_POLLING_TASK
-#endif
-
 // Error message for Core that must select TinyUSB via menu
 #if !defined(USE_TINYUSB) &&                                                   \
     (defined(ARDUINO_ARCH_SAMD) ||                                             \
