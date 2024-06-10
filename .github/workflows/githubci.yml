@@ -69,7 +69,6 @@ jobs:
       uses: actions/checkout@v4
       with:
          repository: adafruit/ci-arduino
-         ref: add-ch32v2
          path: ci
 
     - name: pre-install
