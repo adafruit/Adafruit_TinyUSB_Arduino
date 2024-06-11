@@ -106,6 +106,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: adafruit/ci-arduino
+          ref: skip-list-file
           path: ci
 
       - name: pre-install
