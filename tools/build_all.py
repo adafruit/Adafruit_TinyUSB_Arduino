@@ -19,30 +19,45 @@ all_boards = [
     ['metro_m0_tinyusb', 'adafruit:samd:adafruit_metro_m0:usbstack=tinyusb'],
     ['metro_m4_tinyusb', 'adafruit:samd:adafruit_metro_m4:speed=120,usbstack=tinyusb'],
     ['nrf52840', 'adafruit:nrf52:feather52840'],
-    ['feather_rp2040_tinyusb', 'rp2040:rp2040:adafruit_feather:flash=8388608_0,freq=125,dbgport=Disabled,dbglvl=None,usbstack=tinyusb'],
-    ['metroesp32s2', 'espressif:esp32:adafruit_metro_esp32s2:CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=cdc,PSRAM=enabled,PartitionScheme=tinyuf2'],
-    #[' ', 'espressif:esp32:adafruit_feather_esp32s3:FlashMode=qio,LoopCore=1,EventsCore=1,USBMode=default,CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=cdc,PartitionScheme=tinyuf2'],
+    ['feather_rp2040_tinyusb',
+     'rp2040:rp2040:adafruit_feather:flash=8388608_0,freq=125,dbgport=Disabled,dbglvl=None,usbstack=tinyusb'],
+    ['metroesp32s2',
+     'espressif:esp32:adafruit_metro_esp32s2:CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=cdc,PSRAM=enabled,PartitionScheme=tinyuf2'],
+    # [' ', 'espressif:esp32:adafruit_feather_esp32s3:FlashMode=qio,LoopCore=1,EventsCore=1,USBMode=default,CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=cdc,PartitionScheme=tinyuf2'],
+    ['CH32V20x_EVT', 'WCH:ch32v:CH32V20x_EVT']
 ]
+
 
 # return [succeeded, failed, skipped]
 def build_sketch(variant, sketch):
     ret = [0, 0, 0]
-
     name = variant[0]
     fqbn = variant[1]
-
     start_time = time.monotonic()
-    # Skip if contains: ".board.test.skip" or ".all.test.skip"
-    # Skip if not contains: ".board.test.only" for a specific board
+
+    # Skip if
+    # - contains ".board.test.skip"
+    # - contains any of ".board.test.only" but not this one
+    # - conntain .skip.txt has this board in it
     sketchdir = os.path.dirname(sketch)
-    if os.path.exists(sketchdir + '/.all.test.skip') or os.path.exists(sketchdir + '/.' + name + '.test.skip') or \
+    if os.path.exists(sketchdir + '/.' + name + '.test.skip') or \
             (glob.glob(sketchdir + "/.*.test.only") and not os.path.exists(sketchdir + '/.' + name + '.test.only')):
-        success = SKIPPED
         ret[2] = 1
+
+    skip_txt = f"{sketchdir}/.skip.txt"
+    if os.path.exists(skip_txt):
+        with open(skip_txt) as f:
+            lines = f.readlines()
+            for line in lines:
+                if line.strip() == name:
+                    ret[2] = 1
+                    break
+
+    if ret[2] == 1:
+        success = SKIPPED
     else:
         build_result = subprocess.run("arduino-cli compile --warnings all --fqbn {} {}".format(fqbn, sketch),
                                       shell=True, stdout=PIPE, stderr=PIPE)
-
         # get stderr into a form where warning/error was output to stderr
         if build_result.returncode != 0:
             success = FAILED

@@ -31,20 +31,19 @@ uint32_t position = 0;
 
 // Store example melody as an array of note values
 byte note_sequence[] = {
-  74,78,81,86,90,93,98,102,57,61,66,69,73,78,81,85,88,92,97,100,97,92,88,85,81,78,
-  74,69,66,62,57,62,66,69,74,78,81,86,90,93,97,102,97,93,90,85,81,78,73,68,64,61,
-  56,61,64,68,74,78,81,86,90,93,98,102
+    74, 78, 81, 86, 90, 93, 98, 102, 57, 61, 66, 69, 73, 78, 81, 85, 88, 92, 97, 100, 97, 92, 88, 85, 81, 78,
+    74, 69, 66, 62, 57, 62, 66, 69, 74, 78, 81, 86, 90, 93, 97, 102, 97, 93, 90, 85, 81, 78, 73, 68, 64, 61,
+    56, 61, 64, 68, 74, 78, 81, 86, 90, 93, 98, 102
 };
 
-void setup()
-{
-#if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
-  // Manual begin() is required on core without built-in support for TinyUSB such as mbed rp2040
-  TinyUSB_Device_Init(0);
-#endif
+void setup() {
+  // Manual begin() is required on core without built-in support e.g. mbed rp2040
+  if (!TinyUSBDevice.isInitialized()) {
+    TinyUSBDevice.begin(0);
+  }
 
   pinMode(LED_BUILTIN, OUTPUT);
-  
+
   usb_midi.setStringDescriptor("TinyUSB MIDI");
 
   // Initialize MIDI, and listen to all MIDI channels
@@ -59,37 +58,42 @@ void setup()
   MIDI.setHandleNoteOff(handleNoteOff);
 
   Serial.begin(115200);
-
-  // wait until device mounted
-  while( !TinyUSBDevice.mounted() ) delay(1);
 }
 
-void loop()
-{
+void loop() {
+  #ifdef TINYUSB_NEED_POLLING_TASK
+  // Manual call tud_task since it isn't called by Core's background
+  TinyUSBDevice.task();
+  #endif
+
+  // not enumerated()/mounted() yet: nothing to do
+  if (!TinyUSBDevice.mounted()) {
+    return;
+  }
+
   static uint32_t start_ms = 0;
-  if ( millis() - start_ms > 266 )
-  {
+  if (millis() - start_ms > 266) {
     start_ms += 266;
-    
+
     // Setup variables for the current and previous
     // positions in the note sequence.
     int previous = position - 1;
-  
+
     // If we currently are at position 0, set the
     // previous position to the last note in the sequence.
     if (previous < 0) {
       previous = sizeof(note_sequence) - 1;
     }
-  
+
     // Send Note On for current position at full velocity (127) on channel 1.
     MIDI.sendNoteOn(note_sequence[position], 127, 1);
-  
+
     // Send Note Off for previous note.
     MIDI.sendNoteOff(note_sequence[previous], 0, 1);
-  
+
     // Increment position
     position++;
-  
+
     // If we are at the end of the sequence, start over.
     if (position >= sizeof(note_sequence)) {
       position = 0;
@@ -97,11 +101,10 @@ void loop()
   }
 
   // read any new MIDI messages
-  MIDI.read();  
+  MIDI.read();
 }
 
-void handleNoteOn(byte channel, byte pitch, byte velocity)
-{
+void handleNoteOn(byte channel, byte pitch, byte velocity) {
   // Log when a note is pressed.
   Serial.print("Note on: channel = ");
   Serial.print(channel);
@@ -113,8 +116,7 @@ void handleNoteOn(byte channel, byte pitch, byte velocity)
   Serial.println(velocity);
 }
 
-void handleNoteOff(byte channel, byte pitch, byte velocity)
-{
+void handleNoteOff(byte channel, byte pitch, byte velocity) {
   // Log when a note is released.
   Serial.print("Note off: channel = ");
   Serial.print(channel);

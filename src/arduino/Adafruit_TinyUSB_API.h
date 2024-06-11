@@ -32,6 +32,13 @@
 // TinyUSB_API, USBD_CDC, USBD_Device, USBD_Interface,
 #define TINYUSB_API_VERSION 30000
 
+// Core that has built-in support: Adafruit SAMD, Adafruit nRF, rp2040, esp32
+#if !(defined(ARDUINO_ARCH_SAMD) || defined(ARDUINO_NRF52_ADAFRUIT) ||         \
+      defined(ARDUINO_ARCH_ESP32) ||                                           \
+      (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)))
+#define TINYUSB_NEED_POLLING_TASK
+#endif
+
 //--------------------------------------------------------------------+
 // Core API
 // Should be called by BSP Core to initialize, process task

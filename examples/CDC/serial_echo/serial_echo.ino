@@ -11,41 +11,30 @@
 
 #include "Adafruit_TinyUSB.h"
 
-/* This sketch demonstrates USB CDC Serial can be dropped by simply
- * call Serial.end() within setup(). This must be called before any
- * other USB interfaces (MSC / HID) begin to have a clean configuration
- *
- * Note: this will cause device to loose the touch1200 and require
- * user manual interaction to put device into bootloader/DFU mode.
+/* This sketch demonstrates USB CDC Serial echo (convert to upper case) using SerialTinyUSB which
+ * is available for both core with built-in USB support and without.
  */
 
-int led = LED_BUILTIN;
-
-void setup()
-{
+void setup() {
   // Manual begin() is required on core without built-in support e.g. mbed rp2040
   if (!TinyUSBDevice.isInitialized()) {
     TinyUSBDevice.begin(0);
   }
-
-  // clear configuration will remove all USB interfaces including CDC (Serial)
-  TinyUSBDevice.clearConfiguration();
-
-  pinMode(led, OUTPUT);
 }
 
-void loop()
-{
+void loop() {
   #ifdef TINYUSB_NEED_POLLING_TASK
   // Manual call tud_task since it isn't called by Core's background
   TinyUSBDevice.task();
   #endif
 
-  // toggle LED
-  static uint32_t ms = 0;
-  static uint8_t led_state = 0;
-  if (millis() - ms > 1000) {
-    ms = millis();
-    digitalWrite(LED_BUILTIN, 1-led_state);
+  uint8_t buf[64];
+  uint32_t count = 0;
+  while (SerialTinyUSB.available()) {
+    buf[count++] = (uint8_t) toupper(SerialTinyUSB.read());
+  }
+
+  if (count) {
+    SerialTinyUSB.write(buf, count);
   }
 }
