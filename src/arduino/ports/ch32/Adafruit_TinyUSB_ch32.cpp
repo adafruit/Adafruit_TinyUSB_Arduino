@@ -24,7 +24,8 @@
 
 #include "tusb_option.h"
 
-#if defined(CH32V20x) && CFG_TUD_ENABLED
+#if CFG_TUD_ENABLED &&                                                         \
+    (defined(ARDUINO_ARCH_CH32) || defined(CH32V20x) || defined(CH32V30x))
 
 #include "Arduino.h"
 #include "arduino/Adafruit_USBD_Device.h"
@@ -38,41 +39,52 @@
 //--------------------------------------------------------------------+
 extern "C" {
 
-// USBFS
-__attribute__((interrupt("WCH-Interrupt-fast"))) void USBHD_IRQHandler(void) {
-#if CFG_TUD_WCH_USBIP_USBFS
-  tud_int_handler(0);
-#endif
-}
-
-__attribute__((interrupt("WCH-Interrupt-fast"))) void
-USBHDWakeUp_IRQHandler(void) {
-#if CFG_TUD_WCH_USBIP_USBFS
-  tud_int_handler(0);
-#endif
-}
-
 // USBD (fsdev)
+#if CFG_TUD_WCH_USBIP_FSDEV
 __attribute__((interrupt("WCH-Interrupt-fast"))) void
 USB_LP_CAN1_RX0_IRQHandler(void) {
-#if CFG_TUD_WCH_USBIP_FSDEV
   tud_int_handler(0);
-#endif
 }
 
 __attribute__((interrupt("WCH-Interrupt-fast"))) void
 USB_HP_CAN1_TX_IRQHandler(void) {
-#if CFG_TUD_WCH_USBIP_FSDEV
   tud_int_handler(0);
-#endif
 }
 
 __attribute__((interrupt("WCH-Interrupt-fast"))) void
 USBWakeUp_IRQHandler(void) {
-#if CFG_TUD_WCH_USBIP_FSDEV
   tud_int_handler(0);
-#endif
 }
+#endif
+
+// USBFS
+#if CFG_TUD_WCH_USBIP_USBFS
+
+#ifdef CH32V20x
+__attribute__((interrupt("WCH-Interrupt-fast"))) void USBHD_IRQHandler(void) {
+  tud_int_handler(0);
+}
+
+__attribute__((interrupt("WCH-Interrupt-fast"))) void
+USBHDWakeUp_IRQHandler(void) {
+  tud_int_handler(0);
+}
+#endif
+
+#ifdef CH32V30x
+__attribute__((interrupt("WCH-Interrupt-fast"))) void OTG_FS_IRQHandler(void) {
+  tud_int_handler(0);
+}
+#endif
+
+#endif
+
+// USBHS
+#if CFG_TUD_WCH_USBIP_USBHS
+__attribute__((interrupt("WCH-Interrupt-fast"))) void USBHS_IRQHandler(void) {
+  tud_int_handler(0);
+}
+#endif
 
 void yield(void) {
   tud_task();
@@ -87,21 +99,25 @@ void yield(void) {
 //--------------------------------------------------------------------+
 
 void TinyUSB_Port_InitDevice(uint8_t rhport) {
+#if CFG_TUD_WCH_USBIP_FSDEV || CFG_TUD_WCH_USBIP_USBFS
+  // Full speed OTG or FSDev
   uint8_t usb_div;
   switch (SystemCoreClock) {
   case 48000000:
-    usb_div = RCC_USBCLKSource_PLLCLK_Div1;
+    usb_div = 0; // div1
     break;
   case 96000000:
-    usb_div = RCC_USBCLKSource_PLLCLK_Div2;
+    usb_div = 1; // div2
     break;
   case 144000000:
-    usb_div = RCC_USBCLKSource_PLLCLK_Div3;
+    usb_div = 2; // div3
     break;
   default:
     return; // unsupported
   }
-  RCC_USBCLKConfig(usb_div);
+  // RCC_USBCLKConfig(usb_div) or RCC_OTGFSCLKConfig(usb_div)
+  RCC->CFGR0 &= ~(3 << 22);
+  RCC->CFGR0 |= usb_div << 22;
 
 #if CFG_TUD_WCH_USBIP_FSDEV
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_USB, ENABLE);
@@ -109,6 +125,7 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
 
 #if CFG_TUD_WCH_USBIP_USBFS
   RCC_AHBPeriphClockCmd(RCC_AHBPeriph_OTG_FS, ENABLE);
+#endif
 #endif
 
   tud_init(rhport);
