@@ -31,7 +31,7 @@
 //--------------------------------------------------------------------+
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
 //--------------------------------------------------------------------+
-#define EPSIZE 64
+#define BULK_PACKET_SIZE (TUD_OPT_HIGH_SPEED ? 512 : 64)
 
 // TODO multiple instances
 static Adafruit_USBD_MIDI *_midi_dev = NULL;
@@ -103,7 +103,7 @@ uint16_t Adafruit_USBD_MIDI::getInterfaceDescriptor(uint8_t itfnum_deprecated,
 
   // Endpoint OUT + jack mapping
   {
-    uint8_t desc[] = {TUD_MIDI_DESC_EP(ep_out, EPSIZE, _n_cables)};
+    uint8_t desc[] = {TUD_MIDI_DESC_EP(ep_out, BULK_PACKET_SIZE, _n_cables)};
     memcpy(buf + len, desc, sizeof(desc));
     len += sizeof(desc);
   }
@@ -116,7 +116,7 @@ uint16_t Adafruit_USBD_MIDI::getInterfaceDescriptor(uint8_t itfnum_deprecated,
 
   // Endpoint IN + jack mapping
   {
-    uint8_t desc[] = {TUD_MIDI_DESC_EP(ep_in, EPSIZE, _n_cables)};
+    uint8_t desc[] = {TUD_MIDI_DESC_EP(ep_in, BULK_PACKET_SIZE, _n_cables)};
     memcpy(buf + len, desc, sizeof(desc));
     len += sizeof(desc);
   }

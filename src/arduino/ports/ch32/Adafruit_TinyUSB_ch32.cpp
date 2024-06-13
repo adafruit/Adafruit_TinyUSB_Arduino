@@ -128,6 +128,16 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
 #endif
 #endif
 
+#if CFG_TUD_WCH_USBIP_USBHS
+  // High speed USB: currently require 144MHz HSE, update later
+  RCC_USBCLK48MConfig(RCC_USBCLK48MCLKSource_USBPHY);
+  RCC_USBHSPLLCLKConfig(RCC_HSBHSPLLCLKSource_HSE);
+  RCC_USBHSConfig(RCC_USBPLL_Div2);
+  RCC_USBHSPLLCKREFCLKConfig(RCC_USBHSPLLCKREFCLK_4M);
+  RCC_USBHSPHYPLLALIVEcmd(ENABLE);
+  RCC_AHBPeriphClockCmd(RCC_AHBPeriph_USBHS, ENABLE);
+#endif
+
   tud_init(rhport);
 }
 

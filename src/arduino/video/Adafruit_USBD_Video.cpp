@@ -30,6 +30,8 @@
 
 #include "Adafruit_USBD_Video.h"
 
+#define BULK_PACKET_SIZE (TUD_OPT_HIGH_SPEED ? 512 : 64)
+
 Adafruit_USBD_Video::Adafruit_USBD_Video(void) {
   _vc_id = 0;
   memset(&_camera_terminal, 0, sizeof(_camera_terminal));
@@ -231,7 +233,7 @@ uint16_t Adafruit_USBD_Video::getInterfaceDescriptor(uint8_t itfnum_deprecated,
 
              .bEndpointAddress = ep_in,
              .bmAttributes = {.xfer = TUSB_XFER_BULK, .sync = 0, .usage = 0},
-             .wMaxPacketSize = 64,
+             .wMaxPacketSize = BULK_PACKET_SIZE,
              .bInterval = 1}};
 
   uint16_t const len_iad = sizeof(desc_iad);
