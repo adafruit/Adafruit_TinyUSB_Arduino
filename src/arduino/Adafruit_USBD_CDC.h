@@ -95,10 +95,12 @@ private:
 
 extern Adafruit_USBD_CDC SerialTinyUSB;
 
-// Built-in support "Serial" is used with TinyUSB CDC
+// Built-in support "Serial" is assigned to TinyUSB CDC
 #if defined(USE_TINYUSB)
-#define Serial SerialTinyUSB
+#define SerialTinyUSB Serial
 #endif
+
+extern Adafruit_USBD_CDC SerialTinyUSB;
 
 #endif // else of ESP32
 #endif // __cplusplus
