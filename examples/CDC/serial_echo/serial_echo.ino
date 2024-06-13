@@ -13,6 +13,7 @@
 
 /* This sketch demonstrates USB CDC Serial echo (convert to upper case) using SerialTinyUSB which
  * is available for both core with built-in USB support and without.
+ * Note: on core with built-in support Serial is alias to SerialTinyUSB
  */
 
 void setup() {

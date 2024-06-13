@@ -33,7 +33,7 @@
 #define TINYUSB_API_VERSION 30000
 
 #if defined(ARDUINO_ARCH_SAMD) || defined(ARDUINO_NRF52_ADAFRUIT) ||           \
-    defined(ARDUINO_ARCH_ESP32) ||                                             \
+    defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_CH32) ||               \
     (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED))
 #define TINYUSB_HAS_BUITLTIN_CORE_SUPPORT
 #endif

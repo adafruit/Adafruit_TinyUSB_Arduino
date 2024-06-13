@@ -96,7 +96,8 @@ private:
 extern Adafruit_USBD_CDC SerialTinyUSB;
 
 // Built-in support "Serial" is assigned to TinyUSB CDC
-#if defined(USE_TINYUSB)
+// CH32 defines Serial as alias in WSerial.h
+#if defined(USE_TINYUSB) && !defined(ARDUINO_ARCH_CH32)
 #define SerialTinyUSB Serial
 #endif
 

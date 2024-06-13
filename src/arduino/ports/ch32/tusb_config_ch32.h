@@ -34,7 +34,6 @@ extern "C" {
 //--------------------------------------------------------------------
 #if defined(CH32V20x)
 #define CFG_TUSB_MCU OPT_MCU_CH32V20X
-#define CFG_TUD_WCH_USBIP_FSDEV 1 // use USBD
 #elif defined(CH32V30x)
 #define CFG_TUSB_MCU OPT_MCU_CH32V307
 #endif

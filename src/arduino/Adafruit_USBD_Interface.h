@@ -28,7 +28,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if defined(CH32V20x) || defined(CH32V30x)
+#if defined(ARDUINO_ARCH_CH32) || defined(CH32V20x) || defined(CH32V30x)
 // HACK: required for ch32 core version 1.0.4 or prior, removed when 1.0.5 is
 // released
 extern "C" void yield(void);
