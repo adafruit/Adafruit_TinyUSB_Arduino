@@ -76,7 +76,9 @@ USBWakeUp_IRQHandler(void) {
 
 void yield(void) {
   tud_task();
-  // flush cdc
+  if (tud_cdc_connected()) {
+    tud_cdc_write_flush();
+  }
 }
 }
 
