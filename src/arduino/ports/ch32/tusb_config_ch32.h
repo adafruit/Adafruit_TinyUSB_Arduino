@@ -32,12 +32,13 @@ extern "C" {
 //--------------------------------------------------------------------
 // COMMON CONFIGURATION
 //--------------------------------------------------------------------
-#if defined(CH32V20x)
+#if defined(CH32V10x)
+#define CFG_TUSB_MCU OPT_MCU_CH32V103
+#warnning "CH32v103 is not working yet"
+#elif defined(CH32V20x)
 #define CFG_TUSB_MCU OPT_MCU_CH32V20X
-
 #elif defined(CH32V30x)
 #define CFG_TUSB_MCU OPT_MCU_CH32V307
-
 #endif
 
 #define CFG_TUSB_OS OPT_OS_NONE
