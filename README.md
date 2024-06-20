@@ -39,6 +39,7 @@ Following core has TinyUSB as either the primary usb stack or selectable via men
 - [adafruit/ArduinoCore-samd](https://github.com/adafruit/ArduinoCore-samd)
 - [earlephilhower/arduino-pico](https://github.com/earlephilhower/arduino-pico)
 - [espressif/arduino-esp32](https://github.com/espressif/arduino-esp32)
+- [openwch/arduino_core_ch32](https://github.com/openwch/arduino_core_ch32)
 
 Note: For ESP32 port, version before v3.0 requires all descriptors must be specified in usb objects declaration i.e constructors. Therefore all descriptor-related fields must be part of object declaration and descriptor-related API have no effect afterwards. This limitation is not the case for version from v3.0. 
 
