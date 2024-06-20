@@ -25,13 +25,6 @@
 #ifndef ADAFRUIT_TINYUSB_H_
 #define ADAFRUIT_TINYUSB_H_
 
-// Error message for Core that must select TinyUSB via menu
-#if !defined(USE_TINYUSB) &&                                                   \
-    (defined(ARDUINO_ARCH_SAMD) ||                                             \
-     (defined(ARDUINO_ARCH_RP2040) && !defined(ARDUINO_ARCH_MBED)))
-#error TinyUSB is not selected, please select it in "Tools->Menu->USB Stack"
-#endif
-
 // ESP32 out-of-sync
 #ifdef ARDUINO_ARCH_ESP32
 #include "arduino/ports/esp32/tusb_config_esp32.h"

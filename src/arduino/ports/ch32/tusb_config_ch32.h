@@ -32,9 +32,11 @@ extern "C" {
 //--------------------------------------------------------------------
 // COMMON CONFIGURATION
 //--------------------------------------------------------------------
-#if defined(CH32V20x)
+#if defined(CH32V10x)
+#define CFG_TUSB_MCU OPT_MCU_CH32V103
+#warnning "CH32v103 is not working yet"
+#elif defined(CH32V20x)
 #define CFG_TUSB_MCU OPT_MCU_CH32V20X
-#define CFG_TUD_WCH_USBIP_FSDEV 1 // use USBD
 #elif defined(CH32V30x)
 #define CFG_TUSB_MCU OPT_MCU_CH32V307
 #endif
@@ -106,8 +108,8 @@ extern "C" {
 #define CFG_TUD_VIDEO_STREAMING_EP_BUFSIZE 256
 
 // CDC FIFO size of TX and RX
-#define CFG_TUD_CDC_RX_BUFSIZE 256
-#define CFG_TUD_CDC_TX_BUFSIZE 256
+#define CFG_TUD_CDC_RX_BUFSIZE (TUD_OPT_HIGH_SPEED ? 512 : 256)
+#define CFG_TUD_CDC_TX_BUFSIZE (TUD_OPT_HIGH_SPEED ? 512 : 256)
 
 // MSC Buffer size of Device Mass storage
 #define CFG_TUD_MSC_EP_BUFSIZE 512
@@ -121,17 +123,17 @@ extern "C" {
 
 // Vendor FIFO size of TX and RX
 #ifndef CFG_TUD_VENDOR_RX_BUFSIZE
-#define CFG_TUD_VENDOR_RX_BUFSIZE 64
+#define CFG_TUD_VENDOR_RX_BUFSIZE (TUD_OPT_HIGH_SPEED ? 512 : 64)
 #endif
 
 #ifndef CFG_TUD_VENDOR_TX_BUFSIZE
-#define CFG_TUD_VENDOR_TX_BUFSIZE 64
+#define CFG_TUD_VENDOR_TX_BUFSIZE (TUD_OPT_HIGH_SPEED ? 512 : 64)
 #endif
 
 //--------------------------------------------------------------------
 // Host Configuration
 //--------------------------------------------------------------------
-
+#if 0
 // Size of buffer to hold descriptors and other data used for enumeration
 #define CFG_TUH_ENUMERATION_BUFSIZE 256
 
@@ -159,8 +161,8 @@ extern "C" {
 #define CFG_TUH_CDC_CH34X 1
 
 // RX & TX fifo size
-#define CFG_TUH_CDC_RX_BUFSIZE 64
-#define CFG_TUH_CDC_TX_BUFSIZE 64
+#define CFG_TUH_CDC_RX_BUFSIZE (TUD_OPT_HIGH_SPEED ? 512 : 64)
+#define CFG_TUH_CDC_TX_BUFSIZE (TUD_OPT_HIGH_SPEED ? 512 : 64)
 
 // Set Line Control state on enumeration/mounted:
 // DTR ( bit 0), RTS (bit 1)
@@ -171,6 +173,7 @@ extern "C" {
 // This need Pico-PIO-USB at least 0.5.1
 #define CFG_TUH_CDC_LINE_CODING_ON_ENUM                                        \
   { 115200, CDC_LINE_CONDING_STOP_BITS_1, CDC_LINE_CODING_PARITY_NONE, 8 }
+#endif
 
 #ifdef __cplusplus
 }

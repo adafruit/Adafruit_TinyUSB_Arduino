@@ -38,6 +38,8 @@
 #define TINYUSB_API_VERSION 0
 #endif
 
+#define BULK_PACKET_SIZE (TUD_OPT_HIGH_SPEED ? 512 : 64)
+
 // SerialTinyUSB can be macro expanding to "Serial" on supported cores
 Adafruit_USBD_CDC SerialTinyUSB;
 
@@ -69,8 +71,8 @@ uint16_t Adafruit_USBD_CDC::getInterfaceDescriptor(uint8_t itfnum_deprecated,
   uint8_t _strid = 0;
 #endif
 
-  uint8_t const desc[] = {
-      TUD_CDC_DESCRIPTOR(itfnum, _strid, ep_notif, 8, ep_out, ep_in, 64)};
+  uint8_t const desc[] = {TUD_CDC_DESCRIPTOR(itfnum, _strid, ep_notif, 8,
+                                             ep_out, ep_in, BULK_PACKET_SIZE)};
 
   uint16_t const len = sizeof(desc);
 

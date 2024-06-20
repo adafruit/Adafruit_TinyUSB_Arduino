@@ -93,16 +93,15 @@ private:
   bool isValid(void) { return _instance != INVALID_INSTANCE; }
 };
 
-// "Serial" is used with TinyUSB CDC
-#if defined(USE_TINYUSB)
-extern Adafruit_USBD_CDC Serial;
+extern Adafruit_USBD_CDC SerialTinyUSB;
+
+// Built-in support "Serial" is assigned to TinyUSB CDC
+// CH32 defines Serial as alias in WSerial.h
+#if defined(USE_TINYUSB) && !defined(ARDUINO_ARCH_CH32)
 #define SerialTinyUSB Serial
 #endif
 
-// Serial is probably used with HW Uart
-#ifndef SerialTinyUSB
 extern Adafruit_USBD_CDC SerialTinyUSB;
-#endif
 
 #endif // else of ESP32
 #endif // __cplusplus

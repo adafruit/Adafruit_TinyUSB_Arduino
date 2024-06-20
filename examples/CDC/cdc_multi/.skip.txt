@@ -1,0 +1,6 @@
+feather_esp32s2
+feather_esp32s3
+funhouse
+magtag
+metroesp32s2
+pico_rp2040_tinyusb_host
