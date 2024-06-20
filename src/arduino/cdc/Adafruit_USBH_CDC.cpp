@@ -60,6 +60,11 @@ void Adafruit_USBH_CDC::begin(unsigned long baudrate) {
   }
 }
 
+void Adafruit_USBH_CDC::begin(uint32_t baudrate, const char *descriptor) {
+  (void)descriptor;
+  begin(baudrate);
+}
+
 void Adafruit_USBH_CDC::begin(unsigned long baudrate, uint16_t config) {
   (void)config; // TODO support line coding later
   begin(baudrate);

@@ -87,8 +87,8 @@ uint16_t Adafruit_USBD_CDC::getInterfaceDescriptor(uint8_t itfnum_deprecated,
   return len;
 }
 
-// Baud and config is ignore in CDC
-void Adafruit_USBD_CDC::begin(uint32_t baud) {
+// Configure with a custom descriptor string
+void Adafruit_USBD_CDC::begin(uint32_t baud, const char *descriptor) {
   (void)baud;
 
   // already called begin()
@@ -102,8 +102,12 @@ void Adafruit_USBD_CDC::begin(uint32_t baud) {
   }
 
   _instance = _instance_count++;
-  this->setStringDescriptor("TinyUSB Serial");
+  this->setStringDescriptor(descriptor);
   TinyUSBDevice.addInterface(*this);
+}
+
+void Adafruit_USBD_CDC::begin(uint32_t baud) {
+  Adafruit_USBD_CDC::begin(baud, "TinyUSB Serial");
 }
 
 void Adafruit_USBD_CDC::begin(uint32_t baud, uint8_t config) {

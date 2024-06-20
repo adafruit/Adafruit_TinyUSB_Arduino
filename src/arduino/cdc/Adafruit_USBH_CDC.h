@@ -36,6 +36,7 @@ public:
   uint8_t getInterfaceIndex(void) { return _idx; }
 
   void begin(unsigned long baudrate);
+  void begin(uint32_t baud, const char *descriptor);
   void begin(unsigned long baudrate, uint16_t config);
 
   bool mount(uint8_t idx);

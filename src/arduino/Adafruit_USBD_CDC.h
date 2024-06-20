@@ -51,6 +51,7 @@ public:
     (void)pin_tx;
   }
   void begin(uint32_t baud);
+  void begin(uint32_t baud, const char *descriptor);
   void begin(uint32_t baud, uint8_t config);
   void end(void);
 
