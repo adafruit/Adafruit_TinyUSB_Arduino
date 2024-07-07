@@ -558,7 +558,7 @@ void tud_task_ext(uint32_t timeout_ms, bool in_isr) {
         break;
 
       case DCD_EVENT_SETUP_RECEIVED:
-        _usbd_dev.setup_count--;
+        if (_usbd_dev.setup_count > 0) _usbd_dev.setup_count--;
         TU_LOG_BUF(CFG_TUD_LOG_LEVEL, &event.setup_received, 8);
         if (_usbd_dev.setup_count) {
           TU_LOG_USBD("  Skipped since there is other SETUP in queue\r\n");
