@@ -63,7 +63,9 @@ void TinyUSB_Device_FlushCDC(void) {
     !defined(ARDUINO_ARCH_ESP32)
 
 // #define USE_SEGGER_RTT
+#ifndef SERIAL_TUSB_DEBUG
 #define SERIAL_TUSB_DEBUG Serial1
+#endif
 
 #ifdef USE_SEGGER_RTT
 #include "SEGGER_RTT/RTT/SEGGER_RTT.h"
