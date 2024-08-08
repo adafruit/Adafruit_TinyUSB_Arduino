@@ -86,12 +86,12 @@ TU_ATTR_WEAK void tud_suspend_cb(bool remote_wakeup_en) {
 TU_ATTR_WEAK void tud_resume_cb(void) {
 }
 
-TU_ATTR_WEAK bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const* request) {
-  (void) rhport;
-  (void) stage;
-  (void) request;
-  return false;
-}
+//TU_ATTR_WEAK bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const* request) {
+//  (void) rhport;
+//  (void) stage;
+//  (void) request;
+//  return false;
+//}
 
 TU_ATTR_WEAK bool dcd_deinit(uint8_t rhport) {
   (void) rhport;
@@ -715,6 +715,7 @@ static bool process_control_request(uint8_t rhport, tusb_control_request_t const
 
   // Vendor request
   if ( p_request->bmRequestType_bit.type == TUSB_REQ_TYPE_VENDOR ) {
+    TU_VERIFY(tud_vendor_control_xfer_cb);
     usbd_control_set_complete_callback(tud_vendor_control_xfer_cb);
     return tud_vendor_control_xfer_cb(rhport, CONTROL_STAGE_SETUP, p_request);
   }
