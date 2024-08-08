@@ -47,6 +47,8 @@ extern "C" {
 #define CFG_TUSB_DEBUG 0
 #endif
 
+// #define SERIAL_TUSB_DEBUG Serial2
+
 // For selectively disable device log (when > CFG_TUSB_DEBUG)
 // #define CFG_TUD_LOG_LEVEL 3
 // #define CFG_TUH_LOG_LEVEL 3
@@ -97,11 +99,11 @@ extern "C" {
 #endif
 
 #ifndef CFG_TUD_VIDEO
-#define CFG_TUD_VIDEO 1 // number of video control interfaces
+#define CFG_TUD_VIDEO 0 // number of video control interfaces
 #endif
 
 #ifndef CFG_TUD_VIDEO_STREAMING
-#define CFG_TUD_VIDEO_STREAMING 1 // number of video streaming interfaces
+#define CFG_TUD_VIDEO_STREAMING 0 // number of video streaming interfaces
 #endif
 
 // video streaming endpoint buffer size

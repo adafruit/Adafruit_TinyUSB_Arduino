@@ -118,14 +118,14 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
   switch (SystemCoreClock) {
 #if defined(CH32V20x) || defined(CH32V30x)
   case 48000000:
-    usb_div = 0;
-    break; // div1
+    usb_div = 0; // div1
+    break;
   case 96000000:
-    usb_div = 1;
-    break; // div2
+    usb_div = 1; // div2
+    break;
   case 144000000:
-    usb_div = 2;
-    break; // div3
+    usb_div = 2; // div3
+    break;
 #elif defined(CH32V10x)
   case 48000000:
     usb_div = RCC_USBCLKSource_PLLCLK_Div1;
@@ -167,14 +167,21 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
 }
 
 void TinyUSB_Port_EnterDFU(void) {
-  // Reset to Bootloader
-  // enterSerialDfu();
+  // Reset to Boot ROM
+  // Serial1.println("Reset to Boot ROM");
+  //__disable_irq();
+  // tud_deinit(0);
+  //
+  // // define function pointer to BOOT ROM address
+  // void (*bootloader_entry)(void) = (void (*)(void))0x1FFF8000;
+  // bootloader_entry();
+  // while(1) {}
 }
 
 uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]) {
   volatile uint32_t *ch32_uuid = ((volatile uint32_t *)0x1FFFF7E8UL);
   uint32_t *serial_32 = (uint32_t *)serial_id;
-  serial_32[0] = ch32_uuid[0]; // TODO maybe __builtin_bswap32()
+  serial_32[0] = ch32_uuid[0];
   serial_32[1] = ch32_uuid[1];
   serial_32[2] = ch32_uuid[2];
 

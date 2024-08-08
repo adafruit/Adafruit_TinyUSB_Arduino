@@ -109,7 +109,7 @@ bool tud_control_xfer(uint8_t rhport, tusb_control_request_t const * request, vo
 bool tud_control_status(uint8_t rhport, tusb_control_request_t const * request);
 
 //--------------------------------------------------------------------+
-// Application Callbacks (WEAK is optional)
+// Application Callbacks
 //--------------------------------------------------------------------+
 
 // Invoked when received GET DEVICE DESCRIPTOR request
@@ -132,25 +132,25 @@ TU_ATTR_WEAK uint8_t const * tud_descriptor_bos_cb(void);
 // Application return pointer to descriptor, whose contents must exist long enough for transfer to complete.
 // device_qualifier descriptor describes information about a high-speed capable device that would
 // change if the device were operating at the other speed. If not highspeed capable stall this request.
-TU_ATTR_WEAK uint8_t const* tud_descriptor_device_qualifier_cb(void);
+uint8_t const* tud_descriptor_device_qualifier_cb(void);
 
 // Invoked when received GET OTHER SEED CONFIGURATION DESCRIPTOR request
 // Application return pointer to descriptor, whose contents must exist long enough for transfer to complete
 // Configuration descriptor in the other speed e.g if high speed then this is for full speed and vice versa
-TU_ATTR_WEAK uint8_t const* tud_descriptor_other_speed_configuration_cb(uint8_t index);
+uint8_t const* tud_descriptor_other_speed_configuration_cb(uint8_t index);
 
 // Invoked when device is mounted (configured)
-TU_ATTR_WEAK void tud_mount_cb(void);
+void tud_mount_cb(void);
 
 // Invoked when device is unmounted
-TU_ATTR_WEAK void tud_umount_cb(void);
+void tud_umount_cb(void);
 
 // Invoked when usb bus is suspended
 // Within 7ms, device must draw an average of current less than 2.5 mA from bus
-TU_ATTR_WEAK void tud_suspend_cb(bool remote_wakeup_en);
+void tud_suspend_cb(bool remote_wakeup_en);
 
 // Invoked when usb bus is resumed
-TU_ATTR_WEAK void tud_resume_cb(void);
+void tud_resume_cb(void);
 
 // Invoked when there is a new usb event, which need to be processed by tud_task()/tud_task_ext()
 void tud_event_hook_cb(uint8_t rhport, uint32_t eventid, bool in_isr);
