@@ -126,7 +126,7 @@ uint16_t const* tud_descriptor_string_cb(uint8_t index, uint16_t langid);
 
 // Invoked when received GET BOS DESCRIPTOR request
 // Application return pointer to descriptor
-uint8_t const * tud_descriptor_bos_cb(void);
+TU_ATTR_WEAK uint8_t const * tud_descriptor_bos_cb(void);
 
 // Invoked when received GET DEVICE QUALIFIER DESCRIPTOR request
 // Application return pointer to descriptor, whose contents must exist long enough for transfer to complete.

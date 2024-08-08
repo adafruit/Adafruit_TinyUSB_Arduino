@@ -60,9 +60,9 @@ TU_ATTR_WEAK void tud_sof_cb(uint32_t frame_count) {
   (void) frame_count;
 }
 
-TU_ATTR_WEAK uint8_t const* tud_descriptor_bos_cb(void) {
-  return NULL;
-}
+// TU_ATTR_WEAK uint8_t const* tud_descriptor_bos_cb(void) {
+//   return NULL;
+// }
 
 TU_ATTR_WEAK uint8_t const* tud_descriptor_device_qualifier_cb(void) {
   return NULL;
@@ -1091,7 +1091,10 @@ static bool process_get_descriptor(uint8_t rhport, tusb_control_request_t const 
       TU_LOG_USBD(" BOS\r\n");
 
       // requested by host if USB > 2.0 ( i.e 2.1 or 3.x )
-      uintptr_t desc_bos = (uintptr_t) tud_descriptor_bos_cb();
+      uintptr_t desc_bos = 0;
+      if (tud_descriptor_bos_cb) {
+        desc_bos = (uintptr_t) tud_descriptor_bos_cb();
+      }
       TU_VERIFY(desc_bos);
 
       // Use offsetof to avoid pointer to the odd/misaligned address
