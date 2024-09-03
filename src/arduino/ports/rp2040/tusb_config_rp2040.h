@@ -82,7 +82,7 @@ extern "C" {
 #define CFG_TUD_ENDPOINT0_SIZE 64
 
 #ifndef CFG_TUD_CDC
-#define CFG_TUD_CDC 1
+#define CFG_TUD_CDC 2
 #endif
 #ifndef CFG_TUD_MSC
 #define CFG_TUD_MSC 1
