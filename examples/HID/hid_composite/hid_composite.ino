@@ -70,17 +70,24 @@ void setup() {
     TinyUSBDevice.begin(0);
   }
 
+  Serial.begin(115200);
+
   // Set up HID
   usb_hid.setPollInterval(2);
   usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
   usb_hid.setStringDescriptor("TinyUSB HID Composite");
-
   usb_hid.begin();
+
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
 
   // Set up button, pullup opposite to active state
   pinMode(pin, activeState ? INPUT_PULLDOWN : INPUT_PULLUP);
 
-  Serial.begin(115200);
   Serial.println("Adafruit TinyUSB HID Composite example");
 }
 

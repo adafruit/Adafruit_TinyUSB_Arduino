@@ -93,14 +93,19 @@ void setupMassStorage(void)
   // MSC is ready for read/write
   fs_changed = false;
   usb_msc.setReadyCallback(0, msc_ready_callback);
-
   usb_msc.begin();
+
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
 
   // Init file system on the flash
   fs_formatted = fatfs.begin(&flash);
 
-  if ( !fs_formatted )
-  {
+  if ( !fs_formatted ) {
     DBG_SERIAL.println("Failed to init files system, flash may not be formatted");
   }
 }

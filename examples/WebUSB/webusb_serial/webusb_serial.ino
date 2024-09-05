@@ -42,6 +42,7 @@ void setup() {
   if (!TinyUSBDevice.isInitialized()) {
     TinyUSBDevice.begin(0);
   }
+  Serial.begin(115200);
 
   pinMode(led_pin, OUTPUT);
   digitalWrite(led_pin, LOW);
@@ -51,7 +52,12 @@ void setup() {
   //usb_web.setStringDescriptor("TinyUSB WebUSB");
   usb_web.begin();
 
-  Serial.begin(115200);
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
 
   // wait until device mounted
   while (!TinyUSBDevice.mounted()) delay(1);

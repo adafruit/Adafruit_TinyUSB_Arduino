@@ -42,6 +42,8 @@ void setup() {
     TinyUSBDevice.begin(0);
   }
 
+  Serial.begin(115200);
+
   pinMode(LED_BUILTIN, OUTPUT);
 
   usb_midi.setStringDescriptor("TinyUSB MIDI");
@@ -50,14 +52,19 @@ void setup() {
   // This will also call usb_midi's begin()
   MIDI.begin(MIDI_CHANNEL_OMNI);
 
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
+
   // Attach the handleNoteOn function to the MIDI Library. It will
   // be called whenever the Bluefruit receives MIDI Note On messages.
   MIDI.setHandleNoteOn(handleNoteOn);
 
   // Do the same for MIDI Note Off messages.
   MIDI.setHandleNoteOff(handleNoteOff);
-
-  Serial.begin(115200);
 }
 
 void loop() {

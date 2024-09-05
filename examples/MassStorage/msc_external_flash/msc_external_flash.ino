@@ -52,6 +52,8 @@ void setup()
 {
   pinMode(LED_BUILTIN, OUTPUT);
 
+  Serial.begin(115200);
+
   flash.begin();
 
   // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
@@ -68,10 +70,16 @@ void setup()
 
   usb_msc.begin();
 
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
+
   // Init file system on the flash
   fs_formatted = fatfs.begin(&flash);
 
-  Serial.begin(115200);
   //while ( !Serial ) delay(10);   // wait for native usb
 
   Serial.println("Adafruit TinyUSB Mass Storage External Flash example");
@@ -79,15 +87,12 @@ void setup()
   Serial.print("Flash size: "); Serial.print(flash.size() / 1024); Serial.println(" KB");
 }
 
-void loop()
-{
+void loop() {
   // check if formatted
-  if ( !fs_formatted )
-  {
+  if ( !fs_formatted ) {
     fs_formatted = fatfs.begin(&flash);
 
-    if (!fs_formatted)
-    {
+    if (!fs_formatted) {
       Serial.println("Failed to init files system, flash may not be formatted");
       Serial.println("Please format it as FAT12 with your PC or using Adafruit_SPIFlash's SdFat_format example:");
       Serial.println("- https://github.com/adafruit/Adafruit_SPIFlash/tree/master/examples/SdFat_format");
@@ -98,14 +103,12 @@ void loop()
     }
   }
 
-  if ( fs_changed )
-  {
+  if ( fs_changed ) {
     fs_changed = false;
 
     Serial.println("Opening root");
 
-    if ( !root.open("/") )
-    {
+    if ( !root.open("/") ) {
       Serial.println("open root failed");
       return;
     }
@@ -115,13 +118,11 @@ void loop()
     // Open next file in root.
     // Warning, openNext starts at the current directory position
     // so a rewind of the directory may be required.
-    while ( file.openNext(&root, O_RDONLY) )
-    {
+    while ( file.openNext(&root, O_RDONLY) ) {
       file.printFileSize(&Serial);
       Serial.write(' ');
       file.printName(&Serial);
-      if ( file.isDir() )
-      {
+      if ( file.isDir() ) {
         // Indicate a directory.
         Serial.write('/');
       }
@@ -139,8 +140,7 @@ void loop()
 // Callback invoked when received READ10 command.
 // Copy disk's data to buffer (up to bufsize) and 
 // return number of copied bytes (must be multiple of block size) 
-int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
-{
+int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize) {
   // Note: SPIFLash Block API: readBlocks/writeBlocks/syncBlocks
   // already include 4K sector caching internally. We don't need to cache it, yahhhh!!
   return flash.readBlocks(lba, (uint8_t*) buffer, bufsize/512) ? bufsize : -1;
@@ -149,8 +149,7 @@ int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 // Callback invoked when received WRITE10 command.
 // Process data in buffer to disk's storage and 
 // return number of written bytes (must be multiple of block size)
-int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
-{
+int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize) {
   digitalWrite(LED_BUILTIN, HIGH);
 
   // Note: SPIFLash Block API: readBlocks/writeBlocks/syncBlocks
@@ -160,8 +159,7 @@ int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 
 // Callback invoked when WRITE10 command is completed (status received and accepted by host).
 // used to flush any pending cache.
-void msc_flush_cb (void)
-{
+void msc_flush_cb (void) {
   // sync with flash
   flash.syncBlocks();
 

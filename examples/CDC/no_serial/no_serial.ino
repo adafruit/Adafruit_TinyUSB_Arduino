@@ -31,6 +31,13 @@ void setup()
   // clear configuration will remove all USB interfaces including CDC (Serial)
   TinyUSBDevice.clearConfiguration();
 
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
+
   pinMode(led, OUTPUT);
 }
 
