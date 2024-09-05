@@ -53,16 +53,23 @@ void setup() {
     TinyUSBDevice.begin(0);
   }
 
+  Serial.begin(115200);
+
   // Notes: following commented-out functions has no affect on ESP32
   usb_hid.enableOutEndpoint(true);
   usb_hid.setPollInterval(2);
   usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
   usb_hid.setStringDescriptor("TinyUSB HID Generic");
-
   usb_hid.setReportCallback(get_report_callback, set_report_callback);
   usb_hid.begin();
 
-  Serial.begin(115200);
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
+
   Serial.println("Adafruit TinyUSB HID Generic In Out example");
 }
 

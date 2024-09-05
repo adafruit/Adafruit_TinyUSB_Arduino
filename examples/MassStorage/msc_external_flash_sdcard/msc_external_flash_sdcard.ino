@@ -66,8 +66,7 @@ bool flash_formatted = false;
 bool flash_changed = false;
 
 // the setup function runs once when you press reset or power the board
-void setup()
-{
+void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   Serial.begin(115200);
 
@@ -82,6 +81,13 @@ void setup()
   // i.e without Mass Storage. To prevent this, we call Mass Storage begin first
   // LUN readiness will always be set later on
   usb_msc.begin();
+
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
 
   //------------- Lun 0 for external flash -------------//
   flash.begin();

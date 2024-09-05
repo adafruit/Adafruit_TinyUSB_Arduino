@@ -66,6 +66,13 @@ void setup() {
 
   usb_hid.begin();
 
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
+
   // led pin
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);

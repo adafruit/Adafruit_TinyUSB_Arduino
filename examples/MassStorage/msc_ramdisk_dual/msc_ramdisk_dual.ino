@@ -26,6 +26,8 @@ void setup() {
     TinyUSBDevice.begin(0);
   }
 
+  Serial.begin(115200);
+
   usb_msc.setMaxLun(2);
 
   // Set disk size and callback for Logical Unit 0 (LUN 0)
@@ -42,9 +44,14 @@ void setup() {
 
   usb_msc.begin();
 
-  Serial.begin(115200);
-  //while ( !Serial ) delay(10);   // wait for native usb
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
 
+  //while ( !Serial ) delay(10);   // wait for native usb
   Serial.println("Adafruit TinyUSB Mass Storage Dual RAM Disks example");
 }
 

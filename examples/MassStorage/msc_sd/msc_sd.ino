@@ -26,6 +26,8 @@ SdVolume volume;
 // the setup function runs once when you press reset or power the board
 void setup()
 {
+  Serial.begin(115200);
+
   // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
   usb_msc.setID("Adafruit", "SD Card", "1.0");
 
@@ -37,15 +39,18 @@ void setup()
   usb_msc.setUnitReady(false);
   usb_msc.begin();
 
-  Serial.begin(115200);
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
+
   //while ( !Serial ) delay(10);   // wait for native usb
-
   Serial.println("Adafruit TinyUSB Mass Storage SD Card example");
-
   Serial.println("\nInitializing SD card...");
 
-  if ( !card.init(SPI_HALF_SPEED, chipSelect) )
-  {
+  if ( !card.init(SPI_HALF_SPEED, chipSelect) ) {
     Serial.println("initialization failed. Things to check:");
     Serial.println("* is a card inserted?");
     Serial.println("* is your wiring correct?");
@@ -71,16 +76,14 @@ void setup()
   usb_msc.setUnitReady(true);
 }
 
-void loop()
-{
+void loop() {
   // nothing to do
 }
 
 // Callback invoked when received READ10 command.
 // Copy disk's data to buffer (up to bufsize) and
 // return number of copied bytes (must be multiple of block size)
-int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
-{
+int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize) {
   (void) bufsize;
   return card.readBlock(lba, (uint8_t*) buffer) ? 512 : -1;
 }
@@ -88,15 +91,13 @@ int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 // Callback invoked when received WRITE10 command.
 // Process data in buffer to disk's storage and 
 // return number of written bytes (must be multiple of block size)
-int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
-{
+int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize) {
   (void) bufsize;
   return card.writeBlock(lba, buffer) ? 512 : -1;
 }
 
 // Callback invoked when WRITE10 command is completed (status received and accepted by host).
 // used to flush any pending cache.
-void msc_flush_cb (void)
-{
+void msc_flush_cb (void) {
   // nothing to do
 }

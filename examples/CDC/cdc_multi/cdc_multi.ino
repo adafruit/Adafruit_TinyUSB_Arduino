@@ -56,6 +56,13 @@ void setup() {
   // initialize 2nd CDC interface
   USBSer1.begin(115200);
 
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
+
   while (!Serial || !USBSer1) {
     if (Serial) {
       Serial.println("Waiting for other USB ports");

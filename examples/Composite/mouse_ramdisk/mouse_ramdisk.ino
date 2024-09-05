@@ -74,6 +74,8 @@ void setup() {
     TinyUSBDevice.begin(0);
   }
 
+  Serial.begin(115200);
+
   // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
   usb_msc.setID("Adafruit", "Mass Storage", "1.0");
 
@@ -97,7 +99,13 @@ void setup() {
   usb_hid.setPollInterval(2);
   usb_hid.begin();
 
-  Serial.begin(115200);
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
+
   Serial.println("Adafruit TinyUSB Mouse + Mass Storage (ramdisk) example");
 }
 

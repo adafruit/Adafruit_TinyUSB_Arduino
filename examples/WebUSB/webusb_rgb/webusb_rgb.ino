@@ -59,12 +59,20 @@ void setup() {
   if (!TinyUSBDevice.isInitialized()) {
     TinyUSBDevice.begin(0);
   }
+
+  Serial.begin(115200);
+
   //usb_web.setStringDescriptor("TinyUSB WebUSB");
   usb_web.setLandingPage(&landingPage);
   usb_web.setLineStateCallback(line_state_callback);
   usb_web.begin();
 
-  Serial.begin(115200);
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
 
   // This initializes the NeoPixel with RED
 #ifdef NEOPIXEL_POWER

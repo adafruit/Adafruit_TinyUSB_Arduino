@@ -35,8 +35,9 @@ Adafruit_USBD_MSC usb_msc;
 bool fs_changed;
 
 // the setup function runs once when you press reset or power the board
-void setup()
-{
+void setup() {
+  Serial.begin(115200);
+
   // Initialize internal flash
   flash.begin();
 
@@ -46,32 +47,30 @@ void setup()
   // Set callback
   usb_msc.setReadWriteCallback(msc_read_callback, msc_write_callback, msc_flush_callback);
   usb_msc.setWritableCallback(msc_writable_callback);
-
-  // Set disk size, block size should be 512 regardless of flash page size
-  usb_msc.setCapacity(flash.size()/512, 512);
-
-  // Set Lun ready
-  usb_msc.setUnitReady(true);
-
+  usb_msc.setCapacity(flash.size()/512, 512); // Set disk size, block size should be 512 regardless of flash page size
+  usb_msc.setUnitReady(true); // Set Lun ready
   usb_msc.begin();
+
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
 
   // Init file system on the flash
   fatfs.begin(&flash);
 
-  Serial.begin(115200);
   //while ( !Serial ) delay(10);   // wait for native usb
 
   fs_changed = true; // to print contents initially
 }
 
-void loop()
-{
-  if ( fs_changed )
-  {
+void loop() {
+  if ( fs_changed ) {
     fs_changed = false;
 
-    if ( !root.open("/") )
-    {
+    if ( !root.open("/") ) {
       Serial.println("open root failed");
       return;
     }
@@ -81,13 +80,11 @@ void loop()
     // Open next file in root.
     // Warning, openNext starts at the current directory position
     // so a rewind of the directory may be required.
-    while ( file.openNext(&root, O_RDONLY) )
-    {
+    while ( file.openNext(&root, O_RDONLY) ) {
       file.printFileSize(&Serial);
       Serial.write(' ');
       file.printName(&Serial);
-      if ( file.isDir() )
-      {
+      if ( file.isDir() ) {
         // Indicate a directory.
         Serial.write('/');
       }
@@ -105,8 +102,7 @@ void loop()
 // Callback invoked when received READ10 command.
 // Copy disk's data to buffer (up to bufsize) and
 // return number of copied bytes (must be multiple of block size)
-int32_t msc_read_callback (uint32_t lba, void* buffer, uint32_t bufsize)
-{
+int32_t msc_read_callback (uint32_t lba, void* buffer, uint32_t bufsize) {
   // Note: InternalFlash Block API: readBlocks/writeBlocks/syncBlocks
   // already include sector caching (if needed). We don't need to cache it, yahhhh!!
   return flash.readBlocks(lba, (uint8_t*) buffer, bufsize/512) ? bufsize : -1;
@@ -115,8 +111,7 @@ int32_t msc_read_callback (uint32_t lba, void* buffer, uint32_t bufsize)
 // Callback invoked when received WRITE10 command.
 // Process data in buffer to disk's storage and
 // return number of written bytes (must be multiple of block size)
-int32_t msc_write_callback (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
-{
+int32_t msc_write_callback (uint32_t lba, uint8_t* buffer, uint32_t bufsize) {
   // Note: InternalFlash Block API: readBlocks/writeBlocks/syncBlocks
   // already include sector caching (if needed). We don't need to cache it, yahhhh!!
   return flash.writeBlocks(lba, buffer, bufsize/512) ? bufsize : -1;
@@ -124,8 +119,7 @@ int32_t msc_write_callback (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
 
 // Callback invoked when WRITE10 command is completed (status received and accepted by host).
 // used to flush any pending cache.
-void msc_flush_callback (void)
-{
+void msc_flush_callback (void) {
   // sync with flash
   flash.syncBlocks();
 
@@ -137,8 +131,7 @@ void msc_flush_callback (void)
 
 // Invoked to check if device is writable as part of SCSI WRITE10
 // Default mode is writable
-bool msc_writable_callback(void)
-{
+bool msc_writable_callback(void) {
   // true for writable, false for read-only
   return true;
 }

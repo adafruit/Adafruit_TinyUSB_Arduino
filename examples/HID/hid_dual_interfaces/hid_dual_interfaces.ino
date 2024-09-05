@@ -67,6 +67,8 @@ void setup() {
     TinyUSBDevice.begin(0);
   }
 
+  Serial.begin(115200);
+
   // HID Keyboard
   usb_keyboard.setPollInterval(2);
   usb_keyboard.setBootProtocol(HID_ITF_PROTOCOL_KEYBOARD);
@@ -81,10 +83,16 @@ void setup() {
   usb_mouse.setStringDescriptor("TinyUSB HID Keyboard");
   usb_mouse.begin();
 
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
+
   // Set up button, pullup opposite to active state
   pinMode(pin, activeState ? INPUT_PULLDOWN : INPUT_PULLUP);
 
-  Serial.begin(115200);
   Serial.println("Adafruit TinyUSB HID Composite example");
 }
 

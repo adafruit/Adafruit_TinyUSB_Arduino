@@ -63,6 +63,13 @@ void setup() {
 
   // init i2c usb with buffer and size
   i2c_usb.begin(i2c_buf, sizeof(i2c_buf));
+
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
 }
 
 void loop() {

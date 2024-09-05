@@ -19,8 +19,7 @@
 // USB MIDI object with 3 ports
 Adafruit_USBD_MIDI usb_midi(3);
 
-void setup()
-{
+void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
 
   // Manual begin() is required on core without built-in support e.g. mbed rp2040
@@ -32,12 +31,17 @@ void setup()
   usb_midi.setCableName(1, "Keyboard");
   usb_midi.setCableName(2, "Drum Pads");
   usb_midi.setCableName(3, "Lights");
-
   usb_midi.begin();
+
+  // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
 }
 
-void loop()
-{
+void loop() {
   #ifdef TINYUSB_NEED_POLLING_TASK
   // Manual call tud_task since it isn't called by Core's background
   TinyUSBDevice.task();
