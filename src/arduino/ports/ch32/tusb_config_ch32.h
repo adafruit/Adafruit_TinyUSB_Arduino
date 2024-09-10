@@ -39,8 +39,6 @@ extern "C" {
 #define CFG_TUSB_MCU OPT_MCU_CH32V20X
 #elif defined(CH32V30x)
 #define CFG_TUSB_MCU OPT_MCU_CH32V307
-#elif defined(CH32X035)
-#define CFG_TUSB_MCU OPT_MCU_CH32X035
 #elif defined(CH32L10x)
 #define CFG_TUSB_MCU OPT_MCU_CH32L10X
 #endif
