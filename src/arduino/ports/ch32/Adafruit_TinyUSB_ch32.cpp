@@ -117,8 +117,6 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
 #define RCC_AHBPeriph_OTG_FS RCC_AHBPeriph_USBHD
 #endif
 
-#if defined(CH32V20x) || defined(CH32V30x) || defined(CH32L10x)
-
   uint8_t usb_div;
   switch (SystemCoreClock) {
 #if defined(CH32V20x) || defined(CH32V30x)
@@ -157,8 +155,6 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
   RCC_OTGFSCLKConfig(usb_div);
 #else
   RCC_USBCLKConfig(usb_div);
-#endif
-
 #endif
 
 #if CFG_TUD_WCH_USBIP_FSDEV
