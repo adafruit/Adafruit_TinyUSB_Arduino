@@ -143,7 +143,7 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
     usb_div = RCC_USBCLKSource_PLLCLK_Div1;
     break;
   case 72000000:
-    usb_div = RCC_USBCLKSource_PLLCLK_1Div5;
+    usb_div = RCC_USBCLKSource_PLLCLK_Div1_5;
     break;
   case 96000000:
     usb_div = RCC_USBCLKSource_PLLCLK_Div2;
