@@ -25,7 +25,7 @@
 #include "tusb_option.h"
 
 #if CFG_TUD_ENABLED &&                                                         \
-    (defined(ARDUINO_ARCH_CH32) || defined(CH32V20x) || defined(CH32V30x) || defied(CH32X035) || defined(CH32L10x))
+    (defined(ARDUINO_ARCH_CH32) || defined(CH32V20x) || defined(CH32V30x) || defined(CH32X035) || defined(CH32L10x))
 
 #include "Arduino.h"
 #include "arduino/Adafruit_USBD_Device.h"
