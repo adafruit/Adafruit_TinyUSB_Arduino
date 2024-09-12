@@ -120,7 +120,7 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
 #define RCC_AHBPeriphClockCmd RCC_HBPeriphClockCmd
 #endif
 
-  uint8_t usb_div;
+  uint32_t usb_div;
   switch (SystemCoreClock) {
 #if defined(CH32V20x) || defined(CH32V30x)
   case 48000000:
