@@ -474,7 +474,7 @@
   #define TUP_DCD_ENDPOINT_MAX    (CFG_TUD_WCH_USBIP_USBHS ? 16 : 8)
 
 #elif TU_CHECK_MCU(OPT_MCU_CH32L10X)
-  // x035 and l103 support USBFS only
+  // l103 support USBFS only
   #define TUP_USBIP_WCH_USBFS
 
   #if !defined(CFG_TUD_WCH_USBIP_USBFS)
