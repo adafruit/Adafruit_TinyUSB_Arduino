@@ -118,9 +118,11 @@ void Adafruit_USBD_CDC::end(void) {
   _instance = INVALID_INSTANCE;
 }
 
+#ifdef ARDUINO_ARCH_RP2040
 void Adafruit_USBD_CDC::ignoreFlowControl(bool ignore) {
   _ignoreFlowControl = ignore;
 }
+#endif
 
 uint32_t Adafruit_USBD_CDC::baud(void) {
   if (!isValid()) {
@@ -247,7 +249,12 @@ size_t Adafruit_USBD_CDC::write(const uint8_t *buffer, size_t size) {
   }
 
   size_t remain = size;
-  while (remain && (tud_cdc_n_connected(_instance) || _ignoreFlowControl)) {
+#ifdef ARDUINO_ARCH_RP2040
+  while (remain && (tud_cdc_n_connected(_instance) || _ignoreFlowControl))
+#else
+  while (remain && tud_cdc_n_connected(_instance))
+#endif
+  {
     size_t wrcount = tud_cdc_n_write(_instance, buffer, remain);
     remain -= wrcount;
     buffer += wrcount;
