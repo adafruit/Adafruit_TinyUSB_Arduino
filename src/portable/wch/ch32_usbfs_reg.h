@@ -97,6 +97,11 @@
 #elif CFG_TUSB_MCU == OPT_MCU_CH32V307
   #include <ch32v30x.h>
   #define USBHD_IRQn OTG_FS_IRQn
+#elif CFG_TUSB_MCU == OPT_MCU_CH32X035
+  #include <ch32x035.h>
+  #define USBOTG_FS USBFSD
+  #define USBHD_IRQn USBFS_IRQn
+#endif
 #elif CFG_TUSB_MCU == OPT_MCU_CH32L10X
   #include <ch32l103.h>
   #define USBOTG_FS USBFSD

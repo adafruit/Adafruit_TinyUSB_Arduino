@@ -183,7 +183,8 @@
 #define OPT_MCU_CH32F20X         2210 ///< WCH CH32F20x
 #define OPT_MCU_CH32V20X         2220 ///< WCH CH32V20x
 #define OPT_MCU_CH32V103         2230 ///< WCH CH32V103
-#define OPT_MCU_CH32L10X         2240 ///< WCH CH32L10x
+#define OPT_MCU_CH32X035         2240 ///< WCH CH32X035
+#define OPT_MCU_CH32L10X         2250 ///< WCH CH32L10x
 
 // NXP LPC MCX
 #define OPT_MCU_MCXN9            2300  ///< NXP MCX N9 Series

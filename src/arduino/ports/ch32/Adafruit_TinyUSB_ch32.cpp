@@ -25,7 +25,8 @@
 #include "tusb_option.h"
 
 #if CFG_TUD_ENABLED && (defined(ARDUINO_ARCH_CH32) || defined(CH32V20x) ||     \
-                        defined(CH32V30x) || defined(CH32L10x))
+                        defined(CH32V30x) || defined(CH32X035) ||              \
+                        defined(CH32L10x))
 
 #include "Arduino.h"
 #include "arduino/Adafruit_USBD_Device.h"
@@ -64,7 +65,7 @@ USBWakeUp_IRQHandler(void) {
 
 #if defined(CH32V10x)
 #define USBHDWakeUp_IRQHandler USBWakeUp_IRQHandler
-#elif defined(CH32L10x)
+#elif defined(CH32X035) || defined(CH32L10x)
 #define USBHD_IRQHandler USBFS_IRQHandler
 #define USBHDWakeUp_IRQHandler USBFSWakeUp_IRQHandler
 #endif
@@ -115,6 +116,8 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
   EXTEN->EXTEN_CTR &= ~EXTEN_USB_5V_SEL;
 
 #define RCC_AHBPeriph_OTG_FS RCC_AHBPeriph_USBHD
+#elif defined(CH32X035)
+#define RCC_AHBPeriph_OTG_FS RCC_AHBPeriph_USBFS
 #elif defined(CH32L10x)
 #define RCC_AHBPeriph_OTG_FS RCC_HBPeriph_USBFS
 #define RCC_AHBPeriphClockCmd RCC_HBPeriphClockCmd
@@ -139,6 +142,9 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
   case 72000000:
     usb_div = RCC_USBCLKSource_PLLCLK_1Div5;
     break;
+#elif defined(CH32X035)
+  case 48000000:
+    break;
 #elif defined(CH32L10x)
   case 48000000:
     usb_div = RCC_USBCLKSource_PLLCLK_Div1;
@@ -156,7 +162,7 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
 
 #if defined(CH32V30x)
   RCC_OTGFSCLKConfig(usb_div);
-#else
+#else !defined(CH32X035)
   RCC_USBCLKConfig(usb_div);
 #endif
 
