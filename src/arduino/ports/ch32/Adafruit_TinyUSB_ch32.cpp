@@ -162,7 +162,7 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
 
 #if defined(CH32V30x)
   RCC_OTGFSCLKConfig(usb_div);
-#else !defined(CH32X035)
+#elif !defined(CH32X035)
   RCC_USBCLKConfig(usb_div);
 #endif
 

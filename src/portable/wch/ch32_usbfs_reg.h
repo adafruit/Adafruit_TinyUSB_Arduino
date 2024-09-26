@@ -101,7 +101,6 @@
   #include <ch32x035.h>
   #define USBOTG_FS USBFSD
   #define USBHD_IRQn USBFS_IRQn
-#endif
 #elif CFG_TUSB_MCU == OPT_MCU_CH32L10X
   #include <ch32l103.h>
   #define USBOTG_FS USBFSD
