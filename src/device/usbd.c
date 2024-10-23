@@ -453,11 +453,14 @@ bool tud_inited(void) {
   return _usbd_rhport != RHPORT_INVALID;
 }
 
-bool tud_init(uint8_t rhport) {
-  // skip if already initialized
-  if (tud_inited()) return true;
+bool tud_rhport_init(uint8_t rhport, const tusb_rhport_init_t* rh_init) {
+  if (tud_inited()) {
+    return true; // skip if already initialized
+  }
+  TU_ASSERT(rh_init);
 
-  TU_LOG_USBD("USBD init on controller %u, Highspeed = %u\r\n", rhport, TUD_OPT_HIGH_SPEED);
+  TU_LOG_USBD("USBD init on controller %u, speed = %s\r\n", rhport,
+    rh_init->speed == TUSB_SPEED_HIGH ? "High" : "Full");
   TU_LOG_INT(CFG_TUD_LOG_LEVEL, sizeof(usbd_device_t));
   TU_LOG_INT(CFG_TUD_LOG_LEVEL, sizeof(dcd_event_t));
   TU_LOG_INT(CFG_TUD_LOG_LEVEL, sizeof(tu_fifo_t));
@@ -492,15 +495,16 @@ bool tud_init(uint8_t rhport) {
   _usbd_rhport = rhport;
 
   // Init device controller driver
-  dcd_init(rhport);
+  TU_ASSERT(dcd_init(rhport, rh_init));
   dcd_int_enable(rhport);
 
   return true;
 }
 
 bool tud_deinit(uint8_t rhport) {
-  // skip if not initialized
-  if (!tud_inited()) return true;
+  if (!tud_inited()) {
+    return true; // skip if not initialized
+  }
 
   TU_LOG_USBD("USBD deinit on controller %u\r\n", rhport);
 
@@ -562,7 +566,7 @@ bool tud_task_event_ready(void) {
  *
     int main(void) {
       application_init();
-      tusb_init();
+      tusb_init(0, TUSB_ROLE_DEVICE);
 
       while(1) { // the mainloop
         application_code();
@@ -1427,9 +1431,12 @@ bool usbd_edpt_stalled(uint8_t rhport, uint8_t ep_addr) {
  * In progress transfers on this EP may be delivered after this call.
  */
 void usbd_edpt_close(uint8_t rhport, uint8_t ep_addr) {
+#ifdef TUP_DCD_EDPT_ISO_ALLOC
+  (void) rhport; (void) ep_addr;
+  // ISO alloc/activate Should be used instead
+#else
   rhport = _usbd_rhport;
 
-  TU_ASSERT(dcd_edpt_close, /**/);
   TU_LOG_USBD("  CLOSING Endpoint: 0x%02X\r\n", ep_addr);
 
   uint8_t const epnum = tu_edpt_number(ep_addr);
@@ -1439,6 +1446,7 @@ void usbd_edpt_close(uint8_t rhport, uint8_t ep_addr) {
   _usbd_dev.ep_status[epnum][dir].stalled = 0;
   _usbd_dev.ep_status[epnum][dir].busy = 0;
   _usbd_dev.ep_status[epnum][dir].claimed = 0;
+#endif
 
   return;
 }
@@ -1461,21 +1469,24 @@ void usbd_sof_enable(uint8_t rhport, sof_consumer_t consumer, bool en) {
 }
 
 bool usbd_edpt_iso_alloc(uint8_t rhport, uint8_t ep_addr, uint16_t largest_packet_size) {
+#ifdef TUP_DCD_EDPT_ISO_ALLOC
   rhport = _usbd_rhport;
 
-  TU_ASSERT(dcd_edpt_iso_alloc);
   TU_ASSERT(tu_edpt_number(ep_addr) < CFG_TUD_ENDPPOINT_MAX);
-
   return dcd_edpt_iso_alloc(rhport, ep_addr, largest_packet_size);
+#else
+  (void) rhport; (void) ep_addr; (void) largest_packet_size;
+  return false;
+#endif
 }
 
 bool usbd_edpt_iso_activate(uint8_t rhport, tusb_desc_endpoint_t const* desc_ep) {
+#ifdef TUP_DCD_EDPT_ISO_ALLOC
   rhport = _usbd_rhport;
 
   uint8_t const epnum = tu_edpt_number(desc_ep->bEndpointAddress);
   uint8_t const dir = tu_edpt_dir(desc_ep->bEndpointAddress);
 
-  TU_ASSERT(dcd_edpt_iso_activate);
   TU_ASSERT(epnum < CFG_TUD_ENDPPOINT_MAX);
   TU_ASSERT(tu_edpt_validate(desc_ep, (tusb_speed_t) _usbd_dev.speed));
 
@@ -1483,6 +1494,10 @@ bool usbd_edpt_iso_activate(uint8_t rhport, tusb_desc_endpoint_t const* desc_ep)
   _usbd_dev.ep_status[epnum][dir].busy = 0;
   _usbd_dev.ep_status[epnum][dir].claimed = 0;
   return dcd_edpt_iso_activate(rhport, desc_ep);
+#else
+  (void) rhport; (void) desc_ep;
+  return false;
+#endif
 }
 
 #endif
