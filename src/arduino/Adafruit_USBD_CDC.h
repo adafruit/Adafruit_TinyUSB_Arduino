@@ -54,6 +54,16 @@ public:
   void begin(uint32_t baud, uint8_t config);
   void end(void);
 
+#ifdef ARDUINO_ARCH_RP2040
+  // In some cases, the target application will not assert
+  // the DTR virtual line, thus preventing writing operations
+  // to succeed. For this reason, the
+  // Adafruit_USBD_CDC::ignoreFlowControl() method disables the
+  // connection’s state verification, enabling the program to
+  // write on the port, even though the data might be lost.
+  void ignoreFlowControl(bool ignore = true);
+#endif
+
   // return line coding set by host
   uint32_t baud(void);
   uint8_t stopbits(void);
@@ -89,6 +99,10 @@ private:
   static uint8_t _instance_count;
 
   uint8_t _instance;
+
+#ifdef ARDUINO_ARCH_RP2040
+  bool _ignoreFlowControl = false;
+#endif
 
   bool isValid(void) { return _instance != INVALID_INSTANCE; }
 };
