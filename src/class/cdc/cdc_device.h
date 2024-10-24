@@ -24,8 +24,8 @@
  * This file is part of the TinyUSB stack.
  */
 
-#ifndef _TUSB_CDC_DEVICE_H_
-#define _TUSB_CDC_DEVICE_H_
+#ifndef TUSB_CDC_DEVICE_H_
+#define TUSB_CDC_DEVICE_H_
 
 #include "cdc.h"
 
