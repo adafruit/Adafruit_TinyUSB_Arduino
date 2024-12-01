@@ -1,7 +1,25 @@
 {
     "name": "Adafruit TinyUSB Library",
+    "keywords": "usb, esp32, esp32-s3, esp32-s2, usb-otg, arduino",
+    "description": "tinyusb fixed for pioarduino",
+    "version": "3.4.1.1",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/OrhanYigitDurmaz/Adafruit_TinyUSB_Arduino.git"
+    },
+    "frameworks": "*",
+    "platforms": "*",
     "build": {
         "libArchive": false,
         "flags": "-DUSE_TINYUSB"
-    }
+    },
+    "authors":
+    [
+      {
+         "name": "tinyusb",
+         "email": "tinyusb@tusb.com",
+         "url": "tinyusb.org",
+         "maintainer": true
+      }
+    ]
 }
