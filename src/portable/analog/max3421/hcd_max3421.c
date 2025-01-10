@@ -238,7 +238,13 @@ typedef struct {
     uint8_t hxfr;
   }sndfifo_owner;
 
+#if CFG_TUSB_MCU == OPT_MCU_RP2040
+  // currently has undefined reference to `__atomic_test_and_set' with rp2040 on Arduino with gcc 14.2
+  // temporarily use native semaphore instead. TODO rework osal semaphore/mutex later on
+  semaphore_t busy; // busy transferring
+#else
   atomic_flag busy; // busy transferring
+#endif
 
 #if OSAL_MUTEX_REQUIRED
   OSAL_MUTEX_DEF(spi_mutexdef);
@@ -256,6 +262,25 @@ static tuh_configure_max3421_t _tuh_cfg = {
     .cpuctl = 0, // default: INT pulse width = 10.6 us
     .pinctl = 0, // default: negative edge interrupt
 };
+
+#if CFG_TUSB_MCU == OPT_MCU_RP2040
+TU_ATTR_ALWAYS_INLINE static inline bool usb_xfer_test_and_set(void) {
+  return !sem_try_acquire(&_hcd_data.busy);
+}
+
+TU_ATTR_ALWAYS_INLINE static inline void usb_xfer_clear(void) {
+  sem_release(&_hcd_data.busy);
+}
+
+#else
+TU_ATTR_ALWAYS_INLINE static inline bool usb_xfer_test_and_set(void) {
+  return atomic_flag_test_and_set(&_hcd_data.busy);
+}
+
+TU_ATTR_ALWAYS_INLINE static inline void usb_xfer_clear(void) {
+  atomic_flag_clear(&_hcd_data.busy);
+}
+#endif
 
 //--------------------------------------------------------------------+
 // API: SPI transfer with MAX3421E
@@ -499,8 +524,8 @@ bool hcd_configure(uint8_t rhport, uint32_t cfg_id, const void* cfg_param) {
 }
 
 // Initialize controller to host mode
-bool hcd_init(uint8_t rhport) {
-  (void) rhport;
+bool hcd_init(uint8_t rhport, const tusb_rhport_init_t* rh_init) {
+  (void) rh_init;
 
   tuh_max3421_int_api(rhport, false);
 
@@ -510,6 +535,10 @@ bool hcd_init(uint8_t rhport) {
 
   tu_memclr(&_hcd_data, sizeof(_hcd_data));
   _hcd_data.peraddr = 0xff; // invalid
+
+#if CFG_TUSB_MCU == OPT_MCU_RP2040
+  sem_init(&_hcd_data.busy, 1, 1);
+#endif
 
 #if OSAL_MUTEX_REQUIRED
   _hcd_data.spi_mutex = osal_mutex_create(&_hcd_data.spi_mutexdef);
@@ -567,6 +596,10 @@ bool hcd_deinit(uint8_t rhport) {
   osal_mutex_delete(_hcd_data.spi_mutex);
   _hcd_data.spi_mutex = NULL;
   #endif
+
+#if CFG_TUSB_MCU == OPT_MCU_RP2040
+  sem_reset(&_hcd_data.busy, 1);
+#endif
 
   return true;
 }
@@ -754,7 +787,7 @@ bool hcd_edpt_xfer(uint8_t rhport, uint8_t daddr, uint8_t ep_addr, uint8_t * buf
   ep->state = EP_STATE_ATTEMPT_1;
 
   // carry out transfer if not busy
-  if (!atomic_flag_test_and_set(&_hcd_data.busy)) {
+  if (!usb_xfer_test_and_set()) {
     xact_generic(rhport, ep, true, false);
   }
 
@@ -791,7 +824,7 @@ bool hcd_setup_send(uint8_t rhport, uint8_t daddr, uint8_t const setup_packet[8]
   ep->state = EP_STATE_ATTEMPT_1;
 
   // carry out transfer if not busy
-  if (!atomic_flag_test_and_set(&_hcd_data.busy)) {
+  if (!usb_xfer_test_and_set()) {
     xact_setup(rhport, ep, false);
   }
 
@@ -876,7 +909,7 @@ static void xfer_complete_isr(uint8_t rhport, max3421_ep_t *ep, xfer_result_t re
     xact_generic(rhport, next_ep, true, in_isr);
   }else {
     // no more pending
-    atomic_flag_clear(&_hcd_data.busy);
+    usb_xfer_clear();
   }
 }
 
@@ -915,7 +948,7 @@ static void handle_xfer_done(uint8_t rhport, bool in_isr) {
         xact_generic(rhport, next_ep, true, in_isr);
       } else {
         // no more pending in this frame -> clear busy
-        atomic_flag_clear(&_hcd_data.busy);
+        usb_xfer_clear();
       }
       return;
 
@@ -1026,7 +1059,7 @@ void hcd_int_handler(uint8_t rhport, bool in_isr) {
     }
 
     // start usb transfer if not busy
-    if (ep_retry != NULL && !atomic_flag_test_and_set(&_hcd_data.busy)) {
+    if (ep_retry != NULL && !usb_xfer_test_and_set()) {
       xact_generic(rhport, ep_retry, true, in_isr);
     }
   }
