@@ -146,7 +146,9 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
     return; // unsupported
   }
 
-#if !defined(CH32X035)
+#if defined(CH32V30x)
+  RCC_USBFSCLKConfig(usb_div);
+#elif !defined(CH32X035)
   RCC_USBCLKConfig(usb_div);
 #endif
 
