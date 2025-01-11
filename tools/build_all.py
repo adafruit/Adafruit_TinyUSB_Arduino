@@ -24,7 +24,9 @@ all_boards = [
     ['metroesp32s2',
      'espressif:esp32:adafruit_metro_esp32s2:CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=cdc,PSRAM=enabled,PartitionScheme=tinyuf2'],
     # [' ', 'espressif:esp32:adafruit_feather_esp32s3:FlashMode=qio,LoopCore=1,EventsCore=1,USBMode=default,CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=cdc,PartitionScheme=tinyuf2'],
-    ['CH32V20x_EVT', 'WCH:ch32v:CH32V20x_EVT']
+    ['CH32V20x_EVT', 'WCH:ch32v:CH32V20x_EVT'],
+    ['CH32X035_EVT', 'WCH:ch32v:CH32X035_EVT'],
+    ['CH32L10x_EVT', 'WCH:ch32v:CH32L10x_EVT']
 ]
 
 
