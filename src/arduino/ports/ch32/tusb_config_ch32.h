@@ -43,7 +43,6 @@ extern "C" {
 #define CFG_TUSB_MCU OPT_MCU_CH32X035
 #elif defined(CH32L10x)
 #define CFG_TUSB_MCU OPT_MCU_CH32L10X
-#warning "CH32L103 is not working yet"
 #endif
 
 #define CFG_TUSB_OS OPT_OS_NONE
