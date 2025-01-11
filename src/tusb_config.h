@@ -50,8 +50,7 @@
   #endif
 
   // Note: For platformio prioritize this file over the one in BSP in all cases
-
-#elif defined(ARDUINO_ARCH_CH32) || defined(CH32V20x) || defined(CH32V30x)
+#elif defined(ARDUINO_ARCH_CH32) || defined(CH32V20x) || defined(CH32V30x) || defined(CH32X035) || defined(CH32L10x)
   #include "arduino/ports/ch32/tusb_config_ch32.h"
 #else
   #error TinyUSB Arduino Library does not support your core yet
