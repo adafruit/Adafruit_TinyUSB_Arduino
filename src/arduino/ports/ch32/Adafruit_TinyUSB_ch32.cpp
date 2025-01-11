@@ -61,7 +61,8 @@ USBWakeUp_IRQHandler(void) {
 // USBFS
 #if CFG_TUD_WCH_USBIP_USBFS
 
-#if defined(CH32V10x) || defined(CH32V20x) || defined(CH32L10x)
+#if defined(CH32V10x) || defined(CH32V20x) || defined(CH32X035) || \ 
+    defined(CH32L10x)
 
 #if defined(CH32V10x)
 #define USBFSWakeUp_IRQHandler USBWakeUp_IRQHandler

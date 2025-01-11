@@ -6,4 +6,3 @@ metroesp32s2
 feather_rp2040_tinyusb
 pico_rp2040_tinyusb_host
 CH32V20x_EVT
-

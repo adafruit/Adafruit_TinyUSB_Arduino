@@ -59,7 +59,7 @@ jobs:
            # SAMD
            - 'metro_m0_tinyusb'
            - 'metro_m4_tinyusb'
-           # CH32
+           # Ch32v2
            - 'CH32V20x_EVT'
     steps:
     - name: Checkout code

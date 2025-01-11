@@ -34,7 +34,7 @@ extern "C" {
 //--------------------------------------------------------------------
 #if defined(CH32V10x)
 #define CFG_TUSB_MCU OPT_MCU_CH32V103
-#warning "CH32V103 is not working yet"
+#warning "CH32v103 is not working yet"
 #elif defined(CH32V20x)
 #define CFG_TUSB_MCU OPT_MCU_CH32V20X
 #elif defined(CH32V30x)
