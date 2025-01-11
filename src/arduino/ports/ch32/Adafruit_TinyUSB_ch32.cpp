@@ -102,7 +102,7 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
   // Full speed OTG or FSDev
 
 #if defined(CH32V10x)
-  EXTEN->EXTEN_CTR |= EXTEN_USBHD_IO_EN;
+  EXTEN->EXTEN_CTR |= EXTEN_USBFS_IO_EN;
   EXTEN->EXTEN_CTR &= ~EXTEN_USB_5V_SEL;
 #elif defined(CH32L10x)
 #define RCC_AHBPeriph_USBFS RCC_HBPeriph_USBFS
