@@ -89,22 +89,17 @@
     __IO uint32_t Reserve1;
     __IO uint32_t OTG_CR;
     __IO uint32_t OTG_SR;
-  } USBOTG_FS_TypeDef;
+  } USBFSD_TypeDef;
 
-  #define USBOTG_FS ((USBOTG_FS_TypeDef *) 0x40023400)
+  #define USBFSD ((USBFSD_TypeDef *) 0x40023400)
 #elif CFG_TUSB_MCU == OPT_MCU_CH32V20X
   #include <ch32v20x.h>
 #elif CFG_TUSB_MCU == OPT_MCU_CH32V307
   #include <ch32v30x.h>
-  #define USBHD_IRQn OTG_FS_IRQn
 #elif CFG_TUSB_MCU == OPT_MCU_CH32X035
   #include <ch32x035.h>
-  #define USBOTG_FS USBFSD
-  #define USBHD_IRQn USBFS_IRQn
 #elif CFG_TUSB_MCU == OPT_MCU_CH32L10X
   #include <ch32l103.h>
-  #define USBOTG_FS USBFSD
-  #define USBHD_IRQn USBFS_IRQn
 #endif
 
 #ifdef __GNUC__

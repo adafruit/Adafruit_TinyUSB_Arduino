@@ -64,24 +64,14 @@ USBWakeUp_IRQHandler(void) {
 #if defined(CH32V10x) || defined(CH32V20x) || defined(CH32L10x)
 
 #if defined(CH32V10x)
-#define USBHDWakeUp_IRQHandler USBWakeUp_IRQHandler
-#elif defined(CH32X035) || defined(CH32L10x)
-#define USBHD_IRQHandler USBFS_IRQHandler
-#define USBHDWakeUp_IRQHandler USBFSWakeUp_IRQHandler
+#define USBFSWakeUp_IRQHandler USBWakeUp_IRQHandler
 #endif
-
-__attribute__((interrupt("WCH-Interrupt-fast"))) void USBHD_IRQHandler(void) {
+__attribute__((interrupt("WCH-Interrupt-fast"))) void USBFS_IRQHandler(void) {
   tud_int_handler(0);
 }
 
 __attribute__((interrupt("WCH-Interrupt-fast"))) void
-USBHDWakeUp_IRQHandler(void) {
-  tud_int_handler(0);
-}
-#endif
-
-#ifdef CH32V30x
-__attribute__((interrupt("WCH-Interrupt-fast"))) void OTG_FS_IRQHandler(void) {
+USBFSWakeUp_IRQHandler(void) {
   tud_int_handler(0);
 }
 #endif
@@ -114,12 +104,8 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
 #if defined(CH32V10x)
   EXTEN->EXTEN_CTR |= EXTEN_USBHD_IO_EN;
   EXTEN->EXTEN_CTR &= ~EXTEN_USB_5V_SEL;
-
-#define RCC_AHBPeriph_OTG_FS RCC_AHBPeriph_USBHD
-#elif defined(CH32X035)
-#define RCC_AHBPeriph_OTG_FS RCC_AHBPeriph_USBFS
 #elif defined(CH32L10x)
-#define RCC_AHBPeriph_OTG_FS RCC_HBPeriph_USBFS
+#define RCC_AHBPeriph_USBFS RCC_HBPeriph_USBFS
 #define RCC_AHBPeriphClockCmd RCC_HBPeriphClockCmd
 #endif
 
@@ -160,9 +146,7 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
     return; // unsupported
   }
 
-#if defined(CH32V30x)
-  RCC_OTGFSCLKConfig(usb_div);
-#elif !defined(CH32X035)
+#if !defined(CH32X035)
   RCC_USBCLKConfig(usb_div);
 #endif
 
@@ -171,7 +155,7 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
 #endif
 
 #if CFG_TUD_WCH_USBIP_USBFS
-  RCC_AHBPeriphClockCmd(RCC_AHBPeriph_OTG_FS, ENABLE);
+  RCC_AHBPeriphClockCmd(RCC_AHBPeriph_USBFS, ENABLE);
 #endif
 #endif
 

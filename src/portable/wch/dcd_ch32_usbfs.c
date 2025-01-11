@@ -35,10 +35,10 @@
 /* private defines */
 #define EP_MAX (8)
 
-#define EP_DMA(ep)     ((&USBOTG_FS->UEP0_DMA)[ep])
-#define EP_TX_LEN(ep)  ((&USBOTG_FS->UEP0_TX_LEN)[2 * ep])
-#define EP_TX_CTRL(ep) ((&USBOTG_FS->UEP0_TX_CTRL)[4 * ep])
-#define EP_RX_CTRL(ep) ((&USBOTG_FS->UEP0_RX_CTRL)[4 * ep])
+#define EP_DMA(ep)     ((&USBFSD->UEP0_DMA)[ep])
+#define EP_TX_LEN(ep)  ((&USBFSD->UEP0_TX_LEN)[2 * ep])
+#define EP_TX_CTRL(ep) ((&USBFSD->UEP0_TX_CTRL)[4 * ep])
+#define EP_RX_CTRL(ep) ((&USBFSD->UEP0_RX_CTRL)[4 * ep])
 
 /* private data */
 struct usb_xfer {
@@ -126,12 +126,12 @@ static void update_out(uint8_t rhport, uint8_t ep, size_t rx_len) {
 bool dcd_init(uint8_t rhport, const tusb_rhport_init_t* rh_init) {
   (void) rh_init;
   // init registers
-  USBOTG_FS->BASE_CTRL = USBFS_CTRL_SYS_CTRL | USBFS_CTRL_INT_BUSY | USBFS_CTRL_DMA_EN;
-  USBOTG_FS->UDEV_CTRL = USBFS_UDEV_CTRL_PD_DIS | USBFS_UDEV_CTRL_PORT_EN;
-  USBOTG_FS->DEV_ADDR = 0x00;
+  USBFSD->BASE_CTRL = USBFS_CTRL_SYS_CTRL | USBFS_CTRL_INT_BUSY | USBFS_CTRL_DMA_EN;
+  USBFSD->UDEV_CTRL = USBFS_UDEV_CTRL_PD_DIS | USBFS_UDEV_CTRL_PORT_EN;
+  USBFSD->DEV_ADDR = 0x00;
 
-  USBOTG_FS->INT_FG = 0xFF;
-  USBOTG_FS->INT_EN = USBFS_INT_EN_BUS_RST | USBFS_INT_EN_TRANSFER | USBFS_INT_EN_SUSPEND;
+  USBFSD->INT_FG = 0xFF;
+  USBFSD->INT_EN = USBFS_INT_EN_BUS_RST | USBFS_INT_EN_TRANSFER | USBFS_INT_EN_SUSPEND;
 
   // setup endpoint 0
   EP_DMA(0) = (uint32_t) &data.buffer[0][0];
@@ -140,10 +140,10 @@ bool dcd_init(uint8_t rhport, const tusb_rhport_init_t* rh_init) {
   EP_RX_CTRL(0) = USBFS_EP_R_RES_ACK;
 
   // enable other endpoints but NAK everything
-  USBOTG_FS->UEP4_1_MOD = 0xCC;
-  USBOTG_FS->UEP2_3_MOD = 0xCC;
-  USBOTG_FS->UEP5_6_MOD = 0xCC;
-  USBOTG_FS->UEP7_MOD = 0x0C;
+  USBFSD->UEP4_1_MOD = 0xCC;
+  USBFSD->UEP2_3_MOD = 0xCC;
+  USBFSD->UEP5_6_MOD = 0xCC;
+  USBFSD->UEP7_MOD = 0x0C;
 
   for (uint8_t ep = 1; ep < EP_MAX; ep++) {
     EP_DMA(ep) = (uint32_t) &data.buffer[ep][0];
@@ -160,14 +160,14 @@ bool dcd_init(uint8_t rhport, const tusb_rhport_init_t* rh_init) {
 
 void dcd_int_handler(uint8_t rhport) {
   (void) rhport;
-  uint8_t status = USBOTG_FS->INT_FG;
+  uint8_t status = USBFSD->INT_FG;
   if (status & USBFS_INT_FG_TRANSFER) {
-    uint8_t ep = USBFS_INT_ST_MASK_UIS_ENDP(USBOTG_FS->INT_ST);
-    uint8_t token = USBFS_INT_ST_MASK_UIS_TOKEN(USBOTG_FS->INT_ST);
+    uint8_t ep = USBFS_INT_ST_MASK_UIS_ENDP(USBFSD->INT_ST);
+    uint8_t token = USBFS_INT_ST_MASK_UIS_TOKEN(USBFSD->INT_ST);
 
     switch (token) {
       case PID_OUT: {
-        uint16_t rx_len = USBOTG_FS->RX_LEN;
+        uint16_t rx_len = USBFSD->RX_LEN;
         update_out(rhport, ep, rx_len);
         break;
       }
@@ -186,7 +186,7 @@ void dcd_int_handler(uint8_t rhport) {
         break;
     }
 
-    USBOTG_FS->INT_FG = USBFS_INT_FG_TRANSFER;
+    USBFSD->INT_FG = USBFS_INT_FG_TRANSFER;
   } else if (status & USBFS_INT_FG_BUS_RST) {
     data.ep0_tog = true;
     data.xfer[0][TUSB_DIR_OUT].max_size = 64;
@@ -194,25 +194,25 @@ void dcd_int_handler(uint8_t rhport) {
 
     dcd_event_bus_signal(rhport, DCD_EVENT_BUS_RESET, true);
 
-    USBOTG_FS->DEV_ADDR = 0x00;
+    USBFSD->DEV_ADDR = 0x00;
     EP_RX_CTRL(0) = USBFS_EP_R_RES_ACK;
 
-    USBOTG_FS->INT_FG = USBFS_INT_FG_BUS_RST;
+    USBFSD->INT_FG = USBFS_INT_FG_BUS_RST;
   } else if (status & USBFS_INT_FG_SUSPEND) {
     dcd_event_t event = {.rhport = rhport, .event_id = DCD_EVENT_SUSPEND};
     dcd_event_handler(&event, true);
-    USBOTG_FS->INT_FG = USBFS_INT_FG_SUSPEND;
+    USBFSD->INT_FG = USBFS_INT_FG_SUSPEND;
   }
 }
 
 void dcd_int_enable(uint8_t rhport) {
   (void) rhport;
-  NVIC_EnableIRQ(USBHD_IRQn);
+  NVIC_EnableIRQ(USBFS_IRQn);
 }
 
 void dcd_int_disable(uint8_t rhport) {
   (void) rhport;
-  NVIC_DisableIRQ(USBHD_IRQn);
+  NVIC_DisableIRQ(USBFS_IRQn);
 }
 
 void dcd_set_address(uint8_t rhport, uint8_t dev_addr) {
@@ -227,12 +227,12 @@ void dcd_remote_wakeup(uint8_t rhport) {
 
 void dcd_connect(uint8_t rhport) {
   (void) rhport;
-  USBOTG_FS->BASE_CTRL |= USBFS_CTRL_DEV_PUEN;
+  USBFSD->BASE_CTRL |= USBFS_CTRL_DEV_PUEN;
 }
 
 void dcd_disconnect(uint8_t rhport) {
   (void) rhport;
-  USBOTG_FS->BASE_CTRL &= ~USBFS_CTRL_DEV_PUEN;
+  USBFSD->BASE_CTRL &= ~USBFS_CTRL_DEV_PUEN;
 }
 
 void dcd_sof_enable(uint8_t rhport, bool en) {
@@ -247,7 +247,7 @@ void dcd_edpt0_status_complete(uint8_t rhport, tusb_control_request_t const* req
   if (request->bmRequestType_bit.recipient == TUSB_REQ_RCPT_DEVICE &&
       request->bmRequestType_bit.type == TUSB_REQ_TYPE_STANDARD &&
       request->bRequest == TUSB_REQ_SET_ADDRESS) {
-    USBOTG_FS->DEV_ADDR = (uint8_t) request->wValue;
+    USBFSD->DEV_ADDR = (uint8_t) request->wValue;
   }
   EP_TX_CTRL(0) = USBFS_EP_T_RES_NAK;
   EP_RX_CTRL(0) = USBFS_EP_R_RES_ACK;
