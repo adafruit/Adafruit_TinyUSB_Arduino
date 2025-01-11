@@ -1,2 +1,5 @@
 pico_rp2040_tinyusb_host
 CH32V20x_EVT
+CH32V30x_EVT
+CH32X035_EVT
+CH32L10x_EVT
