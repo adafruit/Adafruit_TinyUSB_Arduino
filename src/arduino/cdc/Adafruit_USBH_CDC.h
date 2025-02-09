@@ -27,7 +27,7 @@
 
 #include "HardwareSerial.h"
 
-class Adafruit_USBH_CDC : public HardwareSerial {
+class Adafruit_USBH_CDC : public arduino::HardwareSerial {
 public:
   Adafruit_USBH_CDC(void);
 
