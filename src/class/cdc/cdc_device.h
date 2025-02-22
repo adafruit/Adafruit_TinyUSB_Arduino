@@ -70,6 +70,12 @@ bool tud_cdc_n_connected(uint8_t itf);
 // Get current line state. Bit 0:  DTR (Data Terminal Ready), Bit 1: RTS (Request to Send)
 uint8_t tud_cdc_n_get_line_state(uint8_t itf);
 
+// Get current serial state.
+cdc_serial_state_t tud_cdc_n_get_serial_state(uint8_t itf);
+
+// Set current serial state.
+void tud_cdc_n_set_serial_state(uint8_t itf, cdc_serial_state_t ser_state);
+
 // Get current line encoding: bit rate, stop bits parity etc ..
 void tud_cdc_n_get_line_coding(uint8_t itf, cdc_line_coding_t* coding);
 
@@ -130,6 +136,14 @@ TU_ATTR_ALWAYS_INLINE static inline bool tud_cdc_connected(void) {
 
 TU_ATTR_ALWAYS_INLINE static inline uint8_t tud_cdc_get_line_state(void) {
   return tud_cdc_n_get_line_state(0);
+}
+
+TU_ATTR_ALWAYS_INLINE static inline cdc_serial_state_t tud_cdc_get_serial_state(void) {
+  return tud_cdc_n_get_serial_state(0);
+}
+
+TU_ATTR_ALWAYS_INLINE static inline void tud_cdc_set_serial_state(cdc_serial_state_t ser_state) {
+  return tud_cdc_n_set_serial_state(0, ser_state);
 }
 
 TU_ATTR_ALWAYS_INLINE static inline void tud_cdc_get_line_coding(cdc_line_coding_t* coding) {

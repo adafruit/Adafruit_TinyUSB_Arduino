@@ -59,6 +59,10 @@ typedef struct {
   // Bit 0:  DTR (Data Terminal Ready), Bit 1: RTS (Request to Send)
   uint8_t line_state;
 
+  // Notify host of flow control bits: CTS, DSR, DCD, RI, and some error flags.
+  cdc_serial_state_t serial_state;
+  bool serial_state_changed;
+
   /*------------- From this point, data is not cleared by bus reset -------------*/
   char wanted_char;
   TU_ATTR_ALIGNED(4) cdc_line_coding_t line_coding;
@@ -76,6 +80,7 @@ typedef struct {
   // Endpoint Transfer buffer
   CFG_TUSB_MEM_ALIGN uint8_t epout_buf[CFG_TUD_CDC_EP_BUFSIZE];
   CFG_TUSB_MEM_ALIGN uint8_t epin_buf[CFG_TUD_CDC_EP_BUFSIZE];
+  CFG_TUSB_MEM_ALIGN cdc_notify_struct_t epnotif_buf;
 } cdcd_interface_t;
 
 #define ITF_MEM_RESET_SIZE   offsetof(cdcd_interface_t, wanted_char)
@@ -136,6 +141,18 @@ bool tud_cdc_n_connected(uint8_t itf) {
 
 uint8_t tud_cdc_n_get_line_state(uint8_t itf) {
   return _cdcd_itf[itf].line_state;
+}
+
+cdc_serial_state_t tud_cdc_n_get_serial_state(uint8_t itf) {
+  return _cdcd_itf[itf].serial_state;
+}
+
+void tud_cdc_n_set_serial_state(uint8_t itf, cdc_serial_state_t serial_state) {
+  if (memcmp(&(_cdcd_itf[itf].serial_state), &serial_state, sizeof(serial_state)) != 0) {
+    TU_LOG_DRV("  Serial State Changed: %x -> %x\r\n", _cdcd_itf[itf].serial_state, serial_state);
+    _cdcd_itf[itf].serial_state_changed = true;
+  }
+  _cdcd_itf[itf].serial_state = serial_state;
 }
 
 void tud_cdc_n_get_line_coding(uint8_t itf, cdc_line_coding_t* coding) {
@@ -326,10 +343,13 @@ uint16_t cdcd_open(uint8_t rhport, tusb_desc_interface_t const * itf_desc, uint1
 
   if (TUSB_DESC_ENDPOINT == tu_desc_type(p_desc)) {
     // notification endpoint
-    tusb_desc_endpoint_t const* desc_ep = (tusb_desc_endpoint_t const*) p_desc;
+    tusb_desc_endpoint_t desc_ep = *(tusb_desc_endpoint_t const*) p_desc;
+    TU_LOG_DRV("  Interval before: %d\r\n", desc_ep.bInterval);
 
-    TU_ASSERT(usbd_edpt_open(rhport, desc_ep), 0);
-    p_cdc->ep_notif = desc_ep->bEndpointAddress;
+    desc_ep.bInterval = 1;  // Query every frame, 1ms at Full Speed.
+
+    TU_ASSERT(usbd_edpt_open(rhport, &desc_ep), 0);
+    p_cdc->ep_notif = desc_ep.bEndpointAddress;
 
     drv_len += tu_desc_len(p_desc);
     p_desc = tu_desc_next(p_desc);
@@ -437,12 +457,13 @@ bool cdcd_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint32_
   // Identify which interface to use
   for (itf = 0; itf < CFG_TUD_CDC; itf++) {
     p_cdc = &_cdcd_itf[itf];
-    if ((ep_addr == p_cdc->ep_out) || (ep_addr == p_cdc->ep_in)) break;
+    if ((ep_addr == p_cdc->ep_out) || (ep_addr == p_cdc->ep_in) || (ep_addr == p_cdc->ep_notif)) break;
   }
   TU_ASSERT(itf < CFG_TUD_CDC);
 
   // Received new data
   if (ep_addr == p_cdc->ep_out) {
+    TU_LOG_DRV("  XFer Out\r\n");
     tu_fifo_write_n(&p_cdc->rx_ff, p_cdc->epout_buf, (uint16_t) xferred_bytes);
 
     // Check for wanted char and invoke callback if needed
@@ -465,6 +486,7 @@ bool cdcd_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint32_
   // Note: This will cause incorrect baudrate set in line coding.
   //       Though maybe the baudrate is not really important !!!
   if (ep_addr == p_cdc->ep_in) {
+    TU_LOG_DRV("  XFer In\r\n");
     // invoke transmit callback to possibly refill tx fifo
     if (tud_cdc_tx_complete_cb) tud_cdc_tx_complete_cb(itf);
 
@@ -479,7 +501,30 @@ bool cdcd_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint32_
     }
   }
 
-  // nothing to do with notif endpoint for now
+  // Notifications
+  if (ep_addr == p_cdc->ep_notif) {
+    TU_LOG_DRV("  XFer Notification\r\n");
+    uint8_t const rhport = 0;
+
+    // SERIAL_STATE notification. Send flow control signals.
+    if (p_cdc->serial_state_changed) {
+      p_cdc->serial_state_changed = false;
+
+      // Build the notification
+      p_cdc->epnotif_buf = cdc_notify_serial_status;
+      p_cdc->epnotif_buf.header.wIndex = p_cdc->itf_num;
+      p_cdc->epnotif_buf.serial_state = p_cdc->serial_state;
+
+      // claim endpoint
+      TU_VERIFY(usbd_edpt_claim(rhport, p_cdc->ep_notif), 0);
+
+      // Send notification
+      return usbd_edpt_xfer(rhport, p_cdc->ep_notif, (uint8_t *) &(p_cdc->epnotif_buf), sizeof(p_cdc->epnotif_buf));
+    }
+    else {
+      // Send a NAK?
+    }
+  }
 
   return true;
 }

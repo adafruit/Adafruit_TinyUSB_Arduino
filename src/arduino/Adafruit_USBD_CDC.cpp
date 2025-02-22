@@ -170,6 +170,50 @@ int Adafruit_USBD_CDC::dtr(void) {
   return tud_cdc_n_connected(_instance);
 }
 
+inline bool Adafruit_USBD_CDC::rts(void) {
+  return tud_cdc_n_get_line_state(_instance) & CDC_CONTROL_LINE_STATE_RTS;
+}
+
+inline bool Adafruit_USBD_CDC::cts(void) {
+  return tud_cdc_n_get_serial_state(_instance).cts;
+}
+
+inline bool Adafruit_USBD_CDC::dsr(void) {
+  return tud_cdc_n_get_serial_state(_instance).dsr;
+}
+
+inline bool Adafruit_USBD_CDC::dcd(void) {
+  return tud_cdc_n_get_serial_state(_instance).dcd;
+}
+
+inline bool Adafruit_USBD_CDC::ri(void) {
+  return tud_cdc_n_get_serial_state(_instance).ri;
+}
+
+void Adafruit_USBD_CDC::cts(bool c) {
+  cdc_serial_state_t serial_state = tud_cdc_n_get_serial_state(_instance);
+  serial_state.cts = c;
+  tud_cdc_n_set_serial_state(_instance, serial_state);
+}
+
+void Adafruit_USBD_CDC::dsr(bool c) {
+  cdc_serial_state_t serial_state = tud_cdc_n_get_serial_state(_instance);
+  serial_state.dsr = c;
+  tud_cdc_n_set_serial_state(_instance, serial_state);
+}
+
+void Adafruit_USBD_CDC::dcd(bool c) {
+  cdc_serial_state_t serial_state = tud_cdc_n_get_serial_state(_instance);
+  serial_state.dcd = c;
+  tud_cdc_n_set_serial_state(_instance, serial_state);
+}
+
+void Adafruit_USBD_CDC::ri(bool c) {
+  cdc_serial_state_t serial_state = tud_cdc_n_get_serial_state(_instance);
+  serial_state.ri = c;
+  tud_cdc_n_set_serial_state(_instance, serial_state);
+}
+
 Adafruit_USBD_CDC::operator bool() {
   if (!isValid()) {
     return false;
