@@ -61,7 +61,7 @@ public:
   uint8_t numbits(void);
 
   // Flow control bit getters.
-  int dtr(void);   // pre-existing, I don't want to change the return type.
+  int dtr(void); // pre-existing, I don't want to change the return type.
   bool rts(void);
   bool cts(void);
   bool dsr(void);
