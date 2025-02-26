@@ -57,7 +57,7 @@ void loop() {
 //------------- Core0 -------------//
 void setup() {
   Serial.begin(115200);
-  //while ( !Serial ) delay(10);   // wait for native usb
+  while ( !Serial ) delay(10);   // wait for native usb
   Serial.println("TinyUSB Dual: HID Device Report Example");
 }
 

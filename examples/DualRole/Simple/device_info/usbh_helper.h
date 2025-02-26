@@ -29,6 +29,8 @@
   #ifndef PIN_5V_EN_STATE
   #define PIN_5V_EN_STATE  1
   #endif
+
+  #include "hardware/dma.h"
 #endif // ARDUINO_ARCH_RP2040
 
 #include "Adafruit_TinyUSB.h"
@@ -61,6 +63,7 @@ static void rp2040_configure_pio_usb(void) {
 
   // Check for CPU frequency, must be multiple of 120Mhz for bit-banging USB
   uint32_t cpu_hz = clock_get_hz(clk_sys);
+  Serial.printf("Core speed is %fMHz\r\n", cpu_hz * 1e-6);
   if (cpu_hz % 12000000UL) {
     while (!Serial) {
       delay(10);   // wait for native usb
@@ -72,6 +75,7 @@ static void rp2040_configure_pio_usb(void) {
     }
   }
 
+Serial.printf("%s:%d\r\n", __FILE__, __LINE__);
 #ifdef PIN_5V_EN
   pinMode(PIN_5V_EN, OUTPUT);
   digitalWrite(PIN_5V_EN, PIN_5V_EN_STATE);
@@ -91,8 +95,13 @@ static void rp2040_configure_pio_usb(void) {
   pio_cfg.pio_tx_num = 1;
   pio_cfg.tx_ch      = 9;
 #endif
+Serial.printf("%s:%d\r\n", __FILE__, __LINE__);
+  pio_cfg.tx_ch      = dma_claim_unused_channel(true);
+  dma_channel_unclaim(pio_cfg.tx_ch);
 
+Serial.printf("%s:%d: using dma channel %d\r\n", __FILE__, __LINE__, pio_cfg.tx_ch);
   USBHost.configure_pio_usb(1, &pio_cfg);
+Serial.printf("%s:%d\r\n", __FILE__, __LINE__);
 }
 #endif
 

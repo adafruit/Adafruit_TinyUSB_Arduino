@@ -48,11 +48,20 @@
  *
  */
 
+#include "Adafruit_dvhstx.h"
+
+DVHSTXText3 display(DVHSTX_PINOUT_DEFAULT);
+
 // USBHost is defined in usbh_helper.h
 #include "usbh_helper.h"
 
 // Language ID: English
 #define LANGUAGE_ID 0x0409
+
+#if defined(ARDUINO_ARCH_RP2040)
+#include "hardware/vreg.h"
+#include "hardware/clocks.h"
+#endif
 
 typedef struct {
   tusb_desc_device_t desc_device;
@@ -65,8 +74,23 @@ typedef struct {
 // CFG_TUH_DEVICE_MAX is defined by tusb_config header
 dev_info_t dev_info[CFG_TUH_DEVICE_MAX] = { 0 };
 
+volatile bool start1 = false;
+
 void setup() {
+display.begin();
   Serial.begin(115200);
+ while ( !Serial ) delay(10);   // wait for native usb
+
+#if  0 // defined(ARDUINO_ARCH_RP2040)
+  Serial.println("About to overclock to 264MHz"); Serial.flush();
+    // We're going to go fast, boost the voltage a little
+    vreg_set_voltage(VREG_VOLTAGE_1_15);
+    delay(10);
+
+    set_sys_clock_khz(240000, true);
+  Serial.println("Overclocking complete (LIE)"); Serial.flush();
+#endif
+
 
 #if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
   // init host stack on controller (rhport) 1
@@ -75,7 +99,13 @@ void setup() {
 #endif
 
 //  while ( !Serial ) delay(10);   // wait for native usb
-  Serial.println("TinyUSB Dual Device Info Example");
+  Serial.println("TinyUSB Dual Device Info Example"); Serial.flush();
+  display.println("TinyUSB Dual Device Info Example"); display.flush();
+display.printf("CFG_TUH_DEVICE_MAX=%u\n", CFG_TUH_DEVICE_MAX);
+display.printf("systick CSR=%08x RVR=%08x CVR=%08x\r\n", systick_hw->csr, systick_hw->rvr, systick_hw->cvr);
+delay(10);
+display.printf("systick CSR=%08x RVR=%08x CVR=%08x\r\n", systick_hw->csr, systick_hw->rvr, systick_hw->cvr);
+  start1=true;
 }
 
 #if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
@@ -88,6 +118,9 @@ void loop() {
 }
 
 #elif defined(ARDUINO_ARCH_RP2040)
+#include "hardware/vreg.h"
+#include "hardware/clocks.h"
+
 //--------------------------------------------------------------------+
 // For RP2040 use both core0 for device stack, core1 for host stack
 //--------------------------------------------------------------------+
@@ -98,6 +131,7 @@ void loop() {
 
 //------------- Core1 -------------//
 void setup1() {
+  while (!start1) delay(10);
   //while ( !Serial ) delay(10);   // wait for native usb
   // configure pio-usb: defined in usbh_helper.h
   rp2040_configure_pio_usb();
@@ -106,6 +140,7 @@ void setup1() {
   // Note: For rp2040 pico-pio-usb, calling USBHost.begin() on core1 will have most of the
   // host bit-banging processing works done in core1 to free up core0 for other works
   USBHost.begin(1);
+Serial.printf("%s:%d\r\n", __FILE__, __LINE__);
 }
 
 void loop1() {
@@ -128,7 +163,7 @@ void print_lsusb(void) {
     // use local connected flag instead
     dev_info_t *dev = &dev_info[daddr - 1];
     if (dev->mounted) {
-      Serial.printf("Device %u: ID %04x:%04x %s %s\r\n", daddr,
+      display.printf("Device %u: ID %04x:%04x %s %s\r\n", daddr,
                     dev->desc_device.idVendor, dev->desc_device.idProduct,
                     (char *) dev->manufacturer, (char *) dev->product);
 
@@ -137,13 +172,13 @@ void print_lsusb(void) {
   }
 
   if (no_device) {
-    Serial.println("No device connected (except hub)");
+    display.println("No device connected (except hub)");
   }
 }
 
 // Invoked when device is mounted (configured)
 void tuh_mount_cb(uint8_t daddr) {
-  Serial.printf("Device attached, address = %d\r\n", daddr);
+  display.printf("Device attached, address = %d\r\n", daddr);
 
   dev_info_t *dev = &dev_info[daddr - 1];
   dev->mounted = true;
@@ -154,7 +189,7 @@ void tuh_mount_cb(uint8_t daddr) {
 
 /// Invoked when device is unmounted (bus reset/unplugged)
 void tuh_umount_cb(uint8_t daddr) {
-  Serial.printf("Device removed, address = %d\r\n", daddr);
+  display.printf("Device removed, address = %d\r\n", daddr);
   dev_info_t *dev = &dev_info[daddr - 1];
   dev->mounted = false;
 
@@ -164,7 +199,7 @@ void tuh_umount_cb(uint8_t daddr) {
 
 void print_device_descriptor(tuh_xfer_t *xfer) {
   if (XFER_RESULT_SUCCESS != xfer->result) {
-    Serial.printf("Failed to get device descriptor\r\n");
+    display.printf("Failed to get device descriptor\r\n");
     return;
   }
 
@@ -172,45 +207,45 @@ void print_device_descriptor(tuh_xfer_t *xfer) {
   dev_info_t *dev = &dev_info[daddr - 1];
   tusb_desc_device_t *desc = &dev->desc_device;
 
-  Serial.printf("Device %u: ID %04x:%04x\r\n", daddr, desc->idVendor, desc->idProduct);
-  Serial.printf("Device Descriptor:\r\n");
-  Serial.printf("  bLength             %u\r\n"     , desc->bLength);
-  Serial.printf("  bDescriptorType     %u\r\n"     , desc->bDescriptorType);
-  Serial.printf("  bcdUSB              %04x\r\n"   , desc->bcdUSB);
-  Serial.printf("  bDeviceClass        %u\r\n"     , desc->bDeviceClass);
-  Serial.printf("  bDeviceSubClass     %u\r\n"     , desc->bDeviceSubClass);
-  Serial.printf("  bDeviceProtocol     %u\r\n"     , desc->bDeviceProtocol);
-  Serial.printf("  bMaxPacketSize0     %u\r\n"     , desc->bMaxPacketSize0);
-  Serial.printf("  idVendor            0x%04x\r\n" , desc->idVendor);
-  Serial.printf("  idProduct           0x%04x\r\n" , desc->idProduct);
-  Serial.printf("  bcdDevice           %04x\r\n"   , desc->bcdDevice);
+  display.printf("Device %u: ID %04x:%04x\r\n", daddr, desc->idVendor, desc->idProduct);
+  display.printf("Device Descriptor:\r\n");
+  display.printf("  bLength             %u\r\n"     , desc->bLength);
+  display.printf("  bDescriptorType     %u\r\n"     , desc->bDescriptorType);
+  display.printf("  bcdUSB              %04x\r\n"   , desc->bcdUSB);
+  display.printf("  bDeviceClass        %u\r\n"     , desc->bDeviceClass);
+  display.printf("  bDeviceSubClass     %u\r\n"     , desc->bDeviceSubClass);
+  display.printf("  bDeviceProtocol     %u\r\n"     , desc->bDeviceProtocol);
+  display.printf("  bMaxPacketSize0     %u\r\n"     , desc->bMaxPacketSize0);
+  display.printf("  idVendor            0x%04x\r\n" , desc->idVendor);
+  display.printf("  idProduct           0x%04x\r\n" , desc->idProduct);
+  display.printf("  bcdDevice           %04x\r\n"   , desc->bcdDevice);
 
   // Get String descriptor using Sync API
-  Serial.printf("  iManufacturer       %u     ", desc->iManufacturer);
+  display.printf("  iManufacturer       %u     ", desc->iManufacturer);
   if (XFER_RESULT_SUCCESS ==
       tuh_descriptor_get_manufacturer_string_sync(daddr, LANGUAGE_ID, dev->manufacturer, sizeof(dev->manufacturer))) {
     utf16_to_utf8(dev->manufacturer, sizeof(dev->manufacturer));
-    Serial.printf((char *) dev->manufacturer);
+    display.printf((char *) dev->manufacturer);
   }
-  Serial.printf("\r\n");
+  display.printf("\r\n");
 
-  Serial.printf("  iProduct            %u     ", desc->iProduct);
+  display.printf("  iProduct            %u     ", desc->iProduct);
   if (XFER_RESULT_SUCCESS ==
       tuh_descriptor_get_product_string_sync(daddr, LANGUAGE_ID, dev->product, sizeof(dev->product))) {
     utf16_to_utf8(dev->product, sizeof(dev->product));
-    Serial.printf((char *) dev->product);
+    display.printf((char *) dev->product);
   }
-  Serial.printf("\r\n");
+  display.printf("\r\n");
 
-  Serial.printf("  iSerialNumber       %u     ", desc->iSerialNumber);
+  display.printf("  iSerialNumber       %u     ", desc->iSerialNumber);
   if (XFER_RESULT_SUCCESS ==
       tuh_descriptor_get_serial_string_sync(daddr, LANGUAGE_ID, dev->serial, sizeof(dev->serial))) {
     utf16_to_utf8(dev->serial, sizeof(dev->serial));
-    Serial.printf((char *) dev->serial);
+    display.printf((char *) dev->serial);
   }
-  Serial.printf("\r\n");
+  display.printf("\r\n");
 
-  Serial.printf("  bNumConfigurations  %u\r\n", desc->bNumConfigurations);
+  display.printf("  bNumConfigurations  %u\r\n", desc->bNumConfigurations);
 
   // print device summary
   print_lsusb();
