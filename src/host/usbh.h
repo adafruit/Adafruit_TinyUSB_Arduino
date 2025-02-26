@@ -96,8 +96,6 @@ typedef union {
 // APPLICATION CALLBACK
 //--------------------------------------------------------------------+
 
-//TU_ATTR_WEAK uint8_t tuh_attach_cb (tusb_desc_device_t const *desc_device);
-
 // Invoked when a device is mounted (configured)
 TU_ATTR_WEAK void tuh_mount_cb (uint8_t daddr);
 
@@ -184,6 +182,10 @@ tusb_speed_t tuh_speed_get(uint8_t daddr);
 
 // Check if device is connected and configured
 bool tuh_mounted(uint8_t daddr);
+
+// Check if device is connected which mean device has at least 1 successful transfer
+// Note: It may not be addressed/configured/mounted yet
+bool tuh_connected(uint8_t daddr);
 
 // Check if device is suspended
 TU_ATTR_ALWAYS_INLINE static inline
