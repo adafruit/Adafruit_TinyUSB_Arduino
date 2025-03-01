@@ -27,6 +27,9 @@
 // esp32 use built-in core cdc
 #if CFG_TUD_CDC && !defined(ARDUINO_ARCH_ESP32)
 
+// Include before "Arduino.h" because TinyUSB is part of platform cores
+// When developing TinyUSB, it needs to include the local version, not the
+// platform core version, which is what gets included by Arduino.h
 #include "Adafruit_USBD_CDC.h"
 
 #include "Arduino.h"
