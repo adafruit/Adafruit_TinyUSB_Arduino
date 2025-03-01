@@ -59,6 +59,10 @@ typedef struct {
   // Bit 0:  DTR (Data Terminal Ready), Bit 1: RTS (Request to Send)
   uint8_t line_state;
 
+  // Notify host of flow control bits: DSR, DCD, RI, and some error flags.
+  cdc_serial_state_t serial_state;
+  bool serial_state_changed;
+
   /*------------- From this point, data is not cleared by bus reset -------------*/
   char wanted_char;
   TU_ATTR_ALIGNED(4) cdc_line_coding_t line_coding;
@@ -76,6 +80,7 @@ typedef struct {
   // Endpoint Transfer buffer
   CFG_TUSB_MEM_ALIGN uint8_t epout_buf[CFG_TUD_CDC_EP_BUFSIZE];
   CFG_TUSB_MEM_ALIGN uint8_t epin_buf[CFG_TUD_CDC_EP_BUFSIZE];
+  CFG_TUSB_MEM_ALIGN cdc_notify_struct_t epnotif_buf;
 } cdcd_interface_t;
 
 #define ITF_MEM_RESET_SIZE   offsetof(cdcd_interface_t, wanted_char)
@@ -115,6 +120,29 @@ static bool _prep_out_transaction (cdcd_interface_t* p_cdc) {
   }
 }
 
+bool _send_serial_state_notification(cdcd_interface_t *p_cdc) {
+  const uint8_t rhport = 0;
+
+  if (!p_cdc->serial_state_changed) {
+    // Nothing to do.
+    return true;
+  }
+
+  if (!usbd_edpt_claim(rhport, p_cdc->ep_notif)) {
+    // If claim failed, we're already in the middle of a transaction.
+    // cdcd_xfer_cb() will pick up this change.
+    return true;
+  }
+  
+  // We have the end point.  Build and send the notification.
+  p_cdc->serial_state_changed = false;
+  
+  p_cdc->epnotif_buf = cdc_notify_serial_status;
+  p_cdc->epnotif_buf.header.wIndex = p_cdc->itf_num;
+  p_cdc->epnotif_buf.serial_state = p_cdc->serial_state;
+  return usbd_edpt_xfer(rhport, p_cdc->ep_notif, (uint8_t *) &(p_cdc->epnotif_buf), sizeof(p_cdc->epnotif_buf));
+}
+
 //--------------------------------------------------------------------+
 // APPLICATION API
 //--------------------------------------------------------------------+
@@ -136,6 +164,19 @@ bool tud_cdc_n_connected(uint8_t itf) {
 
 uint8_t tud_cdc_n_get_line_state(uint8_t itf) {
   return _cdcd_itf[itf].line_state;
+}
+
+cdc_serial_state_t tud_cdc_n_get_serial_state(uint8_t itf) {
+  return _cdcd_itf[itf].serial_state;
+}
+
+void tud_cdc_n_set_serial_state(uint8_t itf, cdc_serial_state_t serial_state) {
+  cdcd_interface_t* p_cdc = &_cdcd_itf[itf];
+  if (p_cdc->serial_state.state != serial_state.state) {
+    p_cdc->serial_state_changed = true;
+    p_cdc->serial_state = serial_state;
+    _send_serial_state_notification(p_cdc);
+  }
 }
 
 void tud_cdc_n_get_line_coding(uint8_t itf, cdc_line_coding_t* coding) {
@@ -437,10 +478,10 @@ bool cdcd_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint32_
   // Identify which interface to use
   for (itf = 0; itf < CFG_TUD_CDC; itf++) {
     p_cdc = &_cdcd_itf[itf];
-    if ((ep_addr == p_cdc->ep_out) || (ep_addr == p_cdc->ep_in)) break;
+    if ((ep_addr == p_cdc->ep_out) || (ep_addr == p_cdc->ep_in) || (ep_addr == p_cdc->ep_notif)) break;
   }
   TU_ASSERT(itf < CFG_TUD_CDC);
-
+  
   // Received new data
   if (ep_addr == p_cdc->ep_out) {
     tu_fifo_write_n(&p_cdc->rx_ff, p_cdc->epout_buf, (uint16_t) xferred_bytes);
@@ -479,7 +520,11 @@ bool cdcd_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint32_
     }
   }
 
-  // nothing to do with notif endpoint for now
+  // Notifications
+  if (ep_addr == p_cdc->ep_notif) {
+    // Send any changes that may have come in while sending the previous change.
+    return _send_serial_state_notification(p_cdc);
+  }
 
   return true;
 }
