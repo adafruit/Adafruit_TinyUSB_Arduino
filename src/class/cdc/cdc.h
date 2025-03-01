@@ -416,21 +416,22 @@ TU_VERIFY_STATIC(sizeof(cdc_line_control_state_t) == 2, "size is not correct");
 // Notifications
 //--------------------------------------------------------------------+
 
-typedef struct TU_ATTR_PACKED {
-  uint16_t dcd         :1;
-  uint16_t dsr         :1;
-  uint16_t break_err   :1;
-  uint16_t ri          :1;
-  uint16_t frame_err   :1;
-  uint16_t parity_err  :1;
-  uint16_t overrun_err :1;
-  uint16_t cts         :1;  // https://community.st.com/t5/stm32-mcus-products/cts-signal-on-usb-cdc/td-p/325800
-  uint16_t             :8;
+typedef union TU_ATTR_PACKED {
+  struct {
+    uint16_t dcd         :1;
+    uint16_t dsr         :1;
+    uint16_t break_err   :1;
+    uint16_t ri          :1;
+    uint16_t frame_err   :1;
+    uint16_t parity_err  :1;
+    uint16_t overrun_err :1;
+    uint16_t             :9;
+  };
+  uint16_t state;
 } cdc_serial_state_t;
 
 TU_VERIFY_STATIC(sizeof(cdc_serial_state_t) == 2, "size is not correct");
 
-// Add more notifications here.  PSTN120.pdf, Section 6.5
 typedef struct TU_ATTR_PACKED {
   tusb_notification_t header;
   union {

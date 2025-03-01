@@ -174,10 +174,6 @@ bool Adafruit_USBD_CDC::rts(void) {
   return tud_cdc_n_get_line_state(_instance) & CDC_CONTROL_LINE_STATE_RTS;
 }
 
-bool Adafruit_USBD_CDC::cts(void) {
-  return tud_cdc_n_get_serial_state(_instance).cts;
-}
-
 bool Adafruit_USBD_CDC::dsr(void) {
   return tud_cdc_n_get_serial_state(_instance).dsr;
 }
@@ -188,12 +184,6 @@ bool Adafruit_USBD_CDC::dcd(void) {
 
 bool Adafruit_USBD_CDC::ri(void) {
   return tud_cdc_n_get_serial_state(_instance).ri;
-}
-
-void Adafruit_USBD_CDC::cts(bool c) {
-  cdc_serial_state_t serial_state = tud_cdc_n_get_serial_state(_instance);
-  serial_state.cts = c;
-  tud_cdc_n_set_serial_state(_instance, serial_state);
 }
 
 void Adafruit_USBD_CDC::dsr(bool c) {

@@ -143,7 +143,7 @@ TU_ATTR_ALWAYS_INLINE static inline cdc_serial_state_t tud_cdc_get_serial_state(
 }
 
 TU_ATTR_ALWAYS_INLINE static inline void tud_cdc_set_serial_state(cdc_serial_state_t ser_state) {
-  return tud_cdc_n_set_serial_state(0, ser_state);
+  tud_cdc_n_set_serial_state(0, ser_state);
 }
 
 TU_ATTR_ALWAYS_INLINE static inline void tud_cdc_get_line_coding(cdc_line_coding_t* coding) {
