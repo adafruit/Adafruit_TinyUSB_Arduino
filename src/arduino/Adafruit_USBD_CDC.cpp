@@ -27,11 +27,12 @@
 // esp32 use built-in core cdc
 #if CFG_TUD_CDC && !defined(ARDUINO_ARCH_ESP32)
 
+#include "Adafruit_USBD_CDC.h"
+
 #include "Arduino.h"
 
 #include "Adafruit_TinyUSB_API.h"
 
-#include "Adafruit_USBD_CDC.h"
 #include "Adafruit_USBD_Device.h"
 
 #ifndef TINYUSB_API_VERSION
