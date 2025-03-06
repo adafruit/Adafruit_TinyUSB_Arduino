@@ -64,7 +64,6 @@ extern "C" {
 #define CFG_TUSB_MCU OPT_MCU_ESP32P4
 #else
 #define CFG_TUSB_MCU OPT_MCU_ESP32
-#define CFG_TUH_MAX3421 1
 #endif
 
 #if CONFIG_IDF_TARGET_ESP32P4
@@ -141,6 +140,7 @@ extern "C" {
 
 // Enable host stack with MAX3421E (host shield)
 #define CFG_TUH_ENABLED 1
+#define CFG_TUH_MAX3421 1
 
 #ifndef CFG_TUH_MAX3421_ENDPOINT_TOTAL
 #define CFG_TUH_MAX3421_ENDPOINT_TOTAL (8 + 4 * (CFG_TUH_DEVICE_MAX - 1))
