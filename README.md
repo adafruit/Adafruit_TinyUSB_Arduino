@@ -38,7 +38,9 @@ Following core has TinyUSB as either the primary usb stack or selectable via men
 - [adafruit/Adafruit_nRF52_Arduino](https://github.com/adafruit/Adafruit_nRF52_Arduino)
 - [adafruit/ArduinoCore-samd](https://github.com/adafruit/ArduinoCore-samd)
 - [earlephilhower/arduino-pico](https://github.com/earlephilhower/arduino-pico)
-- [espressif/arduino-esp32](https://github.com/espressif/arduino-esp32)
+- [espressif/arduino-esp32](https://github.com/espressif/arduino-esp32) additional Tools menu is needed 
+    - `USB Mode=USB-OTG (TinyUSB)` for S3 and P4
+    - `USB CDC On Boot=Enabled`, `USB Firmware MSC On Boot=Disabled`, `USB DFU On Boot=Disabled`
 - [openwch/arduino_core_ch32](https://github.com/openwch/arduino_core_ch32)
 
 Note: For ESP32 port, version before v3.0 requires all descriptors must be specified in usb objects declaration i.e constructors. Therefore all descriptor-related fields must be part of object declaration and descriptor-related API have no effect afterwards. This limitation is not the case for version from v3.0. 

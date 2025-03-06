@@ -240,6 +240,9 @@
 // Allow to use command line to change the config name/location
 #ifdef CFG_TUSB_CONFIG_FILE
   #include CFG_TUSB_CONFIG_FILE
+#elif defined(ARDUINO_ARCH_ESP32)
+  // ESP32 out-of-sync
+  #include "arduino/ports/esp32/tusb_config_esp32.h"
 #else
   #include "tusb_config.h"
 #endif

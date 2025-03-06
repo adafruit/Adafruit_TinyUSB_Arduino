@@ -38,15 +38,41 @@ extern "C" {
 // libraries, this file is used to make it compatible with ESP32 Arduino core.
 
 // This file also contains additional configuration for EPS32 in addition to
-// tools/sdk/esp32xx/include/arduino_tinyusb/include/tusb_config.h
+// tools/esp32-arduino-libs/esp32xx/include/arduino_tinyusb/include/tusb_config.h
 
 //--------------------------------------------------------------------+
 // ESP32 out-of-sync
 //--------------------------------------------------------------------+
 #include "esp_arduino_version.h"
+#include "sdkconfig.h"
 
 #if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(2, 0, 8)
 #error "ESP32 Arduino core version 2.0.8 or later is required"
+#endif
+
+//--------------------------------------------------------------------
+// COMMON CONFIGURATION
+// Note: it is possible to use tinyusb + max3421e as host controller
+// with no OTG USB MCU such as eps32, c3 etc...
+//--------------------------------------------------------------------
+
+#if CONFIG_IDF_TARGET_ESP32S2
+#define CFG_TUSB_MCU OPT_MCU_ESP32S2
+#elif CONFIG_IDF_TARGET_ESP32S3
+#define CFG_TUSB_MCU OPT_MCU_ESP32S3
+#elif CONFIG_IDF_TARGET_ESP32P4
+#define CFG_TUSB_MCU OPT_MCU_ESP32P4
+#else
+#define CFG_TUSB_MCU OPT_MCU_ESP32
+#define CFG_TUH_MAX3421 1
+#endif
+
+#if CONFIG_IDF_TARGET_ESP32P4
+#define CFG_TUD_MAX_SPEED OPT_MODE_HIGH_SPEED
+#define CFG_TUH_MAX_SPEED OPT_MODE_HIGH_SPEED
+#else
+#define CFG_TUD_MAX_SPEED OPT_MODE_FULL_SPEED
+#define CFG_TUH_MAX_SPEED OPT_MODE_FULL_SPEED
 #endif
 
 #ifndef CFG_TUSB_OS
@@ -64,12 +90,6 @@ extern "C" {
 #define CFG_TUH_LOG_LEVEL 2
 #endif
 
-//--------------------------------------------------------------------
-// COMMON CONFIGURATION
-// Note: it is possible to use tinyusb + max3421e as host controller
-// with no OTG USB MCU such as eps32, c3 etc...
-//--------------------------------------------------------------------
-
 #ifndef CFG_TUSB_DEBUG
 #define CFG_TUSB_DEBUG 0
 #endif
@@ -77,12 +97,43 @@ extern "C" {
 // For selectively disable device log (when > CFG_TUSB_DEBUG)
 // #define CFG_TUD_LOG_LEVEL 3
 
+#define CFG_TUSB_MEM_SECTION
+#define CFG_TUSB_MEM_ALIGN TU_ATTR_ALIGNED(4)
+
 //--------------------------------------------------------------------
 // DEVICE CONFIGURATION
 //--------------------------------------------------------------------
+#define CFG_TUD_ENABLED 1
 
-// device configuration is configured in BSP
-// sdk/include/arduino_tinyusb/include/tusb_config.h
+#define CFG_TUD_CDC 2
+#define CFG_TUD_MSC 1
+#define CFG_TUD_HID 2
+#define CFG_TUD_MIDI 1
+#define CFG_TUD_VENDOR 1
+#define CFG_TUD_VIDEO 1
+#define CFG_TUD_VIDEO_STREAMING 1
+
+// video streaming endpoint buffer size
+#define CFG_TUD_VIDEO_STREAMING_EP_BUFSIZE                                     \
+  CONFIG_TINYUSB_VIDEO_STREAMING_BUFSIZE
+
+// CDC FIFO size of TX and RX
+#define CFG_TUD_CDC_RX_BUFSIZE CONFIG_TINYUSB_CDC_RX_BUFSIZE
+#define CFG_TUD_CDC_TX_BUFSIZE CONFIG_TINYUSB_CDC_TX_BUFSIZE
+
+// MSC Buffer size of Device Mass storage
+#define CFG_TUD_MSC_EP_BUFSIZE CONFIG_TINYUSB_MSC_BUFSIZE
+
+// HID buffer size Should be sufficient to hold ID (if any) + Data
+#define CFG_TUD_HID_BUFSIZE CONFIG_TINYUSB_HID_BUFSIZE
+
+// MIDI FIFO size of TX and RX
+#define CFG_TUD_MIDI_RX_BUFSIZE CONFIG_TINYUSB_MIDI_RX_BUFSIZE
+#define CFG_TUD_MIDI_TX_BUFSIZE CONFIG_TINYUSB_MIDI_TX_BUFSIZE
+
+// Vendor FIFO size of TX and RX
+#define CFG_TUD_VENDOR_RX_BUFSIZE CONFIG_TINYUSB_VENDOR_RX_BUFSIZE
+#define CFG_TUD_VENDOR_TX_BUFSIZE CONFIG_TINYUSB_VENDOR_TX_BUFSIZE
 
 //--------------------------------------------------------------------
 // Host Configuration
@@ -90,8 +141,6 @@ extern "C" {
 
 // Enable host stack with MAX3421E (host shield)
 #define CFG_TUH_ENABLED 1
-#define CFG_TUH_MAX_SPEED OPT_MODE_FULL_SPEED
-#define CFG_TUH_MAX3421 1
 
 #ifndef CFG_TUH_MAX3421_ENDPOINT_TOTAL
 #define CFG_TUH_MAX3421_ENDPOINT_TOTAL (8 + 4 * (CFG_TUH_DEVICE_MAX - 1))

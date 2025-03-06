@@ -31,12 +31,6 @@
 //--------------------------------------------------------------------+
 // INCLUDE
 //--------------------------------------------------------------------+
-
-// ESP32 out-of-sync
-#ifdef ARDUINO_ARCH_ESP32
-#include "arduino/ports/esp32/tusb_config_esp32.h"
-#endif
-
 #include "bth_device.h"
 #include <device/usbd_pvt.h>
 
