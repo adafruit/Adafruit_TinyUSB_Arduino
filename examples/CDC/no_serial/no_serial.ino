@@ -18,11 +18,7 @@
  * Note: this will cause device to loose the touch1200 and require
  * user manual interaction to put device into bootloader/DFU mode.
  */
-
-int led = LED_BUILTIN;
-
-void setup()
-{
+void setup() {
   // Manual begin() is required on core without built-in support e.g. mbed rp2040
   if (!TinyUSBDevice.isInitialized()) {
     TinyUSBDevice.begin(0);
@@ -38,11 +34,12 @@ void setup()
     TinyUSBDevice.attach();
   }
 
-  pinMode(led, OUTPUT);
+  #ifdef LED_BUILTIN
+  pinMode(LED_BUILTIN, OUTPUT);
+  #endif
 }
 
-void loop()
-{
+void loop() {
   #ifdef TINYUSB_NEED_POLLING_TASK
   // Manual call tud_task since it isn't called by Core's background
   TinyUSBDevice.task();
@@ -53,6 +50,8 @@ void loop()
   static uint8_t led_state = 0;
   if (millis() - ms > 1000) {
     ms = millis();
+    #ifdef LED_BUILTIN
     digitalWrite(LED_BUILTIN, 1-led_state);
+    #endif
   }
 }
