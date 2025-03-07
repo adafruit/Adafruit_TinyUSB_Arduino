@@ -119,14 +119,15 @@ public:
   void task(void);
 
   // physical disable/enable pull-up
-  bool detach(void);
-  bool attach(void);
+  bool detach(void) { return tud_disconnect(); }
+  bool attach(void) { return tud_connect(); }
 
   //------------- status -------------//
-  bool mounted(void);
-  bool suspended(void);
-  bool ready(void);
-  bool remoteWakeup(void);
+  bool mounted(void) { return tud_mounted(); }
+  bool suspended(void) { return tud_suspended(); }
+  bool ready(void) { return tud_ready(); }
+  bool remoteWakeup(void) { return tud_remote_wakeup(); }
+  tusb_speed_t getSpeed(void) { return tud_speed_get(); }
 
 private:
   uint16_t const *descriptor_string_cb(uint8_t index, uint16_t langid);

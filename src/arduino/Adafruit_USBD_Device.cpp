@@ -161,18 +161,6 @@ void Adafruit_USBD_Device::task(void) {
 #endif
 }
 
-bool Adafruit_USBD_Device::mounted(void) { return tud_mounted(); }
-
-bool Adafruit_USBD_Device::suspended(void) { return tud_suspended(); }
-
-bool Adafruit_USBD_Device::ready(void) { return tud_ready(); }
-
-bool Adafruit_USBD_Device::remoteWakeup(void) { return tud_remote_wakeup(); }
-
-bool Adafruit_USBD_Device::detach(void) { return tud_disconnect(); }
-
-bool Adafruit_USBD_Device::attach(void) { return tud_connect(); }
-
 void Adafruit_USBD_Device::clearConfiguration(void) {
   tusb_desc_device_t const desc_dev = {.bLength = sizeof(tusb_desc_device_t),
                                        .bDescriptorType = TUSB_DESC_DEVICE,
@@ -257,8 +245,10 @@ bool Adafruit_USBD_Device::begin(uint8_t rhport) {
   // follow USBCDC cdc descriptor
   uint8_t itfnum = allocInterface(2);
   uint8_t strid = addStringDescriptor("TinyUSB Serial");
+  uint16_t const mps =
+      (TUD_OPT_HIGH_SPEED ? 512 : 64); // TODO actual link speed
   uint8_t const desc_cdc[TUD_CDC_DESC_LEN] = {
-      TUD_CDC_DESCRIPTOR(itfnum, strid, 0x85, 64, 0x03, 0x84, 64)};
+      TUD_CDC_DESCRIPTOR(itfnum, strid, 0x85, 64, 0x03, 0x84, mps)};
 
   memcpy(_desc_cfg + _desc_cfg_len, desc_cdc, sizeof(desc_cdc));
   _desc_cfg_len += sizeof(desc_cdc);
