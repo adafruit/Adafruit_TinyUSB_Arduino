@@ -33,6 +33,8 @@
 #include "esp32-hal-tinyusb.h"
 #endif
 
+#if CFG_TUD_ENABLED
+
 class Adafruit_USBD_Device {
 private:
   enum { STRING_DESCRIPTOR_MAX = 12 };
@@ -146,4 +148,5 @@ extern Adafruit_USBD_Device TinyUSBDevice;
 #define USBDevice TinyUSBDevice
 #endif
 
+#endif /* CFG_TUD_ENABLED */
 #endif /* ADAFRUIT_USBD_DEVICE_H_ */
