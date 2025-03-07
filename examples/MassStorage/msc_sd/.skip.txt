@@ -3,6 +3,7 @@ feather_esp32s3
 funhouse
 magtag
 metroesp32s2
+esp32p4
 feather_rp2040_tinyusb
 pico_rp2040_tinyusb_host
 CH32V20x_EVT
