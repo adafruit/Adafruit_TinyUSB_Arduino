@@ -27,22 +27,12 @@
 #ifndef _TUSB_USBH_PVT_H_
 #define _TUSB_USBH_PVT_H_
 
-// ESP32 out-of-sync
-#ifdef ARDUINO_ARCH_ESP32
-#include "arduino/ports/esp32/tusb_config_esp32.h"
-#endif
-
 #include "osal/osal.h"
 #include "common/tusb_fifo.h"
 #include "common/tusb_private.h"
 
 #ifdef __cplusplus
  extern "C" {
-#endif
-
-// Level where CFG_TUSB_DEBUG must be at least for USBH is logged
-#ifndef CFG_TUH_LOG_LEVEL
-  #define CFG_TUH_LOG_LEVEL   2
 #endif
 
 #define TU_LOG_USBH(...)      TU_LOG(CFG_TUH_LOG_LEVEL, __VA_ARGS__)
@@ -93,8 +83,8 @@ void usbh_defer_func(osal_task_func_t func, void *param, bool in_isr);
 bool usbh_edpt_xfer_with_callback(uint8_t dev_addr, uint8_t ep_addr, uint8_t * buffer, uint16_t total_bytes,
                                   tuh_xfer_cb_t complete_cb, uintptr_t user_data);
 
-TU_ATTR_ALWAYS_INLINE
-static inline bool usbh_edpt_xfer(uint8_t dev_addr, uint8_t ep_addr, uint8_t * buffer, uint16_t total_bytes) {
+TU_ATTR_ALWAYS_INLINE static inline
+bool usbh_edpt_xfer(uint8_t dev_addr, uint8_t ep_addr, uint8_t * buffer, uint16_t total_bytes) {
   return usbh_edpt_xfer_with_callback(dev_addr, ep_addr, buffer, total_bytes, NULL, 0);
 }
 

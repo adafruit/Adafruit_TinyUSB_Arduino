@@ -28,9 +28,9 @@
 #include "tusb.h"
 
 // define SdFat host helper class if SdFat library is available
-#if __has_include("SdFat.h")
+#if __has_include("SdFat_Adafruit_Fork.h")
 
-#include "SdFat.h"
+#include "SdFat_Adafruit_Fork.h"
 
 class Adafruit_USBH_MSC_BlockDevice : public FsBlockDeviceInterface {
 public:
