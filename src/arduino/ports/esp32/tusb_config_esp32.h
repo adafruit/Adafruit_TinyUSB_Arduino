@@ -99,8 +99,13 @@ extern "C" {
 
 //--------------------------------------------------------------------
 // DEVICE CONFIGURATION
+// only enabled if USB OTG is supported
 //--------------------------------------------------------------------
+#if defined(CONFIG_USB_OTG_SUPPORTED) && CONFIG_USB_OTG_SUPPORTED
 #define CFG_TUD_ENABLED 1
+#else
+#define CFG_TUD_ENABLED 0
+#endif
 
 #define CFG_TUD_CDC 2
 #define CFG_TUD_MSC 1
