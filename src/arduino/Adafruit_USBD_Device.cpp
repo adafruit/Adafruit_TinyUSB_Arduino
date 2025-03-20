@@ -162,9 +162,10 @@ void Adafruit_USBD_Device::task(void) {
 }
 
 void Adafruit_USBD_Device::clearConfiguration(void) {
-  tusb_desc_device_t const desc_dev = {.bLength = sizeof(tusb_desc_device_t),
+  tusb_desc_device_t const desc_dev = {
+    .bLength = sizeof(tusb_desc_device_t),
     .bDescriptorType = TUSB_DESC_DEVICE,
-#if CFG_TUSB_MCU==OPT_MCU_RP2040  // RP2040 only supports full speed
+#if CFG_TUSB_MCU == OPT_MCU_RP2040 // RP2040 only supports full speed
     .bcdUSB = 0x0110,
 #else
     .bcdUSB = 0x0200,
@@ -179,7 +180,8 @@ void Adafruit_USBD_Device::clearConfiguration(void) {
     .iManufacturer = STRID_MANUFACTURER,
     .iProduct = STRID_PRODUCT,
     .iSerialNumber = STRID_SERIAL,
-    .bNumConfigurations = 0x01};
+    .bNumConfigurations = 0x01
+  };
 
   _desc_device = desc_dev;
 
