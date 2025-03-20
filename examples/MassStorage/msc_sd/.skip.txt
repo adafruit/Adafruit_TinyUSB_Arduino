@@ -1,3 +1,4 @@
+feather_esp32_v2
 feather_esp32s2
 feather_esp32s3
 funhouse
