@@ -1,2 +1,3 @@
+feather_esp32_v2
 pico_rp2040_tinyusb_host
 feather_rp2040_tinyusb

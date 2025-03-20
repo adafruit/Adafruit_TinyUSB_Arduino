@@ -23,7 +23,7 @@
  */
 
 #include "SPI.h"
-#include "SdFat.h"
+#include "SdFat_Adafruit_Fork.h"
 #include "Adafruit_SPIFlash.h"
 #include "Adafruit_TinyUSB.h"
 
@@ -48,9 +48,10 @@ bool fs_formatted = false;
 bool fs_changed = true;;
 
 // the setup function runs once when you press reset or power the board
-void setup()
-{
+void setup() {
+#ifdef LED_BUILTIN
   pinMode(LED_BUILTIN, OUTPUT);
+#endif
 
   Serial.begin(115200);
 
@@ -150,7 +151,9 @@ int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize) {
 // Process data in buffer to disk's storage and 
 // return number of written bytes (must be multiple of block size)
 int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize) {
+#ifdef LED_BUILTIN
   digitalWrite(LED_BUILTIN, HIGH);
+#endif
 
   // Note: SPIFLash Block API: readBlocks/writeBlocks/syncBlocks
   // already include 4K sector caching internally. We don't need to cache it, yahhhh!!
@@ -168,5 +171,7 @@ void msc_flush_cb (void) {
 
   fs_changed = true;
 
+#ifdef LED_BUILTIN
   digitalWrite(LED_BUILTIN, LOW);
+#endif
 }

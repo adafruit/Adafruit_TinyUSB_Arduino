@@ -24,11 +24,6 @@
  * This file is part of the TinyUSB stack.
  */
 
-// ESP32 out-of-sync
-#ifdef ARDUINO_ARCH_ESP32
-#include "arduino/ports/esp32/tusb_config_esp32.h"
-#endif
-
 #include "tusb_option.h"
 
 #if CFG_TUD_ENABLED
@@ -51,9 +46,7 @@
 // Weak stubs: invoked if no strong implementation is available
 //--------------------------------------------------------------------+
 TU_ATTR_WEAK void tud_event_hook_cb(uint8_t rhport, uint32_t eventid, bool in_isr) {
-  (void) rhport;
-  (void) eventid;
-  (void) in_isr;
+  (void) rhport; (void) eventid; (void) in_isr;
 }
 
 TU_ATTR_WEAK void tud_sof_cb(uint32_t frame_count) {
@@ -104,6 +97,21 @@ TU_ATTR_WEAK void dcd_connect(uint8_t rhport) {
 
 TU_ATTR_WEAK void dcd_disconnect(uint8_t rhport) {
   (void) rhport;
+}
+
+TU_ATTR_WEAK bool dcd_dcache_clean(const void* addr, uint32_t data_size) {
+  (void) addr; (void) data_size;
+  return true;
+}
+
+TU_ATTR_WEAK bool dcd_dcache_invalidate(const void* addr, uint32_t data_size) {
+  (void) addr; (void) data_size;
+  return true;
+}
+
+TU_ATTR_WEAK bool dcd_dcache_clean_invalidate(const void* addr, uint32_t data_size) {
+  (void) addr; (void) data_size;
+  return true;
 }
 
 //--------------------------------------------------------------------+

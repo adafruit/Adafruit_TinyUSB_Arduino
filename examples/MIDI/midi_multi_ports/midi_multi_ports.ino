@@ -20,7 +20,9 @@
 Adafruit_USBD_MIDI usb_midi(3);
 
 void setup() {
+#ifdef LED_BUILTIN
   pinMode(LED_BUILTIN, OUTPUT);
+#endif
 
   // Manual begin() is required on core without built-in support e.g. mbed rp2040
   if (!TinyUSBDevice.isInitialized()) {
@@ -52,6 +54,8 @@ void loop() {
   static uint8_t led_state = 0;
   if (millis() - ms > 1000) {
     ms = millis();
+#ifdef LED_BUILTIN
     digitalWrite(LED_BUILTIN, 1-led_state);
+#endif
   }
 }

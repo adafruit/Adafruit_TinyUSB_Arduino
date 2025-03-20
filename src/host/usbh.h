@@ -96,8 +96,6 @@ typedef union {
 // APPLICATION CALLBACK
 //--------------------------------------------------------------------+
 
-//TU_ATTR_WEAK uint8_t tuh_attach_cb (tusb_desc_device_t const *desc_device);
-
 // Invoked when a device is mounted (configured)
 TU_ATTR_WEAK void tuh_mount_cb (uint8_t daddr);
 
@@ -185,6 +183,10 @@ tusb_speed_t tuh_speed_get(uint8_t daddr);
 // Check if device is connected and configured
 bool tuh_mounted(uint8_t daddr);
 
+// Check if device is connected which mean device has at least 1 successful transfer
+// Note: It may not be addressed/configured/mounted yet
+bool tuh_connected(uint8_t daddr);
+
 // Check if device is suspended
 TU_ATTR_ALWAYS_INLINE static inline
 bool tuh_suspended(uint8_t daddr) {
@@ -263,6 +265,13 @@ bool tuh_descriptor_get_hid_report(uint8_t daddr, uint8_t itf_num, uint8_t desc_
 bool tuh_descriptor_get_string(uint8_t daddr, uint8_t index, uint16_t language_id, void* buffer, uint16_t len,
                                tuh_xfer_cb_t complete_cb, uintptr_t user_data);
 
+// Get language id string descriptor (control transfer)
+TU_ATTR_ALWAYS_INLINE static inline
+bool tuh_descriptor_get_string_langid(uint8_t daddr, void* buffer, uint16_t len,
+                               tuh_xfer_cb_t complete_cb, uintptr_t user_data) {
+  return tuh_descriptor_get_string(daddr, 0, 0, buffer, len, complete_cb, user_data);
+}
+
 // Get manufacturer string descriptor (control transfer)
 // true on success, false if there is on-going control transfer or incorrect parameters
 bool tuh_descriptor_get_manufacturer_string(uint8_t daddr, uint16_t language_id, void* buffer, uint16_t len,
@@ -301,6 +310,12 @@ uint8_t tuh_descriptor_get_hid_report_sync(uint8_t daddr, uint8_t itf_num, uint8
 // Sync (blocking) version of tuh_descriptor_get_string()
 // return transfer result
 uint8_t tuh_descriptor_get_string_sync(uint8_t daddr, uint8_t index, uint16_t language_id, void* buffer, uint16_t len);
+
+// Sync (blocking) version of tuh_descriptor_get_string_langid()
+TU_ATTR_ALWAYS_INLINE static inline
+uint8_t tuh_descriptor_get_string_langid_sync(uint8_t daddr, void* buffer, uint16_t len) {
+  return tuh_descriptor_get_string_sync(daddr, 0, 0, buffer, len);
+}
 
 // Sync (blocking) version of tuh_descriptor_get_manufacturer_string()
 // return transfer result

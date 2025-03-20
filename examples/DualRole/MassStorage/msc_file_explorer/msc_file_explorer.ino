@@ -27,7 +27,7 @@
  */
 
 // SdFat is required for using Adafruit_USBH_MSC_SdFatDevice
-#include "SdFat.h"
+#include "SdFat_Adafruit_Fork.h"
 
 // USBHost is defined in usbh_helper.h
 #include "usbh_helper.h"

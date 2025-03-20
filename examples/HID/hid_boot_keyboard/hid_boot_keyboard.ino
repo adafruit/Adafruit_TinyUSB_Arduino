@@ -74,8 +74,10 @@ void setup() {
   }
 
   // led pin
+#ifdef LED_BUILTIN
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
+#endif
 
   // overwrite input pin with PIN_BUTTONx
 #ifdef PIN_BUTTON1
@@ -176,6 +178,8 @@ void hid_report_callback(uint8_t report_id, hid_report_type_t report_type, uint8
   // Kana (4) | Compose (3) | ScrollLock (2) | CapsLock (1) | Numlock (0)
   uint8_t ledIndicator = buffer[0];
 
+#ifdef LED_BUILTIN
   // turn on LED if capslock is set
   digitalWrite(LED_BUILTIN, ledIndicator & KEYBOARD_LED_CAPSLOCK);
+#endif
 }

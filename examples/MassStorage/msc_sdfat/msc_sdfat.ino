@@ -14,7 +14,7 @@
  */
 
 #include "SPI.h"
-#include "SdFat.h"
+#include "SdFat_Adafruit_Fork.h"
 #include "Adafruit_TinyUSB.h"
 
 const int chipSelect = 10;
@@ -32,11 +32,12 @@ Adafruit_USBD_MSC usb_msc;
 bool fs_changed;
 
 // the setup function runs once when you press reset or power the board
-void setup()
-{
+void setup() {
   Serial.begin(115200);
 
+#ifdef LED_BUILTIN
   pinMode(LED_BUILTIN, OUTPUT);
+#endif
 
   // Set disk vendor id, product id and revision with string up to 8, 16, 4 characters respectively
   usb_msc.setID("Adafruit", "SD Card", "1.0");
@@ -138,7 +139,9 @@ int32_t msc_read_cb (uint32_t lba, void* buffer, uint32_t bufsize) {
 int32_t msc_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize) {
   bool rc;
 
+#ifdef LED_BUILTIN
   digitalWrite(LED_BUILTIN, HIGH);
+#endif
 
 #if SD_FAT_VERSION >= 20000
   rc = sd.card()->writeSectors(lba, buffer, bufsize/512);
@@ -163,5 +166,7 @@ void msc_flush_cb (void) {
 
   fs_changed = true;
 
+#ifdef LED_BUILTIN
   digitalWrite(LED_BUILTIN, LOW);
+#endif
 }
