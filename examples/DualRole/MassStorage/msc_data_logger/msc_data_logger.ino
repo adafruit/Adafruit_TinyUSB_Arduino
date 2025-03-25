@@ -38,7 +38,7 @@
 #endif
 
 // SdFat is required for using Adafruit_USBH_MSC_SdFatDevice
-#include "SdFat.h"
+#include "SdFat_Adafruit_Fork.h"
 
 // USBHost is defined in usbh_helper.h
 #include "usbh_helper.h"
@@ -73,7 +73,9 @@ void data_log(void) {
   }
 
   // Turn on LED when start writing
+  #ifdef LED_BUILTIN
   digitalWrite(LED_BUILTIN, HIGH);
+  #endif
 
   f_log = fatfs.open(LOG_FILE, O_WRITE | O_APPEND | O_CREAT);
 
@@ -112,7 +114,9 @@ void usbhost_rtos_task(void *param) {
 void setup() {
   Serial.begin(115200);
 
+  #ifdef LED_BUILTIN
   pinMode(LED_BUILTIN, OUTPUT);
+  #endif
 
 #if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
   // init host stack on controller (rhport) 1
@@ -172,10 +176,12 @@ bool write_complete_callback(uint8_t dev_addr, tuh_msc_complete_data_t const *cb
   (void) dev_addr;
   (void) cb_data;
 
+  #ifdef LED_BUILTIN
   // turn off LED after write is complete
   // Note this only marks the usb transfer is complete, device can take longer to actual
   // write data to physical flash
   digitalWrite(LED_BUILTIN, LOW);
+  #endif
 
   return true;
 }

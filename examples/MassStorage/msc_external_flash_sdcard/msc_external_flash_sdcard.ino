@@ -23,7 +23,7 @@
  */
 
 #include "SPI.h"
-#include "SdFat.h"
+#include "SdFat_Adafruit_Fork.h"
 #include "Adafruit_SPIFlash.h"
 #include "Adafruit_TinyUSB.h"
 
@@ -67,7 +67,9 @@ bool flash_changed = false;
 
 // the setup function runs once when you press reset or power the board
 void setup() {
+#ifdef LED_BUILTIN
   pinMode(LED_BUILTIN, OUTPUT);
+#endif
   Serial.begin(115200);
 
   // MSC with 2 Logical Units: LUN0: External Flash, LUN1: SDCard
@@ -234,11 +236,12 @@ int32_t sdcard_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 // Callback invoked when received WRITE10 command.
 // Process data in buffer to disk's storage and 
 // return number of written bytes (must be multiple of block size)
-int32_t sdcard_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
-{
+int32_t sdcard_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize) {
   bool rc;
 
+#ifdef LED_BUILTIN
   digitalWrite(LED_BUILTIN, HIGH);
+#endif
 
 #if SD_FAT_VERSION >= 20000
   rc = sd.card()->writeSectors(lba, buffer, bufsize/512);
@@ -264,7 +267,9 @@ void sdcard_flush_cb (void)
 
   sd_changed = true;
 
+#ifdef LED_BUILTIN
   digitalWrite(LED_BUILTIN, LOW);
+#endif
 }
 
 #ifdef SDCARD_DETECT
@@ -299,8 +304,7 @@ bool sdcard_ready_callback(void)
 // Callback invoked when received READ10 command.
 // Copy disk's data to buffer (up to bufsize) and
 // return number of copied bytes (must be multiple of block size)
-int32_t external_flash_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
-{
+int32_t external_flash_read_cb (uint32_t lba, void* buffer, uint32_t bufsize) {
   // Note: SPIFLash Bock API: readBlocks/writeBlocks/syncBlocks
   // already include 4K sector caching internally. We don't need to cache it, yahhhh!!
   return flash.readBlocks(lba, (uint8_t*) buffer, bufsize/512) ? bufsize : -1;
@@ -309,9 +313,10 @@ int32_t external_flash_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 // Callback invoked when received WRITE10 command.
 // Process data in buffer to disk's storage and
 // return number of written bytes (must be multiple of block size)
-int32_t external_flash_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize)
-{
+int32_t external_flash_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize) {
+#ifdef LED_BUILTIN
   digitalWrite(LED_BUILTIN, HIGH);
+#endif
 
   // Note: SPIFLash Bock API: readBlocks/writeBlocks/syncBlocks
   // already include 4K sector caching internally. We don't need to cache it, yahhhh!!
@@ -320,8 +325,7 @@ int32_t external_flash_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize
 
 // Callback invoked when WRITE10 command is completed (status received and accepted by host).
 // used to flush any pending cache.
-void external_flash_flush_cb (void)
-{
+void external_flash_flush_cb (void) {
   flash.syncBlocks();
 
   // clear file system's cache to force refresh
@@ -329,5 +333,7 @@ void external_flash_flush_cb (void)
 
   flash_changed = true;
 
+#ifdef LED_BUILTIN
   digitalWrite(LED_BUILTIN, LOW);
+#endif
 }

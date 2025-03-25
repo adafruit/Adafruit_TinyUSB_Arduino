@@ -34,7 +34,7 @@
 #include "Adafruit_USBH_MSC.h"
 #include "tusb.h"
 
-#if __has_include("SdFat.h")
+#if __has_include("SdFat_Adafruit_Fork.h")
 
 Adafruit_USBH_MSC_BlockDevice::Adafruit_USBH_MSC_BlockDevice() {
   _daddr = _lun = 0;

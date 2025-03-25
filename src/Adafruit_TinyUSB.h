@@ -25,11 +25,6 @@
 #ifndef ADAFRUIT_TINYUSB_H_
 #define ADAFRUIT_TINYUSB_H_
 
-// ESP32 out-of-sync
-#ifdef ARDUINO_ARCH_ESP32
-#include "arduino/ports/esp32/tusb_config_esp32.h"
-#endif
-
 #include "tusb_option.h"
 
 // Device

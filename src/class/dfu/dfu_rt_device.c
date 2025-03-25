@@ -24,11 +24,6 @@
  * This file is part of the TinyUSB stack.
  */
 
-// ESP32 out-of-sync
-#ifdef ARDUINO_ARCH_ESP32
-#include "arduino/ports/esp32/tusb_config_esp32.h"
-#endif
-
 #include "tusb_option.h"
 
 #if (CFG_TUD_ENABLED && CFG_TUD_DFU_RUNTIME)
@@ -63,9 +58,8 @@ bool dfu_rtd_deinit(void) {
   return true;
 }
 
-void dfu_rtd_reset(uint8_t rhport)
-{
-    (void) rhport;
+void dfu_rtd_reset(uint8_t rhport) {
+  (void) rhport;
 }
 
 uint16_t dfu_rtd_open(uint8_t rhport, tusb_desc_interface_t const * itf_desc, uint16_t max_len)

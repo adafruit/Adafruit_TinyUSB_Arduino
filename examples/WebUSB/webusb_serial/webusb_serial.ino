@@ -34,8 +34,6 @@ Adafruit_USBD_WebUSB usb_web;
 // Page source can be found at https://github.com/hathach/tinyusb-webusb-page/tree/main/webusb-serial
 WEBUSB_URL_DEF(landingPage, 1 /*https*/, "example.tinyusb.org/webusb-serial/index.html");
 
-int led_pin = LED_BUILTIN;
-
 // the setup function runs once when you press reset or power the board
 void setup() {
   // Manual begin() is required on core without built-in support e.g. mbed rp2040
@@ -44,8 +42,10 @@ void setup() {
   }
   Serial.begin(115200);
 
-  pinMode(led_pin, OUTPUT);
-  digitalWrite(led_pin, LOW);
+#ifdef LED_BUILTIN
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
+#endif
 
   usb_web.setLandingPage(&landingPage);
   usb_web.setLineStateCallback(line_state_callback);
@@ -104,7 +104,9 @@ void loop() {
 }
 
 void line_state_callback(bool connected) {
-  digitalWrite(led_pin, connected);
+#ifdef LED_BUILTIN
+  digitalWrite(LED_BUILTIN, connected);
+#endif
 
   if (connected) {
     usb_web.println("WebUSB interface connected !!");

@@ -42,8 +42,7 @@ uint8_t const desc_hid_report[] = {
     TUD_HID_REPORT_DESC_MOUSE()
 };
 
-// USB HID object. For ESP32 these values cannot be changed after this declaration
-// desc report, desc len, protocol, interval, use out endpoint
+// USB HID object: desc report, desc len, protocol, interval, use out endpoint
 Adafruit_USBD_HID usb_hid(desc_hid_report, sizeof(desc_hid_report), HID_ITF_PROTOCOL_MOUSE, 2, false);
 
 /* Adjustable parameters for the log_filter() method.
