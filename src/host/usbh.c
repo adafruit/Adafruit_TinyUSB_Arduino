@@ -307,6 +307,37 @@ TU_ATTR_ALWAYS_INLINE static inline bool queue_event(hcd_event_t const * event, 
   return true;
 }
 
+TU_ATTR_ALWAYS_INLINE static inline void _control_set_xfer_stage(uint8_t stage) {
+  if (_usbh_data.ctrl_xfer_info.stage != stage) {
+    (void) osal_mutex_lock(_usbh_mutex, OSAL_TIMEOUT_WAIT_FOREVER);
+    _usbh_data.ctrl_xfer_info.stage = stage;
+    (void) osal_mutex_unlock(_usbh_mutex);
+  }
+}
+
+TU_ATTR_ALWAYS_INLINE static inline bool usbh_setup_send(uint8_t daddr, const uint8_t setup_packet[8]) {
+  const uint8_t rhport = usbh_get_rhport(daddr);
+  const bool ret = hcd_setup_send(rhport, daddr, setup_packet);
+  if (!ret) {
+    _control_set_xfer_stage(CONTROL_STAGE_IDLE);
+  }
+  return ret;
+}
+
+TU_ATTR_ALWAYS_INLINE static inline void usbh_device_close(uint8_t rhport, uint8_t daddr) {
+  hcd_device_close(rhport, daddr);
+
+  // abort any ongoing control transfer
+  if (daddr == _usbh_data.ctrl_xfer_info.daddr) {
+    _control_set_xfer_stage(CONTROL_STAGE_IDLE);
+  }
+
+  // invalidate if enumerating
+  if (daddr == _usbh_data.enumerating_daddr) {
+    _usbh_data.enumerating_daddr = TUSB_INDEX_INVALID_8;
+  }
+}
+
 //--------------------------------------------------------------------+
 // Device API
 //--------------------------------------------------------------------+
@@ -530,8 +561,17 @@ void tuh_task_ext(uint32_t timeout_ms, bool in_isr) {
         break;
 
       case HCD_EVENT_DEVICE_REMOVE:
-        TU_LOG_USBH("[%u:%u:%u] USBH DEVICE REMOVED\r\n", event.rhport, event.connection.hub_addr, event.connection.hub_port);
-        process_removed_device(event.rhport, event.connection.hub_addr, event.connection.hub_port);
+        TU_LOG1("[%u:%u:%u] USBH DEVICE REMOVED\r\n", event.rhport, event.connection.hub_addr, event.connection.hub_port);
+
+        if (_usbh_data.enumerating_daddr == 0 &&
+            event.rhport == _usbh_data.dev0_bus.rhport &&
+            event.connection.hub_addr == _usbh_data.dev0_bus.hub_addr &&
+            event.connection.hub_port == _usbh_data.dev0_bus.hub_port) {
+          // dev0 is unplugged while enumerating (not yet assigned an address)
+          usbh_device_close(_usbh_data.dev0_bus.rhport, 0);
+        } else {
+          process_removed_device(event.rhport, event.connection.hub_addr, event.connection.hub_port);
+        }
 
         #if CFG_TUH_HUB
         // TODO remove
@@ -621,23 +661,6 @@ void tuh_task_ext(uint32_t timeout_ms, bool in_isr) {
 static void _control_blocking_complete_cb(tuh_xfer_t* xfer) {
   // update result
   *((xfer_result_t*) xfer->user_data) = xfer->result;
-}
-
-TU_ATTR_ALWAYS_INLINE static inline void _control_set_xfer_stage(uint8_t stage) {
-  if (_usbh_data.ctrl_xfer_info.stage != stage) {
-    (void) osal_mutex_lock(_usbh_mutex, OSAL_TIMEOUT_WAIT_FOREVER);
-    _usbh_data.ctrl_xfer_info.stage = stage;
-    (void) osal_mutex_unlock(_usbh_mutex);
-  }
-}
-
-TU_ATTR_ALWAYS_INLINE static inline bool usbh_setup_send(uint8_t daddr, const uint8_t setup_packet[8]) {
-  const uint8_t rhport = usbh_get_rhport(daddr);
-  const bool ret = hcd_setup_send(rhport, daddr, setup_packet);
-  if (!ret) {
-    _control_set_xfer_stage(CONTROL_STAGE_IDLE);
-  }
-  return ret;
 }
 
 // TODO timeout_ms is not supported yet
@@ -1270,21 +1293,8 @@ TU_ATTR_ALWAYS_INLINE static inline bool is_hub_addr(uint8_t daddr) {
 
 // a device unplugged from rhport:hub_addr:hub_port
 static void process_removed_device(uint8_t rhport, uint8_t hub_addr, uint8_t hub_port) {
-  // if dev0 is unplugged while enumerating (not yet assigned an address)
-  if (_usbh_data.enumerating_daddr == 0) {
-    const tuh_bus_info_t* dev0_bus = &_usbh_data.dev0_bus;
-    if ((rhport == dev0_bus->rhport) && (hub_addr == dev0_bus->hub_addr) && (hub_port == dev0_bus->hub_port)) {
-      hcd_device_close(dev0_bus->rhport, 0);
-      if (_usbh_data.ctrl_xfer_info.daddr == 0) {
-        _control_set_xfer_stage(CONTROL_STAGE_IDLE);
-      }
-      _usbh_data.enumerating_daddr = TUSB_INDEX_INVALID_8;
-      return;
-    }
-  }
-
-  //------------- find the all devices (star-network) under port that is unplugged -------------//
-  uint32_t removing_hubs = 0;
+  // Find the all devices (star-network) under port that is unplugged
+  uint32_t removing_hubs_bm = 0;
   do {
     for (uint8_t dev_id = 0; dev_id < TOTAL_DEVICES; dev_id++) {
       usbh_device_t* dev = &_usbh_devices[dev_id];
@@ -1298,7 +1308,7 @@ static void process_removed_device(uint8_t rhport, uint8_t hub_addr, uint8_t hub
 
         if (is_hub_addr(daddr)) {
           TU_LOG_USBH("  is a HUB device %u\r\n", daddr);
-          removing_hubs |= TU_BIT(dev_id - CFG_TUH_DEVICE_MAX);
+          removing_hubs_bm |= TU_BIT(dev_id - CFG_TUH_DEVICE_MAX);
         } else {
           // Invoke callback before closing driver (maybe call it later ?)
           if (tuh_umount_cb) {
@@ -1314,30 +1324,21 @@ static void process_removed_device(uint8_t rhport, uint8_t hub_addr, uint8_t hub
           }
         }
 
-        hcd_device_close(rhport, daddr);
+        usbh_device_close(rhport, daddr);
         clear_device(dev);
-
-        // abort ongoing control xfer on this device if any
-        if (daddr == _usbh_data.ctrl_xfer_info.daddr) {
-          _control_set_xfer_stage(CONTROL_STAGE_IDLE);
-        }
-
-        if (daddr == _usbh_data.enumerating_daddr) {
-          _usbh_data.enumerating_daddr = TUSB_INDEX_INVALID_8;
-        }
       }
     }
 
     // if removing a hub, we need to remove all of its downstream devices
     #if CFG_TUH_HUB
-    if (removing_hubs == 0) {
+    if (removing_hubs_bm == 0) {
       break;
     }
 
     // find a marked hub to process
     for (uint8_t h_id = 0; h_id < CFG_TUH_HUB; h_id++) {
-      if (tu_bit_test(removing_hubs, h_id)) {
-        removing_hubs &= ~TU_BIT(h_id);
+      if (tu_bit_test(removing_hubs_bm, h_id)) {
+        removing_hubs_bm &= ~TU_BIT(h_id);
 
         // update hub_addr and hub_port for next loop
         hub_addr = h_id + 1 + CFG_TUH_DEVICE_MAX;
@@ -1560,6 +1561,10 @@ static void process_enumeration(tuh_xfer_t* xfer) {
     }
 
     case ENUM_SET_ADDR: {
+      // Due to physical debouncing, some devices can cause multiple attaches (actually reset) without detach event
+      // Force remove currently mounted with the same bus info (rhport, hub addr, hub port) if exists
+      process_removed_device(dev0_bus->rhport, dev0_bus->hub_addr, dev0_bus->hub_port);
+
       const tusb_desc_device_t *desc_device = (const tusb_desc_device_t *) _usbh_epbuf.ctrl;
       const uint8_t new_addr = enum_get_new_address(desc_device->bDeviceClass == TUSB_CLASS_HUB);
       TU_ASSERT(new_addr != 0,);
@@ -1582,7 +1587,7 @@ static void process_enumeration(tuh_xfer_t* xfer) {
       new_dev->addressed = 1;
       _usbh_data.enumerating_daddr = new_addr;
 
-      hcd_device_close(dev0_bus->rhport, 0); // close dev0
+      usbh_device_close(dev0_bus->rhport, 0); // close dev0
 
       TU_ASSERT(usbh_edpt_control_open(new_addr, new_dev->ep0_size),); // open new control endpoint
 
