@@ -10,14 +10,30 @@
 *********************************************************************/
 
 /* This example expose SD card as mass storage using
- * SdFat Library
+ * - SdFat https://github.com/adafruit/SdFat
  */
 
 #include "SPI.h"
 #include "SdFat_Adafruit_Fork.h"
 #include "Adafruit_TinyUSB.h"
 
-const int chipSelect = 10;
+//--------------------------------------------------------------------+
+// SDCard Config
+//--------------------------------------------------------------------+
+
+#if defined(ARDUINO_PYPORTAL_M4) || defined(ARDUINO_PYPORTAL_M4_TITANO)
+  // PyPortal has on-board card reader
+  #define SDCARD_CS            32
+  #define SDCARD_DETECT        33
+  #define SDCARD_DETECT_ACTIVE HIGH
+#elif defined(ARDUINO_ADAFRUIT_METRO_RP2040)
+  #define SDCARD_CS            23
+  #define SDCARD_DETECT        15
+  #define SDCARD_DETECT_ACTIVE LOW
+#else
+  #define SDCARD_CS       10
+  // no detect
+#endif
 
 // File system on SD Card
 SdFat sd;
@@ -57,16 +73,16 @@ void setup() {
     TinyUSBDevice.attach();
   }
 
-  //while ( !Serial ) delay(10);   // wait for native usb
+  while ( !Serial ) delay(10);   // wait for native usb
   Serial.println("Adafruit TinyUSB Mass Storage SD Card example");
   Serial.print("\nInitializing SD card ... ");
-  Serial.print("CS = "); Serial.println(chipSelect);
+  Serial.print("CS = "); Serial.println(SDCARD_CS);
 
-  if ( !sd.begin(chipSelect, SD_SCK_MHZ(50)) ) {
+  if ( !sd.begin(SDCARD_CS, SD_SCK_MHZ(50)) ) {
     Serial.println("initialization failed. Things to check:");
     Serial.println("* is a card inserted?");
     Serial.println("* is your wiring correct?");
-    Serial.println("* did you change the chipSelect pin to match your shield or module?");
+    Serial.println("* did you change the SDCARD_CS pin to match your shield or module?");
     while (1) delay(1);
   }
 
