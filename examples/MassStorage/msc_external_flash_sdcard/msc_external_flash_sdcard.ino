@@ -45,8 +45,13 @@ FatVolume fatfs;
 
 #if defined(ARDUINO_PYPORTAL_M4) || defined(ARDUINO_PYPORTAL_M4_TITANO)
   // PyPortal has on-board card reader
-  #define SDCARD_CS       32
-  #define SDCARD_DETECT   33
+  #define SDCARD_CS            32
+  #define SDCARD_DETECT        33
+  #define SDCARD_DETECT_ACTIVE HIGH
+#elif defined(ARDUINO_ADAFRUIT_METRO_RP2040)
+  #define SDCARD_CS            23
+  #define SDCARD_DETECT        15
+  #define SDCARD_DETECT_ACTIVE LOW
 #else
   #define SDCARD_CS       10
   // no detect
@@ -113,17 +118,15 @@ void setup() {
   usb_msc.setUnitReady(1, true);
 #endif
 
-//  while ( !Serial ) delay(10);   // wait for native usb
+  // while ( !Serial ) delay(10);   // wait for native usb
   Serial.println("Adafruit TinyUSB Mass Storage External Flash + SD Card example");
   delay(1000);
 }
 
-bool init_sdcard(void)
-{
+bool init_sdcard(void) {
   Serial.print("Init SDCard ... ");
 
-  if ( !sd.begin(SDCARD_CS, SD_SCK_MHZ(50)) )
-  {
+  if (!sd.begin(SDCARD_CS, SD_SCK_MHZ(50))) {
     Serial.print("Failed ");
     sd.errorPrint("sd.begin() failed");
 
@@ -138,33 +141,29 @@ bool init_sdcard(void)
   block_count = sd.card()->cardSize();
 #endif
 
-
   usb_msc.setCapacity(1, block_count, 512);
   usb_msc.setReadWriteCallback(1, sdcard_read_cb, sdcard_write_cb, sdcard_flush_cb);
 
   sd_changed = true; // to print contents initially
 
   Serial.print("OK, Card size = ");
-  Serial.print((block_count / (1024*1024)) * 512);
+  Serial.print((block_count / (1024 * 1024)) * 512);
   Serial.println(" MB");
 
   return true;
 }
 
-void print_rootdir(File32* rdir)
-{
+void print_rootdir(File32* rdir) {
   File32 file;
 
   // Open next file in root.
   // Warning, openNext starts at the current directory position
   // so a rewind of the directory may be required.
-  while ( file.openNext(rdir, O_RDONLY) )
-  {
+  while (file.openNext(rdir, O_RDONLY)) {
     file.printFileSize(&Serial);
     Serial.write(' ');
     file.printName(&Serial);
-    if ( file.isDir() )
-    {
+    if (file.isDir()) {
       // Indicate a directory.
       Serial.write('/');
     }
@@ -173,18 +172,14 @@ void print_rootdir(File32* rdir)
   }
 }
 
-void loop()
-{
-  if ( flash_changed )
-  {
-    if (!flash_formatted)
-    {
+void loop() {
+  if (flash_changed) {
+    if (!flash_formatted) {
       flash_formatted = fatfs.begin(&flash);
     }
 
     // skip if still not formatted
-    if (flash_formatted)
-    {
+    if (flash_formatted) {
       File32 root;
       root = fatfs.open("/");
 
@@ -198,8 +193,7 @@ void loop()
     flash_changed = false;
   }
 
-  if ( sd_changed )
-  {
+  if (sd_changed) {
     File32 root;
     root = sd.open("/");
 
@@ -275,18 +269,14 @@ void sdcard_flush_cb (void)
 #ifdef SDCARD_DETECT
 // Invoked when received Test Unit Ready command.
 // return true allowing host to read/write this LUN e.g SD card inserted
-bool sdcard_ready_callback(void)
-{
+bool sdcard_ready_callback(void) {
   // Card is inserted
-  if ( digitalRead(SDCARD_DETECT) == HIGH )
-  {
+  if (digitalRead(SDCARD_DETECT) == SDCARD_DETECT_ACTIVE) {
     // init SD card if not already
-    if ( !sd_inited )
-    {
+    if (!sd_inited) {
       sd_inited = init_sdcard();
     }
-  }else
-  {
+  } else {
     sd_inited = false;
     usb_msc.setReadWriteCallback(1, NULL, NULL, NULL);
   }
