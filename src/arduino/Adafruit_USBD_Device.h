@@ -80,6 +80,21 @@ public:
   // Clear/Reset configuration descriptor
   void clearConfiguration(void);
 
+  // Set configuration attribute
+  void setConfigurationAttribute(uint8_t attribute) {
+    _desc_cfg[offsetof(tusb_desc_configuration_t, bmAttributes)] = attribute;
+  }
+
+  // Set max power consumption in mA (absolute max is 510ma)
+  bool setConfigurationMaxPower(uint16_t power_ma) {
+    if (power_ma > 255 * 2u) {
+      return false;
+    }
+    _desc_cfg[offsetof(tusb_desc_configuration_t, bMaxPower)] =
+        (uint8_t)(power_ma / 2);
+    return true;
+  }
+
   // Provide user buffer for configuration descriptor, if total length > 256
   void setConfigurationBuffer(uint8_t *buf, uint32_t buflen);
 
