@@ -214,15 +214,17 @@ void loop() {
 // SD Card callbacks
 //--------------------------------------------------------------------+
 
-int32_t sdcard_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
-{
-  bool rc;
+int32_t sdcard_read_cb (uint32_t lba, void* buffer, uint32_t bufsize) {
+  bool rc = true;
+  uint8_t* buf = (uint8_t*)buffer;
 
-#if SD_FAT_VERSION >= 20000
-  rc = sd.card()->readSectors(lba, (uint8_t*) buffer, bufsize/512);
-#else
-  rc = sd.card()->readBlocks(lba, (uint8_t*) buffer, bufsize/512);
-#endif
+  // Perform each sector with a single-block CMD17
+  for (uint32_t i = 0; i < bufsize/512; i++) {
+    if (!sd.card()->readBlock(lba + i, buf + i*512)) {
+      rc = false;
+      break;
+    }
+  }
 
   return rc ? bufsize : -1;
 }
@@ -231,17 +233,19 @@ int32_t sdcard_read_cb (uint32_t lba, void* buffer, uint32_t bufsize)
 // Process data in buffer to disk's storage and 
 // return number of written bytes (must be multiple of block size)
 int32_t sdcard_write_cb (uint32_t lba, uint8_t* buffer, uint32_t bufsize) {
-  bool rc;
+  bool rc = true;
 
 #ifdef LED_BUILTIN
   digitalWrite(LED_BUILTIN, HIGH);
 #endif
 
-#if SD_FAT_VERSION >= 20000
-  rc = sd.card()->writeSectors(lba, buffer, bufsize/512);
-#else
-  rc = sd.card()->writeBlocks(lba, buffer, bufsize/512);
-#endif
+  // Perform each 512-byte sector as a single-block CMD24
+  for (uint32_t i = 0; i < bufsize/512; i++) {
+    if (!sd.card()->writeBlock(lba + i, buffer + i*512)) {
+      rc = false;
+      break;
+    }
+  }
 
   return rc ? bufsize : -1;
 }
