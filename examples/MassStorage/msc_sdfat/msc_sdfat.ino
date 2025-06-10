@@ -35,12 +35,19 @@
   #define SDCARD_DETECT_ACTIVE LOW
 
 #elif defined(ARDUINO_ADAFRUIT_METRO_RP2350)
-  // Note: not working yet (need troubleshoot later)
   #define SDIO_CLK_PIN  34
   #define SDIO_CMD_PIN  35 // MOSI
   #define SDIO_DAT0_PIN 36 // DAT1: 37, DAT2: 38, DAT3: 39
 
   #define SDCARD_DETECT        40
+  #define SDCARD_DETECT_ACTIVE LOW
+
+#elif defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  #define SDIO_CLK_PIN  34
+  #define SDIO_CMD_PIN  35 // MOSI
+  #define SDIO_DAT0_PIN 36 // DAT1: 37, DAT2: 38, DAT3: 39
+
+  #define SDCARD_DETECT        33
   #define SDCARD_DETECT_ACTIVE LOW
 
 #else
