@@ -10,8 +10,7 @@
     "frameworks": "*",
     "platforms": "*",
     "build": {
-        "libArchive": false,
-        "flags": "-DUSE_TINYUSB"
+        "libArchive": false
     },
     "authors":
     [
