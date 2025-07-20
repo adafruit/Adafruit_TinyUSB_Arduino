@@ -412,6 +412,49 @@ typedef struct TU_ATTR_PACKED
 
 TU_VERIFY_STATIC(sizeof(cdc_line_control_state_t) == 2, "size is not correct");
 
+//--------------------------------------------------------------------+
+// Notifications
+//--------------------------------------------------------------------+
+
+typedef union TU_ATTR_PACKED {
+  struct {
+    uint16_t dcd         :1;
+    uint16_t dsr         :1;
+    uint16_t break_err   :1;
+    uint16_t ri          :1;
+    uint16_t frame_err   :1;
+    uint16_t parity_err  :1;
+    uint16_t overrun_err :1;
+    uint16_t             :9;
+  };
+  uint16_t state;
+} cdc_serial_state_t;
+
+TU_VERIFY_STATIC(sizeof(cdc_serial_state_t) == 2, "size is not correct");
+
+typedef struct TU_ATTR_PACKED {
+  tusb_notification_t header;
+  union {
+    cdc_serial_state_t serial_state;
+    // Add more Notification "Data" payloads here as more are implemented.
+  };
+} cdc_notify_struct_t;
+
+TU_VERIFY_STATIC(sizeof(cdc_notify_struct_t) == 10, "size is not correct");
+
+tu_static const cdc_notify_struct_t cdc_notify_serial_status = {
+  .header = {
+    .bmRequestType_bit = {
+      .recipient = TUSB_REQ_RCPT_INTERFACE,
+      .type = TUSB_REQ_TYPE_CLASS,
+      .direction = TUSB_DIR_IN,
+    },
+    .bNotification = CDC_NOTIF_SERIAL_STATE,
+    .wValue = 0,
+    .wLength = sizeof(cdc_serial_state_t),
+  }
+};
+
 TU_ATTR_PACKED_END  // End of all packed definitions
 TU_ATTR_BIT_FIELD_ORDER_END
 

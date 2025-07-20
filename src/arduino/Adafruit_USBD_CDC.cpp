@@ -27,11 +27,15 @@
 // esp32 use built-in core cdc
 #if CFG_TUD_CDC && !defined(ARDUINO_ARCH_ESP32)
 
+// Include before "Arduino.h" because TinyUSB is part of platform cores
+// When developing TinyUSB, it needs to include the local version, not the
+// platform core version, which is what gets included by Arduino.h
+#include "Adafruit_USBD_CDC.h"
+
 #include "Arduino.h"
 
 #include "Adafruit_TinyUSB_API.h"
 
-#include "Adafruit_USBD_CDC.h"
 #include "Adafruit_USBD_Device.h"
 
 #ifndef TINYUSB_API_VERSION
@@ -168,6 +172,40 @@ int Adafruit_USBD_CDC::dtr(void) {
   }
 
   return tud_cdc_n_connected(_instance);
+}
+
+bool Adafruit_USBD_CDC::rts(void) {
+  return tud_cdc_n_get_line_state(_instance) & CDC_CONTROL_LINE_STATE_RTS;
+}
+
+bool Adafruit_USBD_CDC::dsr(void) {
+  return tud_cdc_n_get_serial_state(_instance).dsr;
+}
+
+bool Adafruit_USBD_CDC::dcd(void) {
+  return tud_cdc_n_get_serial_state(_instance).dcd;
+}
+
+bool Adafruit_USBD_CDC::ri(void) {
+  return tud_cdc_n_get_serial_state(_instance).ri;
+}
+
+void Adafruit_USBD_CDC::dsr(bool c) {
+  cdc_serial_state_t serial_state = tud_cdc_n_get_serial_state(_instance);
+  serial_state.dsr = c;
+  tud_cdc_n_set_serial_state(_instance, serial_state);
+}
+
+void Adafruit_USBD_CDC::dcd(bool c) {
+  cdc_serial_state_t serial_state = tud_cdc_n_get_serial_state(_instance);
+  serial_state.dcd = c;
+  tud_cdc_n_set_serial_state(_instance, serial_state);
+}
+
+void Adafruit_USBD_CDC::ri(bool c) {
+  cdc_serial_state_t serial_state = tud_cdc_n_get_serial_state(_instance);
+  serial_state.ri = c;
+  tud_cdc_n_set_serial_state(_instance, serial_state);
 }
 
 Adafruit_USBD_CDC::operator bool() {

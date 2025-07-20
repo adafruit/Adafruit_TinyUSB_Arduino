@@ -59,7 +59,21 @@ public:
   uint8_t stopbits(void);
   uint8_t paritytype(void);
   uint8_t numbits(void);
-  int dtr(void);
+
+  // Flow control bit getters.
+  int dtr(void); // pre-existing, I don't want to change the return type.
+  bool rts(void);
+  // bool cts(void);  // NOT PART OF THE CDC ACM SPEC?!
+  bool dsr(void);
+  bool dcd(void);
+  bool ri(void);
+
+  // Flow control bit setters.
+  // void cts(bool c);  // NOT PART OF CDC ACM SPEC?!
+  void dsr(bool c);
+  void dcd(bool c);
+  void ri(bool c);
+  // Break is a little harder, it's an event, not a state.
 
   // Stream API
   virtual int available(void);
