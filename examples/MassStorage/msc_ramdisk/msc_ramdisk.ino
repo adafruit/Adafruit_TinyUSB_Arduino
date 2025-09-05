@@ -35,6 +35,13 @@ Adafruit_USBD_MSC usb_msc;
 #endif
 
 
+int32_t msc_read_callback(uint32_t lba, void* buffer, uint32_t bufsize);
+int32_t msc_write_callback(uint32_t lba, uint8_t* buffer, uint32_t bufsize);
+void msc_flush_callback(void);
+bool msc_start_stop_callback(uint8_t power_condition, bool start, bool load_eject);
+bool msc_ready_callback(void);
+
+
 // the setup function runs once when you press reset or power the board
 void setup() {
   // Manual begin() is required on core without built-in support e.g. mbed rp2040
