@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a problem with TinyUSB Library
+description: Report a problem
 labels: 'Bug'
 body:
   - type: markdown
@@ -88,9 +88,9 @@ body:
 
   - type: textarea
     attributes:
-      label: Debug Log
+      label: Debug Log as ATTACHED TXT
       placeholder: |
-        TinyUSB debug log where the issue occurred as attached txt file, best with comments to explain the actual events.
+        Debug log where the issue occurred as attached txt file, best with comments to explain the actual events.
     validations:
       required: false
 
