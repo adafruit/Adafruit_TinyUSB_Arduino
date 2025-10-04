@@ -138,7 +138,7 @@ uint16_t const* tud_descriptor_string_cb(uint8_t index, uint16_t langid);
 
 // Invoked when received GET BOS DESCRIPTOR request
 // Application return pointer to descriptor
-TU_ATTR_WEAK uint8_t const * tud_descriptor_bos_cb(void);
+uint8_t const * tud_descriptor_bos_cb(void);
 
 // Invoked when received GET DEVICE QUALIFIER DESCRIPTOR request
 // Application return pointer to descriptor, whose contents must exist long enough for transfer to complete.
@@ -171,7 +171,7 @@ void tud_event_hook_cb(uint8_t rhport, uint32_t eventid, bool in_isr);
 void tud_sof_cb(uint32_t frame_count);
 
 // Invoked when received control request with VENDOR TYPE
-TU_ATTR_WEAK bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const * request);
+bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const * request);
 
 //--------------------------------------------------------------------+
 // Binary Device Object Store (BOS) Descriptor Templates
@@ -263,6 +263,25 @@ TU_ATTR_WEAK bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb
 #define TUD_MSC_DESCRIPTOR(_itfnum, _stridx, _epout, _epin, _epsize) \
   /* Interface */\
   9, TUSB_DESC_INTERFACE, _itfnum, 0, 2, TUSB_CLASS_MSC, MSC_SUBCLASS_SCSI, MSC_PROTOCOL_BOT, _stridx,\
+  /* Endpoint Out */\
+  7, TUSB_DESC_ENDPOINT, _epout, TUSB_XFER_BULK, U16_TO_U8S_LE(_epsize), 0,\
+  /* Endpoint In */\
+  7, TUSB_DESC_ENDPOINT, _epin, TUSB_XFER_BULK, U16_TO_U8S_LE(_epsize), 0
+
+
+//--------------------------------------------------------------------+
+// MTP Descriptor Templates
+//--------------------------------------------------------------------+
+
+// Length of template descriptor: 30 bytes
+#define TUD_MTP_DESC_LEN    (9 + 7 + 7 + 7)
+
+// Interface number, string index, EP event, EP event size, EP event polling, EP Out & EP In address, EP size
+#define TUD_MTP_DESCRIPTOR(_itfnum, _stridx, _ep_evt, _ep_evt_size, _ep_evt_polling_interval, _epout, _epin, _epsize) \
+  /* Interface */\
+  9, TUSB_DESC_INTERFACE, _itfnum, 0, 3, TUSB_CLASS_IMAGE, MTP_SUBCLASS_STILL_IMAGE, MTP_PROTOCOL_PIMA_15470, _stridx,\
+  /* Endpoint Interrupt */\
+  7, TUSB_DESC_ENDPOINT, _ep_evt, TUSB_XFER_INTERRUPT, U16_TO_U8S_LE(_ep_evt_size), _ep_evt_polling_interval,\
   /* Endpoint Out */\
   7, TUSB_DESC_ENDPOINT, _epout, TUSB_XFER_BULK, U16_TO_U8S_LE(_epsize), 0,\
   /* Endpoint In */\
