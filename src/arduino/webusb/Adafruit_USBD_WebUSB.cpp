@@ -245,7 +245,7 @@ void Adafruit_USBD_WebUSB::flush(void) { tud_vendor_flush(); }
 //--------------------------------------------------------------------+
 extern "C" {
 
-uint8_t const *tud_descriptor_bos_cb(void) { return desc_bos; }
+TU_ATTR_WEAK uint8_t const *tud_descriptor_bos_cb(void) { return desc_bos; }
 
 // Invoked when a control transfer occurred on an interface of this class
 // Driver response accordingly to the request and the transfer stage

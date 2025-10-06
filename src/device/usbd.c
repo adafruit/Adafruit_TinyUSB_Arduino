@@ -53,9 +53,9 @@ TU_ATTR_WEAK void tud_sof_cb(uint32_t frame_count) {
   (void) frame_count;
 }
 
-TU_ATTR_WEAK uint8_t const* tud_descriptor_bos_cb(void) {
-  return NULL;
-}
+// TU_ATTR_WEAK uint8_t const* tud_descriptor_bos_cb(void) {
+//   return NULL;
+// }
 
 TU_ATTR_WEAK uint8_t const* tud_descriptor_device_qualifier_cb(void) {
   return NULL;
@@ -79,10 +79,10 @@ TU_ATTR_WEAK void tud_suspend_cb(bool remote_wakeup_en) {
 TU_ATTR_WEAK void tud_resume_cb(void) {
 }
 
-TU_ATTR_WEAK bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const* request) {
-  (void) rhport; (void) stage; (void) request;
-  return false;
-}
+// TU_ATTR_WEAK bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const* request) {
+//   (void) rhport; (void) stage; (void) request;
+//   return false;
+// }
 
 TU_ATTR_WEAK bool dcd_deinit(uint8_t rhport) {
   (void) rhport;
