@@ -259,16 +259,12 @@ bool vendord_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint
     tu_edpt_stream_read_xfer_complete(&p_vendor->rx.stream, xferred_bytes);
 
     // Invoked callback if any
-    if (tud_vendor_rx_cb) {
-      tud_vendor_rx_cb(itf, p_epbuf->epout, (uint16_t) xferred_bytes);
-    }
+    tud_vendor_rx_cb(itf, p_epbuf->epout, (uint16_t) xferred_bytes);
 
     tu_edpt_stream_read_xfer(rhport, &p_vendor->rx.stream);
   } else if ( ep_addr == p_vendor->tx.stream.ep_addr ) {
     // Send complete
-    if (tud_vendor_tx_cb) {
-      tud_vendor_tx_cb(itf, (uint16_t) xferred_bytes);
-    }
+    tud_vendor_tx_cb(itf, (uint16_t) xferred_bytes);
 
     #if CFG_TUD_VENDOR_TX_BUFSIZE > 0
     // try to send more if possible
@@ -281,5 +277,9 @@ bool vendord_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint
 
   return true;
 }
+
+// Dummy implementatiions of weak callbacks
+TU_ATTR_WEAK void tud_vendor_rx_cb(uint8_t, uint8_t const*, uint16_t) {}
+TU_ATTR_WEAK void tud_vendor_tx_cb(uint8_t, uint32_t) {}
 
 #endif
