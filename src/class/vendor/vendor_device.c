@@ -279,7 +279,16 @@ bool vendord_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint
 }
 
 // Dummy implementatiions of weak callbacks
-TU_ATTR_WEAK void tud_vendor_rx_cb(uint8_t, uint8_t const*, uint16_t) {}
-TU_ATTR_WEAK void tud_vendor_tx_cb(uint8_t, uint32_t) {}
+TU_ATTR_WEAK void tud_vendor_rx_cb(uint8_t itf, uint8_t const* buffer, uint16_t bufsize)
+{
+  (void)itf;
+  (void)buffer;
+  (void)bufsize;
+}
+TU_ATTR_WEAK void tud_vendor_tx_cb(uint8_t itf, uint32_t sent_bytes)
+{
+  (void)itf;
+  (void)sent_bytes;
+}
 
 #endif
