@@ -67,6 +67,20 @@ typedef struct {
 
 CFG_TUD_MEM_SECTION static vendord_epbuf_t _vendord_epbuf[CFG_TUD_VENDOR];
 
+//--------------------------------------------------------------------+
+// Weak stubs: invoked if no strong implementation is available
+//--------------------------------------------------------------------+
+TU_ATTR_WEAK void tud_vendor_rx_cb(uint8_t itf, uint8_t const* buffer, uint16_t bufsize) {
+  (void) itf;
+  (void) buffer;
+  (void) bufsize;
+}
+
+TU_ATTR_WEAK void tud_vendor_tx_cb(uint8_t itf, uint32_t sent_bytes) {
+  (void) itf;
+  (void) sent_bytes;
+}
+
 //--------------------------------------------------------------------
 // Application API
 //--------------------------------------------------------------------
