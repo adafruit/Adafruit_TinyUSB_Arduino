@@ -59,14 +59,14 @@ static void rp2040_configure_pio_usb(void) {
   //while ( !Serial ) delay(10);   // wait for native usb
   Serial.println("Core1 setup to run TinyUSB host with pio-usb");
 
-  // Check for CPU frequency, must be multiple of 120Mhz for bit-banging USB
+  // Check for CPU frequency, must be multiple of 12 Mhz for bit-banging USB
   uint32_t cpu_hz = clock_get_hz(clk_sys);
-  if (cpu_hz != 120000000UL && cpu_hz != 240000000UL) {
+  if (cpu_hz % 12000000UL) {
     while (!Serial) {
       delay(10);   // wait for native usb
     }
-    Serial.printf("Error: CPU Clock = %lu, PIO USB require CPU clock must be multiple of 120 Mhz\r\n", cpu_hz);
-    Serial.printf("Change your CPU Clock to either 120 or 240 Mhz in Menu->CPU Speed \r\n");
+    Serial.printf("Error: CPU Clock = %lu, PIO USB require CPU clock must be multiple of 12 Mhz\r\n", cpu_hz);
+    Serial.printf("Change your CPU Clock to 12*n Mhz in Menu->CPU Speed \r\n");
     while (1) {
       delay(1);
     }

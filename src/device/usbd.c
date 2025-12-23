@@ -79,12 +79,10 @@ TU_ATTR_WEAK void tud_suspend_cb(bool remote_wakeup_en) {
 TU_ATTR_WEAK void tud_resume_cb(void) {
 }
 
-//TU_ATTR_WEAK bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const* request) {
-//  (void) rhport;
-//  (void) stage;
-//  (void) request;
-//  return false;
-//}
+// TU_ATTR_WEAK bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const* request) {
+//   (void) rhport; (void) stage; (void) request;
+//   return false;
+// }
 
 TU_ATTR_WEAK bool dcd_deinit(uint8_t rhport) {
   (void) rhport;
@@ -165,6 +163,7 @@ tu_static usbd_class_driver_t const _usbd_driver[] = {
         .open             = cdcd_open,
         .control_xfer_cb  = cdcd_control_xfer_cb,
         .xfer_cb          = cdcd_xfer_cb,
+        .xfer_isr         = NULL,
         .sof              = NULL
     },
     #endif
@@ -178,6 +177,7 @@ tu_static usbd_class_driver_t const _usbd_driver[] = {
         .open             = mscd_open,
         .control_xfer_cb  = mscd_control_xfer_cb,
         .xfer_cb          = mscd_xfer_cb,
+        .xfer_isr         = NULL,
         .sof              = NULL
     },
     #endif
@@ -191,6 +191,7 @@ tu_static usbd_class_driver_t const _usbd_driver[] = {
         .open             = hidd_open,
         .control_xfer_cb  = hidd_control_xfer_cb,
         .xfer_cb          = hidd_xfer_cb,
+        .xfer_isr         = NULL,
         .sof              = NULL
     },
     #endif
@@ -204,6 +205,7 @@ tu_static usbd_class_driver_t const _usbd_driver[] = {
         .open             = audiod_open,
         .control_xfer_cb  = audiod_control_xfer_cb,
         .xfer_cb          = audiod_xfer_cb,
+        .xfer_isr         = audiod_xfer_isr,
         .sof              = audiod_sof_isr
     },
     #endif
@@ -217,6 +219,7 @@ tu_static usbd_class_driver_t const _usbd_driver[] = {
         .open             = videod_open,
         .control_xfer_cb  = videod_control_xfer_cb,
         .xfer_cb          = videod_xfer_cb,
+        .xfer_isr         = NULL,
         .sof              = NULL
     },
     #endif
@@ -230,6 +233,7 @@ tu_static usbd_class_driver_t const _usbd_driver[] = {
         .reset            = midid_reset,
         .control_xfer_cb  = midid_control_xfer_cb,
         .xfer_cb          = midid_xfer_cb,
+        .xfer_isr         = NULL,
         .sof              = NULL
     },
     #endif
@@ -243,6 +247,7 @@ tu_static usbd_class_driver_t const _usbd_driver[] = {
         .open             = vendord_open,
         .control_xfer_cb  = tud_vendor_control_xfer_cb,
         .xfer_cb          = vendord_xfer_cb,
+        .xfer_isr         = NULL,
         .sof              = NULL
     },
     #endif
@@ -256,6 +261,7 @@ tu_static usbd_class_driver_t const _usbd_driver[] = {
         .open             = usbtmcd_open_cb,
         .control_xfer_cb  = usbtmcd_control_xfer_cb,
         .xfer_cb          = usbtmcd_xfer_cb,
+        .xfer_isr         = NULL,
         .sof              = NULL
     },
     #endif
@@ -269,6 +275,7 @@ tu_static usbd_class_driver_t const _usbd_driver[] = {
         .open             = dfu_rtd_open,
         .control_xfer_cb  = dfu_rtd_control_xfer_cb,
         .xfer_cb          = NULL,
+        .xfer_isr         = NULL,
         .sof              = NULL
     },
     #endif
@@ -282,6 +289,7 @@ tu_static usbd_class_driver_t const _usbd_driver[] = {
         .open             = dfu_moded_open,
         .control_xfer_cb  = dfu_moded_control_xfer_cb,
         .xfer_cb          = NULL,
+        .xfer_isr         = NULL,
         .sof              = NULL
     },
     #endif
@@ -295,7 +303,8 @@ tu_static usbd_class_driver_t const _usbd_driver[] = {
         .open             = netd_open,
         .control_xfer_cb  = netd_control_xfer_cb,
         .xfer_cb          = netd_xfer_cb,
-        .sof                  = NULL,
+        .xfer_isr         = NULL,
+        .sof              = NULL,
     },
     #endif
 
@@ -308,6 +317,21 @@ tu_static usbd_class_driver_t const _usbd_driver[] = {
         .open             = btd_open,
         .control_xfer_cb  = btd_control_xfer_cb,
         .xfer_cb          = btd_xfer_cb,
+        .xfer_isr         = NULL,
+        .sof              = NULL
+    },
+    #endif
+
+    #if CFG_TUD_MTP
+    {
+        .name             = DRIVER_NAME("MTP"),
+        .init             = mtpd_init,
+        .deinit           = mtpd_deinit,
+        .reset            = mtpd_reset,
+        .open             = mtpd_open,
+        .control_xfer_cb  = mtpd_control_xfer_cb,
+        .xfer_cb          = mtpd_xfer_cb,
+        .xfer_isr         = NULL,
         .sof              = NULL
     },
     #endif
@@ -319,38 +343,37 @@ enum { BUILTIN_DRIVER_COUNT = TU_ARRAY_SIZE(_usbd_driver) };
 tu_static usbd_class_driver_t const * _app_driver = NULL;
 tu_static uint8_t _app_driver_count = 0;
 
-#define TOTAL_DRIVER_COUNT    (_app_driver_count + BUILTIN_DRIVER_COUNT)
+#define TOTAL_DRIVER_COUNT    ((uint8_t) (_app_driver_count + BUILTIN_DRIVER_COUNT))
 
 // virtually joins built-in and application drivers together.
 // Application is positioned first to allow overwriting built-in ones.
 TU_ATTR_ALWAYS_INLINE static inline usbd_class_driver_t const * get_driver(uint8_t drvid) {
-  usbd_class_driver_t const * driver = NULL;
-  if ( drvid < _app_driver_count ) {
+  usbd_class_driver_t const *driver = NULL;
+  if (drvid < _app_driver_count) {
     // Application drivers
     driver = &_app_driver[drvid];
-  } else if ( drvid < TOTAL_DRIVER_COUNT && BUILTIN_DRIVER_COUNT > 0 ){
+  } else if (drvid < TOTAL_DRIVER_COUNT && BUILTIN_DRIVER_COUNT > 0) {
     driver = &_usbd_driver[drvid - _app_driver_count];
   }
   return driver;
 }
 
-
 //--------------------------------------------------------------------+
 // DCD Event
 //--------------------------------------------------------------------+
-
 enum { RHPORT_INVALID = 0xFFu };
 tu_static uint8_t _usbd_rhport = RHPORT_INVALID;
 
-// Event queue
-// usbd_int_set() is used as mutex in OS NONE config
+static OSAL_SPINLOCK_DEF(_usbd_spin, usbd_int_set);
+
+// Event queue: usbd_int_set() is used as mutex in OS NONE config
 OSAL_QUEUE_DEF(usbd_int_set, _usbd_qdef, CFG_TUD_TASK_QUEUE_SZ, dcd_event_t);
-tu_static osal_queue_t _usbd_q;
+static osal_queue_t _usbd_q;
 
 // Mutex for claiming endpoint
 #if OSAL_MUTEX_REQUIRED
-  tu_static osal_mutex_def_t _ubsd_mutexdef;
-  tu_static osal_mutex_t _usbd_mutex;
+  static osal_mutex_def_t _ubsd_mutexdef;
+  static osal_mutex_t _usbd_mutex;
 #else
   #define _usbd_mutex   NULL
 #endif
@@ -384,6 +407,18 @@ void usbd_control_set_request(tusb_control_request_t const *request);
 void usbd_control_set_complete_callback( usbd_control_xfer_cb_t fp );
 bool usbd_control_xfer_cb (uint8_t rhport, uint8_t ep_addr, xfer_result_t event, uint32_t xferred_bytes);
 
+//--------------------------------------------------------------------+
+// Weak stubs: invoked if no strong implementation is available
+//--------------------------------------------------------------------+
+TU_ATTR_WEAK usbd_class_driver_t const* usbd_app_driver_get_cb(uint8_t* driver_count) {
+  *driver_count = 0;
+  return NULL;
+}
+
+TU_ATTR_WEAK bool dcd_edpt_xfer_fifo(uint8_t rhport, uint8_t ep_addr, tu_fifo_t * ff, uint16_t total_bytes) {
+  (void) rhport; (void) ep_addr; (void) ff; (void) total_bytes;
+  return false;
+}
 
 //--------------------------------------------------------------------+
 // Debug
@@ -466,16 +501,35 @@ bool tud_rhport_init(uint8_t rhport, const tusb_rhport_init_t* rh_init) {
     return true; // skip if already initialized
   }
   TU_ASSERT(rh_init);
-
-  TU_LOG_USBD("USBD init on controller %u, speed = %s\r\n", rhport,
-    rh_init->speed == TUSB_SPEED_HIGH ? "High" : "Full");
+#if CFG_TUSB_DEBUG >= CFG_TUD_LOG_LEVEL
+  char const* speed_str = 0;
+            switch (rh_init->speed) {
+    case TUSB_SPEED_HIGH:
+      speed_str = "High";
+    break;
+    case TUSB_SPEED_FULL:
+      speed_str = "Full";
+    break;
+    case TUSB_SPEED_LOW:
+      speed_str = "Low";
+    break;
+    case TUSB_SPEED_AUTO:
+      speed_str = "Auto";
+    break;
+  default:
+    break;
+  }
+  TU_LOG_USBD("USBD init on controller %u, speed = %s\r\n", rhport, speed_str);
   TU_LOG_INT(CFG_TUD_LOG_LEVEL, sizeof(usbd_device_t));
   TU_LOG_INT(CFG_TUD_LOG_LEVEL, sizeof(dcd_event_t));
   TU_LOG_INT(CFG_TUD_LOG_LEVEL, sizeof(tu_fifo_t));
   TU_LOG_INT(CFG_TUD_LOG_LEVEL, sizeof(tu_edpt_stream_t));
+#endif
 
   tu_varclr(&_usbd_dev);
   _usbd_queued_setup = 0;
+
+  osal_spin_init(&_usbd_spin);
 
 #if OSAL_MUTEX_REQUIRED
   // Init device mutex
@@ -488,9 +542,8 @@ bool tud_rhport_init(uint8_t rhport, const tusb_rhport_init_t* rh_init) {
   TU_ASSERT(_usbd_q);
 
   // Get application driver if available
-  if (usbd_app_driver_get_cb) {
-    _app_driver = usbd_app_driver_get_cb(&_app_driver_count);
-  }
+  _app_driver = usbd_app_driver_get_cb(&_app_driver_count);
+  TU_ASSERT(_app_driver_count + BUILTIN_DRIVER_COUNT <= UINT8_MAX);
 
   // Init class drivers
   for (uint8_t i = 0; i < TOTAL_DRIVER_COUNT; i++) {
@@ -563,8 +616,7 @@ static void usbd_reset(uint8_t rhport) {
 }
 
 bool tud_task_event_ready(void) {
-  // Skip if stack is not initialized
-  if (!tud_inited()) return false;
+  TU_VERIFY(tud_inited()); // Skip if stack is not initialized
   return !osal_queue_empty(_usbd_q);
 }
 
@@ -686,7 +738,9 @@ void tud_task_ext(uint32_t timeout_ms, bool in_isr) {
 
       case USBD_EVENT_FUNC_CALL:
         TU_LOG_USBD("\r\n");
-        if (event.func_call.func) event.func_call.func(event.func_call.param);
+        if (event.func_call.func) {
+          event.func_call.func(event.func_call.param);
+        }
         break;
 
       case DCD_EVENT_SOF:
@@ -703,7 +757,7 @@ void tud_task_ext(uint32_t timeout_ms, bool in_isr) {
 
 #if CFG_TUSB_OS != OPT_OS_NONE && CFG_TUSB_OS != OPT_OS_PICO
     // return if there is no more events, for application to run other background
-    if (osal_queue_empty(_usbd_q)) return;
+    if (osal_queue_empty(_usbd_q)) { return; }
 #endif
   }
 }
@@ -727,7 +781,6 @@ static bool process_control_request(uint8_t rhport, tusb_control_request_t const
 
   // Vendor request
   if ( p_request->bmRequestType_bit.type == TUSB_REQ_TYPE_VENDOR ) {
-    TU_VERIFY(tud_vendor_control_xfer_cb);
     usbd_control_set_complete_callback(tud_vendor_control_xfer_cb);
     return tud_vendor_control_xfer_cb(rhport, CONTROL_STAGE_SETUP, p_request);
   }
@@ -1035,7 +1088,14 @@ static bool process_set_config(uint8_t rhport, uint8_t cfg_num)
           #endif
 
           #if CFG_TUD_MIDI
-          if ( driver->open == midid_open ) assoc_itf_count = 2;
+          if (driver->open == midid_open) {
+            // If there is a class-compliant Audio Control Class, then 2 interfaces. Otherwise, only one
+            if (TUSB_CLASS_AUDIO               == desc_itf->bInterfaceClass    &&
+                AUDIO_SUBCLASS_CONTROL         == desc_itf->bInterfaceSubClass &&
+                AUDIO_FUNC_PROTOCOL_CODE_UNDEF == desc_itf->bInterfaceProtocol) {
+              assoc_itf_count = 2;
+            }
+          }
           #endif
 
           #if CFG_TUD_BTH && CFG_TUD_BTH_ISO_ALT_COUNT
@@ -1104,10 +1164,7 @@ static bool process_get_descriptor(uint8_t rhport, tusb_control_request_t const 
       TU_LOG_USBD(" BOS\r\n");
 
       // requested by host if USB > 2.0 ( i.e 2.1 or 3.x )
-      uintptr_t desc_bos = 0;
-      if (tud_descriptor_bos_cb) {
-        desc_bos = (uintptr_t) tud_descriptor_bos_cb();
-      }
+      uintptr_t desc_bos = (uintptr_t) tud_descriptor_bos_cb();
       TU_VERIFY(desc_bos);
 
       // Use offsetof to avoid pointer to the odd/misaligned address
@@ -1226,6 +1283,32 @@ TU_ATTR_FAST_FUNC void dcd_event_handler(dcd_event_t const* event, bool in_isr) 
       send = true;
       break;
 
+    case DCD_EVENT_XFER_COMPLETE: {
+      // Invoke the class callback associated with the endpoint address
+      uint8_t const ep_addr = event->xfer_complete.ep_addr;
+      uint8_t const epnum = tu_edpt_number(ep_addr);
+      uint8_t const ep_dir = tu_edpt_dir(ep_addr);
+
+      send = true;
+      if(epnum > 0) {
+        usbd_class_driver_t const* driver = get_driver(_usbd_dev.ep2drv[epnum][ep_dir]);
+
+        if (driver && driver->xfer_isr) {
+          _usbd_dev.ep_status[epnum][ep_dir].busy = 0;
+          _usbd_dev.ep_status[epnum][ep_dir].claimed = 0;
+
+          send = !driver->xfer_isr(event->rhport, ep_addr, (xfer_result_t) event->xfer_complete.result, event->xfer_complete.len);
+
+          // xfer_isr() is deferred to xfer_cb(), revert busy/claimed status
+          if (send) {
+            _usbd_dev.ep_status[epnum][ep_dir].busy = 1;
+            _usbd_dev.ep_status[epnum][ep_dir].claimed = 1;
+          }
+        }
+      }
+      break;
+    }
+
     default:
       send = true;
       break;
@@ -1240,15 +1323,19 @@ TU_ATTR_FAST_FUNC void dcd_event_handler(dcd_event_t const* event, bool in_isr) 
 // USBD API For Class Driver
 //--------------------------------------------------------------------+
 
-void usbd_int_set(bool enabled)
-{
-  if (enabled)
-  {
+void usbd_int_set(bool enabled) {
+  if (enabled) {
     dcd_int_enable(_usbd_rhport);
-  }else
-  {
+  } else {
     dcd_int_disable(_usbd_rhport);
   }
+}
+
+void usbd_spin_lock(bool in_isr) {
+  osal_spin_lock(&_usbd_spin, in_isr);
+}
+void usbd_spin_unlock(bool in_isr) {
+  osal_spin_unlock(&_usbd_spin, in_isr);
 }
 
 // Parse consecutive endpoint descriptors (IN & OUT)
@@ -1295,7 +1382,7 @@ bool usbd_edpt_open(uint8_t rhport, tusb_desc_endpoint_t const* desc_ep) {
   rhport = _usbd_rhport;
 
   TU_ASSERT(tu_edpt_number(desc_ep->bEndpointAddress) < CFG_TUD_ENDPPOINT_MAX);
-  TU_ASSERT(tu_edpt_validate(desc_ep, (tusb_speed_t) _usbd_dev.speed));
+  TU_ASSERT(tu_edpt_validate(desc_ep, (tusb_speed_t) _usbd_dev.speed, false));
 
   return dcd_edpt_open(rhport, desc_ep);
 }
@@ -1496,7 +1583,7 @@ bool usbd_edpt_iso_activate(uint8_t rhport, tusb_desc_endpoint_t const* desc_ep)
   uint8_t const dir = tu_edpt_dir(desc_ep->bEndpointAddress);
 
   TU_ASSERT(epnum < CFG_TUD_ENDPPOINT_MAX);
-  TU_ASSERT(tu_edpt_validate(desc_ep, (tusb_speed_t) _usbd_dev.speed));
+  TU_ASSERT(tu_edpt_validate(desc_ep, (tusb_speed_t) _usbd_dev.speed, false));
 
   _usbd_dev.ep_status[epnum][dir].stalled = 0;
   _usbd_dev.ep_status[epnum][dir].busy = 0;

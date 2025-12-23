@@ -55,6 +55,14 @@ TU_ATTR_WEAK void tusb_time_delay_ms_api(uint32_t ms) {
 #endif
 }
 
+TU_ATTR_WEAK void* tusb_app_virt_to_phys(void *virt_addr) {
+  return virt_addr;
+}
+
+TU_ATTR_WEAK void* tusb_app_phys_to_virt(void *phys_addr) {
+  return phys_addr;
+}
+
 //--------------------------------------------------------------------+
 // Public API
 //--------------------------------------------------------------------+
@@ -136,13 +144,38 @@ void tusb_int_handler(uint8_t rhport, bool in_isr) {
   #endif
 }
 
+bool tusb_deinit(uint8_t rhport) {
+  TU_VERIFY(rhport < TUP_USBIP_CONTROLLER_NUM);
+  bool ret = false;
+
+  #if CFG_TUD_ENABLED
+  if (_tusb_rhport_role[rhport] == TUSB_ROLE_DEVICE) {
+    TU_ASSERT(tud_deinit(rhport));
+    _tusb_rhport_role[rhport] = TUSB_ROLE_INVALID;
+    ret = true;
+  }
+  #endif
+
+  #if CFG_TUH_ENABLED
+  if (_tusb_rhport_role[rhport] == TUSB_ROLE_HOST) {
+    TU_ASSERT(tuh_deinit(rhport));
+    _tusb_rhport_role[rhport] = TUSB_ROLE_INVALID;
+    ret = true;
+  }
+  #endif
+
+  return ret;
+}
+
 //--------------------------------------------------------------------+
 // Descriptor helper
 //--------------------------------------------------------------------+
 
 uint8_t const* tu_desc_find(uint8_t const* desc, uint8_t const* end, uint8_t byte1) {
   while (desc + 1 < end) {
-    if (desc[1] == byte1) return desc;
+    if (desc[1] == byte1) {
+      return desc;
+    }
     desc += desc[DESC_OFFSET_LEN];
   }
   return NULL;
@@ -150,7 +183,9 @@ uint8_t const* tu_desc_find(uint8_t const* desc, uint8_t const* end, uint8_t byt
 
 uint8_t const* tu_desc_find2(uint8_t const* desc, uint8_t const* end, uint8_t byte1, uint8_t byte2) {
   while (desc + 2 < end) {
-    if (desc[1] == byte1 && desc[2] == byte2) return desc;
+    if (desc[1] == byte1 && desc[2] == byte2) {
+      return desc;
+    }
     desc += desc[DESC_OFFSET_LEN];
   }
   return NULL;
@@ -158,7 +193,9 @@ uint8_t const* tu_desc_find2(uint8_t const* desc, uint8_t const* end, uint8_t by
 
 uint8_t const* tu_desc_find3(uint8_t const* desc, uint8_t const* end, uint8_t byte1, uint8_t byte2, uint8_t byte3) {
   while (desc + 3 < end) {
-    if (desc[1] == byte1 && desc[2] == byte2 && desc[3] == byte3) return desc;
+    if (desc[1] == byte1 && desc[2] == byte2 && desc[3] == byte3) {
+      return desc;
+    }
     desc += desc[DESC_OFFSET_LEN];
   }
   return NULL;
@@ -199,7 +236,7 @@ bool tu_edpt_release(tu_edpt_state_t* ep_state, osal_mutex_t mutex) {
   return ret;
 }
 
-bool tu_edpt_validate(tusb_desc_endpoint_t const* desc_ep, tusb_speed_t speed) {
+bool tu_edpt_validate(tusb_desc_endpoint_t const* desc_ep, tusb_speed_t speed, bool is_host) {
   uint16_t const max_packet_size = tu_edpt_packet_size(desc_ep);
   TU_LOG2("  Open EP %02X with Size = %u\r\n", desc_ep->bEndpointAddress, max_packet_size);
 
@@ -215,8 +252,17 @@ bool tu_edpt_validate(tusb_desc_endpoint_t const* desc_ep, tusb_speed_t speed) {
         // Bulk highspeed must be EXACTLY 512
         TU_ASSERT(max_packet_size == 512);
       } else {
-        // TODO Bulk fullspeed can only be 8, 16, 32, 64
-        TU_ASSERT(max_packet_size <= 64);
+        // Bulk fullspeed can only be 8, 16, 32, 64
+        if (is_host && max_packet_size == 512) {
+          // HACK: while in host mode, some device incorrectly always report 512 regardless of link speed
+          // overwrite descriptor to force 64
+          TU_LOG1("  WARN: EP max packet size is 512 in fullspeed, force to 64\r\n");
+          tusb_desc_endpoint_t* hacked_ep = (tusb_desc_endpoint_t*) (uintptr_t) desc_ep;
+          hacked_ep->wMaxPacketSize = tu_htole16(64);
+        } else {
+          TU_ASSERT(max_packet_size == 8  || max_packet_size == 16 ||
+                    max_packet_size == 32 || max_packet_size == 64);
+        }
       }
       break;
 

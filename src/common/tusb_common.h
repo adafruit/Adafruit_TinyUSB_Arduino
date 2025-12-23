@@ -35,6 +35,7 @@
 // Macros Helper
 //--------------------------------------------------------------------+
 #define TU_ARRAY_SIZE(_arr)   ( sizeof(_arr) / sizeof(_arr[0]) )
+#define TU_FIELD_SIZE(_type, _field)  (sizeof(((_type *)0)->_field))
 #define TU_MIN(_x, _y)        ( ( (_x) < (_y) ) ? (_x) : (_y) )
 #define TU_MAX(_x, _y)        ( ( (_x) > (_y) ) ? (_x) : (_y) )
 #define TU_DIV_CEIL(n, d)     (((n) + (d) - 1) / (d))
@@ -78,19 +79,25 @@
 #include "tusb_debug.h"
 
 //--------------------------------------------------------------------+
-// Optional API implemented by application if needed
+// API implemented by application if needed
 // TODO move to a more obvious place/file
 //--------------------------------------------------------------------+
 
+// Get current milliseconds, required by some port/configuration without RTOS
+extern uint32_t tusb_time_millis_api(void);
+
+// Delay in milliseconds, use tusb_time_millis_api() by default. required by some port/configuration with no RTOS
+extern void tusb_time_delay_ms_api(uint32_t ms);
+
 // flush data cache
-TU_ATTR_WEAK extern void tusb_app_dcache_flush(uintptr_t addr, uint32_t data_size);
+extern void tusb_app_dcache_flush(uintptr_t addr, uint32_t data_size);
 
 // invalidate data cache
-TU_ATTR_WEAK extern void tusb_app_dcache_invalidate(uintptr_t addr, uint32_t data_size);
+extern void tusb_app_dcache_invalidate(uintptr_t addr, uint32_t data_size);
 
 // Optional physical <-> virtual address translation
-TU_ATTR_WEAK extern void* tusb_app_virt_to_phys(void *virt_addr);
-TU_ATTR_WEAK extern void* tusb_app_phys_to_virt(void *phys_addr);
+extern void* tusb_app_virt_to_phys(void *virt_addr);
+extern void* tusb_app_phys_to_virt(void *phys_addr);
 
 //--------------------------------------------------------------------+
 // Internal Inline Functions
@@ -120,6 +127,22 @@ TU_ATTR_ALWAYS_INLINE static inline int tu_memcpy_s(void *dest, size_t destsz, c
   return 0;
 }
 
+TU_ATTR_ALWAYS_INLINE static inline bool tu_mem_is_zero(const void *buffer, size_t size) {
+  const uint8_t* buf8 = (const uint8_t*) buffer;
+  for (size_t i = 0; i < size; i++) {
+    if (buf8[i] != 0) { return false; }
+  }
+  return true;
+}
+
+TU_ATTR_ALWAYS_INLINE static inline bool tu_mem_is_ff(const void *buffer, size_t size) {
+  const uint8_t* buf8 = (const uint8_t*) buffer;
+  for (size_t i = 0; i < size; i++) {
+    if (buf8[i] != 0xff) { return false; }
+  }
+  return true;
+}
+
 
 //------------- Bytes -------------//
 TU_ATTR_ALWAYS_INLINE static inline uint32_t tu_u32(uint8_t b3, uint8_t b2, uint8_t b1, uint8_t b0) {
@@ -146,8 +169,8 @@ TU_ATTR_ALWAYS_INLINE static inline uint8_t tu_u16_high(uint16_t ui16) { return 
 TU_ATTR_ALWAYS_INLINE static inline uint8_t tu_u16_low (uint16_t ui16) { return TU_U16_LOW(ui16); }
 
 //------------- Bits -------------//
-TU_ATTR_ALWAYS_INLINE static inline uint32_t tu_bit_set  (uint32_t value, uint8_t pos) { return value | TU_BIT(pos);                  }
-TU_ATTR_ALWAYS_INLINE static inline uint32_t tu_bit_clear(uint32_t value, uint8_t pos) { return value & (~TU_BIT(pos));               }
+TU_ATTR_ALWAYS_INLINE static inline uint32_t tu_bit_set  (uint32_t value, uint8_t pos) { return value | TU_BIT(pos); }
+TU_ATTR_ALWAYS_INLINE static inline uint32_t tu_bit_clear(uint32_t value, uint8_t pos) { return value & (~TU_BIT(pos)); }
 TU_ATTR_ALWAYS_INLINE static inline bool     tu_bit_test (uint32_t value, uint8_t pos) { return (value & TU_BIT(pos)) ? true : false; }
 
 //------------- Min -------------//
@@ -181,8 +204,7 @@ TU_ATTR_ALWAYS_INLINE static inline uint32_t tu_round_up(uint32_t v, uint32_t f)
 
 // log2 of a value is its MSB's position
 // TODO use clz TODO remove
-static inline uint8_t tu_log2(uint32_t value)
-{
+TU_ATTR_ALWAYS_INLINE static inline uint8_t tu_log2(uint32_t value) {
   uint8_t result = 0;
   while (value >>= 1) { result++; }
   return result;
@@ -193,8 +215,7 @@ static inline uint8_t tu_log2(uint32_t value)
 //   return sizeof(uint32_t) * CHAR_BIT - __builtin_clz(x) - 1;
 //}
 
-static inline bool tu_is_power_of_two(uint32_t value)
-{
+TU_ATTR_ALWAYS_INLINE static inline bool tu_is_power_of_two(uint32_t value) {
    return (value != 0) && ((value & (value - 1)) == 0);
 }
 
@@ -205,27 +226,23 @@ static inline bool tu_is_power_of_two(uint32_t value)
 typedef struct { uint16_t val; } TU_ATTR_PACKED tu_unaligned_uint16_t;
 typedef struct { uint32_t val; } TU_ATTR_PACKED tu_unaligned_uint32_t;
 
-TU_ATTR_ALWAYS_INLINE static inline uint32_t tu_unaligned_read32(const void* mem)
-{
-  tu_unaligned_uint32_t const* ua32 = (tu_unaligned_uint32_t const*) mem;
+TU_ATTR_ALWAYS_INLINE static inline uint32_t tu_unaligned_read32(const void *mem) {
+  tu_unaligned_uint32_t const *ua32 = (tu_unaligned_uint32_t const *) mem;
   return ua32->val;
 }
 
-TU_ATTR_ALWAYS_INLINE static inline void tu_unaligned_write32(void* mem, uint32_t value)
-{
-  tu_unaligned_uint32_t* ua32 = (tu_unaligned_uint32_t*) mem;
+TU_ATTR_ALWAYS_INLINE static inline void tu_unaligned_write32(void *mem, uint32_t value) {
+  tu_unaligned_uint32_t *ua32 = (tu_unaligned_uint32_t *) mem;
   ua32->val = value;
 }
 
-TU_ATTR_ALWAYS_INLINE static inline uint16_t tu_unaligned_read16(const void* mem)
-{
-  tu_unaligned_uint16_t const* ua16 = (tu_unaligned_uint16_t const*) mem;
+TU_ATTR_ALWAYS_INLINE static inline uint16_t tu_unaligned_read16(const void *mem) {
+  tu_unaligned_uint16_t const *ua16 = (tu_unaligned_uint16_t const *) mem;
   return ua16->val;
 }
 
-TU_ATTR_ALWAYS_INLINE static inline void tu_unaligned_write16(void* mem, uint16_t value)
-{
-  tu_unaligned_uint16_t* ua16 = (tu_unaligned_uint16_t*) mem;
+TU_ATTR_ALWAYS_INLINE static inline void tu_unaligned_write16(void *mem, uint16_t value) {
+  tu_unaligned_uint16_t *ua16 = (tu_unaligned_uint16_t *) mem;
   ua16->val = value;
 }
 
@@ -313,6 +330,44 @@ TU_ATTR_ALWAYS_INLINE static inline void tu_unaligned_write16(void *mem, uint16_
             + ((uint32_t)TU_BIN8(db3)<<8) \
             + TU_BIN8(dlsb))
 #endif
+
+//--------------------------------------------------------------------+
+// Descriptor helper
+//--------------------------------------------------------------------+
+
+// return next descriptor
+TU_ATTR_ALWAYS_INLINE static inline uint8_t const * tu_desc_next(void const* desc) {
+  uint8_t const* desc8 = (uint8_t const*) desc;
+  return desc8 + desc8[DESC_OFFSET_LEN];
+}
+
+// get descriptor length
+TU_ATTR_ALWAYS_INLINE static inline uint8_t tu_desc_len(void const* desc) {
+  return ((uint8_t const*) desc)[DESC_OFFSET_LEN];
+}
+
+// get descriptor type
+TU_ATTR_ALWAYS_INLINE static inline uint8_t tu_desc_type(void const* desc) {
+  return ((uint8_t const*) desc)[DESC_OFFSET_TYPE];
+}
+
+// get descriptor subtype
+TU_ATTR_ALWAYS_INLINE static inline uint8_t tu_desc_subtype(void const* desc) {
+  return ((uint8_t const*) desc)[DESC_OFFSET_SUBTYPE];
+}
+
+TU_ATTR_ALWAYS_INLINE static inline uint8_t tu_desc_in_bounds(uint8_t const* p_desc, uint8_t const* desc_end) {
+  return (p_desc < desc_end) && (tu_desc_next(p_desc) <= desc_end);
+}
+
+// find descriptor that match byte1 (type)
+uint8_t const * tu_desc_find(uint8_t const* desc, uint8_t const* end, uint8_t byte1);
+
+// find descriptor that match byte1 (type) and byte2
+uint8_t const * tu_desc_find2(uint8_t const* desc, uint8_t const* end, uint8_t byte1, uint8_t byte2);
+
+// find descriptor that match byte1 (type) and byte2
+uint8_t const * tu_desc_find3(uint8_t const* desc, uint8_t const* end, uint8_t byte1, uint8_t byte2, uint8_t byte3);
 
 #ifdef __cplusplus
  }

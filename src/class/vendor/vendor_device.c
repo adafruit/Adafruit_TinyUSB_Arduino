@@ -67,6 +67,20 @@ typedef struct {
 
 CFG_TUD_MEM_SECTION static vendord_epbuf_t _vendord_epbuf[CFG_TUD_VENDOR];
 
+//--------------------------------------------------------------------+
+// Weak stubs: invoked if no strong implementation is available
+//--------------------------------------------------------------------+
+TU_ATTR_WEAK void tud_vendor_rx_cb(uint8_t itf, uint8_t const* buffer, uint16_t bufsize) {
+  (void) itf;
+  (void) buffer;
+  (void) bufsize;
+}
+
+TU_ATTR_WEAK void tud_vendor_tx_cb(uint8_t itf, uint32_t sent_bytes) {
+  (void) itf;
+  (void) sent_bytes;
+}
+
 //--------------------------------------------------------------------
 // Application API
 //--------------------------------------------------------------------
@@ -196,40 +210,41 @@ void vendord_reset(uint8_t rhport) {
 
 uint16_t vendord_open(uint8_t rhport, const tusb_desc_interface_t* desc_itf, uint16_t max_len) {
   TU_VERIFY(TUSB_CLASS_VENDOR_SPECIFIC == desc_itf->bInterfaceClass, 0);
+  const uint8_t* desc_end = (const uint8_t*)desc_itf + max_len;
   const uint8_t* p_desc = tu_desc_next(desc_itf);
-  const uint8_t* desc_end = p_desc + max_len;
 
   // Find available interface
   vendord_interface_t* p_vendor = NULL;
-  for(uint8_t i=0; i<CFG_TUD_VENDOR; i++) {
-    if (!tud_vendor_n_mounted(i)) {
-      p_vendor = &_vendord_itf[i];
+  uint8_t itf;
+  for(itf=0; itf<CFG_TUD_VENDOR; itf++) {
+    if (!tud_vendor_n_mounted(itf)) {
+      p_vendor = &_vendord_itf[itf];
       break;
     }
   }
   TU_VERIFY(p_vendor, 0);
 
   p_vendor->itf_num = desc_itf->bInterfaceNumber;
-  uint8_t found_ep = 0;
-  while (found_ep < desc_itf->bNumEndpoints) {
-    // skip non-endpoint descriptors
-    while ( (TUSB_DESC_ENDPOINT != tu_desc_type(p_desc)) && (p_desc < desc_end) ) {
-      p_desc = tu_desc_next(p_desc);
-    }
-    if (p_desc >= desc_end) {
-      break;
-    }
+  while (tu_desc_in_bounds(p_desc, desc_end)) {
+    const uint8_t desc_type = tu_desc_type(p_desc);
+    if (desc_type == TUSB_DESC_INTERFACE || desc_type == TUSB_DESC_INTERFACE_ASSOCIATION) {
+      break; // end of this interface
+    } else if (desc_type == TUSB_DESC_ENDPOINT) {
+      const tusb_desc_endpoint_t* desc_ep = (const tusb_desc_endpoint_t*) p_desc;
+      TU_ASSERT(usbd_edpt_open(rhport, desc_ep));
 
-    const tusb_desc_endpoint_t* desc_ep = (const tusb_desc_endpoint_t*) p_desc;
-    TU_ASSERT(usbd_edpt_open(rhport, desc_ep));
-    found_ep++;
-
-    if (tu_edpt_dir(desc_ep->bEndpointAddress) == TUSB_DIR_IN) {
-      tu_edpt_stream_open(&p_vendor->tx.stream, desc_ep);
-      tud_vendor_n_write_flush((uint8_t)(p_vendor - _vendord_itf));
-    } else {
-      tu_edpt_stream_open(&p_vendor->rx.stream, desc_ep);
-      TU_ASSERT(tu_edpt_stream_read_xfer(rhport, &p_vendor->rx.stream) > 0, 0); // prepare for incoming data
+      // open endpoint stream, skip if already opened
+      if (tu_edpt_dir(desc_ep->bEndpointAddress) == TUSB_DIR_IN) {
+        if (p_vendor->tx.stream.ep_addr == 0) {
+          tu_edpt_stream_open(&p_vendor->tx.stream, desc_ep);
+          tud_vendor_n_write_flush(itf);
+        }
+      } else {
+        if (p_vendor->rx.stream.ep_addr == 0) {
+          tu_edpt_stream_open(&p_vendor->rx.stream, desc_ep);
+          TU_ASSERT(tu_edpt_stream_read_xfer(rhport, &p_vendor->rx.stream) > 0, 0); // prepare for incoming data
+        }
+      }
     }
 
     p_desc = tu_desc_next(p_desc);
@@ -258,16 +273,12 @@ bool vendord_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint
     tu_edpt_stream_read_xfer_complete(&p_vendor->rx.stream, xferred_bytes);
 
     // Invoked callback if any
-    if (tud_vendor_rx_cb) {
-      tud_vendor_rx_cb(itf, p_epbuf->epout, (uint16_t) xferred_bytes);
-    }
+    tud_vendor_rx_cb(itf, p_epbuf->epout, (uint16_t) xferred_bytes);
 
     tu_edpt_stream_read_xfer(rhport, &p_vendor->rx.stream);
   } else if ( ep_addr == p_vendor->tx.stream.ep_addr ) {
     // Send complete
-    if (tud_vendor_tx_cb) {
-      tud_vendor_tx_cb(itf, (uint16_t) xferred_bytes);
-    }
+    tud_vendor_tx_cb(itf, (uint16_t) xferred_bytes);
 
     #if CFG_TUD_VENDOR_TX_BUFSIZE > 0
     // try to send more if possible

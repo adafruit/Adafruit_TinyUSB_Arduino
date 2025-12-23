@@ -41,10 +41,6 @@
 #define TU_LOG_INT_USBH(...)  TU_LOG_INT(CFG_TUH_LOG_LEVEL, __VA_ARGS__)
 #define TU_LOG_HEX_USBH(...)  TU_LOG_HEX(CFG_TUH_LOG_LEVEL, __VA_ARGS__)
 
-enum {
-  USBH_EPSIZE_BULK_MAX = (TUH_OPT_HIGH_SPEED ? TUSB_EPSIZE_BULK_HS : TUSB_EPSIZE_BULK_FS)
-};
-
 //--------------------------------------------------------------------+
 // Class Driver API
 //--------------------------------------------------------------------+
@@ -62,18 +58,21 @@ typedef struct {
 // Invoked when initializing host stack to get additional class drivers.
 // Can be implemented by application to extend/overwrite class driver support.
 // Note: The drivers array must be accessible at all time when stack is active
-usbh_class_driver_t const* usbh_app_driver_get_cb(uint8_t* driver_count) TU_ATTR_WEAK;
+usbh_class_driver_t const* usbh_app_driver_get_cb(uint8_t* driver_count);
 
 // Call by class driver to tell USBH that it has complete the enumeration
 void usbh_driver_set_config_complete(uint8_t dev_addr, uint8_t itf_num);
 
-uint8_t usbh_get_rhport(uint8_t dev_addr);
+uint8_t usbh_get_rhport(uint8_t daddr);
 
 uint8_t* usbh_get_enum_buf(void);
 
 void usbh_int_set(bool enabled);
 
 void usbh_defer_func(osal_task_func_t func, void *param, bool in_isr);
+
+void usbh_spin_lock(bool in_isr);
+void usbh_spin_unlock(bool in_isr);
 
 //--------------------------------------------------------------------+
 // USBH Endpoint API
