@@ -137,6 +137,9 @@ extern "C" {
 // max device support (excluding hub device): 1 hub typically has 4 ports
 #define CFG_TUH_DEVICE_MAX (3 * CFG_TUH_HUB + 1)
 
+// enable MIDI Host
+#define CFG_TUH_MIDI (CFG_TUH_DEVICE_MAX)
+
 // Enable tuh_edpt_xfer() API
 // #define CFG_TUH_API_EDPT_XFER       1
 
