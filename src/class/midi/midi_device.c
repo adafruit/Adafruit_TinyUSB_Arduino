@@ -356,6 +356,20 @@ uint32_t tud_midi_n_stream_write(uint8_t itf, uint8_t cable_num, const uint8_t* 
   return i;
 }
 
+bool tud_midi_n_packet_write_n (uint8_t itf, const uint8_t *packet, uint8_t num_packets) {
+  midid_interface_t* midi = &_midid_itf[itf];
+  TU_VERIFY(midi->ep_in);
+
+  if (tu_fifo_remaining(&midi->tx_ff) < 4*num_packets) {
+    return false;
+  }
+
+  tu_fifo_write_n(&midi->tx_ff, packet, 4*num_packets);
+  write_flush(itf);
+
+  return true;
+}
+
 bool tud_midi_n_packet_write (uint8_t itf, const uint8_t packet[4]) {
   midid_interface_t* midi = &_midid_itf[itf];
   TU_VERIFY(midi->ep_in);
