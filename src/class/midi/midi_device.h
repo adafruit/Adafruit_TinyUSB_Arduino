@@ -111,6 +111,8 @@ TU_ATTR_DEPRECATED("tud_midi_send() is renamed to tud_midi_packet_write()")
 static inline bool tud_midi_send(uint8_t packet[4])
 {
   return tud_midi_packet_write(packet);
+}
+
 // Write event packet            (4 bytes)
 bool     tud_midi_n_packet_write (uint8_t itf, uint8_t const packet[4]);
 
