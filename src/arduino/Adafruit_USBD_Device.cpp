@@ -241,9 +241,12 @@ bool Adafruit_USBD_Device::begin(uint8_t rhport) {
   // Use Interface Association Descriptor (IAD) for CDC
   // As required by USB Specs IAD's subclass must be common class (2) and
   // protocol must be IAD (1)
-  _desc_device.bDeviceClass = TUSB_CLASS_MISC;
-  _desc_device.bDeviceSubClass = MISC_SUBCLASS_COMMON;
-  _desc_device.bDeviceProtocol = MISC_PROTOCOL_IAD;
+  //_desc_device.bDeviceClass = TUSB_CLASS_MISC;
+  //_desc_device.bDeviceSubClass = MISC_SUBCLASS_COMMON;
+  //_desc_device.bDeviceProtocol = MISC_PROTOCOL_IAD;
+  _desc_device.bDeviceClass = TUSB_CLASS_UNSPECIFIED;
+  _desc_device.bDeviceSubClass = 0;
+  _desc_device.bDeviceProtocol = 0;
 
 #if defined(ARDUINO_ARCH_ESP32)
 #if ARDUINO_USB_CDC_ON_BOOT && !ARDUINO_USB_MODE
