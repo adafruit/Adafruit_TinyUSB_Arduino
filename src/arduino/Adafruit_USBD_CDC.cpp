@@ -76,7 +76,8 @@ uint16_t Adafruit_USBD_CDC::getInterfaceDescriptor(uint8_t itfnum_deprecated,
   uint16_t const mps =
       (TUD_OPT_HIGH_SPEED ? 512 : 64); // TODO actual link speed
   uint8_t const desc[] = {
-      TUD_CDC_DESCRIPTOR(itfnum, _strid, ep_notif, 8, ep_out, ep_in, mps)};
+      // Changed 8 to 16, notification size, to match Teensy.
+      TUD_CDC_DESCRIPTOR(itfnum, _strid, ep_notif, 16, ep_out, ep_in, mps)};
 
   uint16_t const len = sizeof(desc);
 
