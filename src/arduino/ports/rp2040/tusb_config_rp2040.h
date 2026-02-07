@@ -138,7 +138,7 @@ extern "C" {
 #define CFG_TUH_DEVICE_MAX (3 * CFG_TUH_HUB + 1)
 
 // enable MIDI Host
-#define CFG_TUH_MIDI (CFG_TUH_DEVICE_MAX)
+#define CFG_TUH_MIDI 1
 
 // Enable tuh_edpt_xfer() API
 // #define CFG_TUH_API_EDPT_XFER       1
