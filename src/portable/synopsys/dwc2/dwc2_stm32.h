@@ -176,7 +176,9 @@ TU_ATTR_ALWAYS_INLINE static inline void dwc2_int_set(uint8_t rhport, tusb_role_
 TU_ATTR_ALWAYS_INLINE static inline void dwc2_remote_wakeup_delay(void) {
   // try to delay for 1 ms
   uint32_t count = SystemCoreClock / 1000;
-  while (count--) __NOP();
+  while (count--) {
+    __NOP();
+  }
 }
 
 // MCU specific PHY init, called BEFORE core reset
@@ -335,6 +337,9 @@ TU_ATTR_ALWAYS_INLINE static inline uint32_t round_up_to_cache_line_size(uint32_
 }
 
 TU_ATTR_ALWAYS_INLINE static inline bool is_cache_mem(uintptr_t addr) {
+  if (0 == (SCB->CCR & SCB_CCR_DC_Msk)) {
+    return false; // D-Cache is disabled
+  }
   for (unsigned int i = 0; i < TU_ARRAY_SIZE(uncached_regions); i++) {
     if (uncached_regions[i].start <= addr && addr <= uncached_regions[i].end) { return false; }
   }
