@@ -41,7 +41,7 @@
 #elif defined(ARDUINO_ARCH_ESP32)
   // do nothing since we force include "arduino/ports/esp32/tusb_config_esp32.h" in tusb_option.h
 
-#elif defined(ARDUINO_ARCH_CH32) || defined(CH32V20x) || defined(CH32V30x)
+#elif defined(ARDUINO_ARCH_CH32) || defined(CH32V20x) || defined(CH32V30x) || defined(CH32X035) || defined(CH32L10x)
   #include "arduino/ports/ch32/tusb_config_ch32.h"
 
 #elif defined(ARDUINO_ARCH_STM32) || defined(ARDUINO_ARCH_ARDUINO_CORE_STM32)
