@@ -89,14 +89,17 @@
     __IO uint32_t Reserve1;
     __IO uint32_t OTG_CR;
     __IO uint32_t OTG_SR;
-  } USBOTG_FS_TypeDef;
+  } USBFSD_TypeDef;
 
-  #define USBOTG_FS ((USBOTG_FS_TypeDef *) 0x40023400)
+  #define USBFSD ((USBFSD_TypeDef *) 0x40023400)
 #elif CFG_TUSB_MCU == OPT_MCU_CH32V20X
   #include <ch32v20x.h>
 #elif CFG_TUSB_MCU == OPT_MCU_CH32V307
   #include <ch32v30x.h>
-  #define USBHD_IRQn OTG_FS_IRQn
+#elif CFG_TUSB_MCU == OPT_MCU_CH32X035
+  #include <ch32x035.h>
+#elif CFG_TUSB_MCU == OPT_MCU_CH32L10X
+  #include <ch32l103.h>
 #endif
 
 #ifdef __GNUC__
@@ -146,6 +149,27 @@
 #define USBFS_UDEV_CTRL_DP_PIN    (1 << 5)
 #define USBFS_UDEV_CTRL_PD_DIS    (1 << 7)
 
+#if defined(CH32X035)
+// TX_CTRL
+#define USBFS_EP_T_RES_MASK (3 << 0)
+#define USBFS_EP_T_TOG      (1 << 6)
+#define USBFS_EP_T_AUTO_TOG (1 << 4)
+
+#define USBFS_EP_T_RES_ACK   (0 << 0)
+#define USBFS_EP_T_RES_NYET  (1 << 0)
+#define USBFS_EP_T_RES_NAK   (2 << 0)
+#define USBFS_EP_T_RES_STALL (3 << 0)
+
+// RX_CTRL
+#define USBFS_EP_R_RES_MASK (3 << 2)
+#define USBFS_EP_R_TOG      (1 << 7)
+#define USBFS_EP_R_AUTO_TOG (1 << 4)
+
+#define USBFS_EP_R_RES_ACK   (0 << 0)
+#define USBFS_EP_R_RES_NYET  (1 << 0)
+#define USBFS_EP_R_RES_NAK   (2 << 0)
+#define USBFS_EP_R_RES_STALL (3 << 0)
+#else
 // TX_CTRL
 #define USBFS_EP_T_RES_MASK (3 << 0)
 #define USBFS_EP_T_TOG      (1 << 2)
@@ -165,6 +189,7 @@
 #define USBFS_EP_R_RES_NYET  (1 << 0)
 #define USBFS_EP_R_RES_NAK   (2 << 0)
 #define USBFS_EP_R_RES_STALL (3 << 0)
+#endif
 
 // token PID
 #define PID_OUT   0
