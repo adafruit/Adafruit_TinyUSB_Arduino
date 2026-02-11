@@ -36,6 +36,14 @@
   #define CFG_TUD_CDC_NOTIFY    0
 #endif
 
+#ifndef CFG_TUD_CDC_TX_BUFSIZE
+  #define CFG_TUD_CDC_TX_BUFSIZE (TUD_OPT_HIGH_SPEED ? 512 : 64)
+#endif
+
+#ifndef CFG_TUD_CDC_RX_BUFSIZE
+  #define CFG_TUD_CDC_RX_BUFSIZE (TUD_OPT_HIGH_SPEED ? 512 : 64)
+#endif
+
 #if !defined(CFG_TUD_CDC_EP_BUFSIZE) && defined(CFG_TUD_CDC_EPSIZE)
   #warning CFG_TUD_CDC_EPSIZE is renamed to CFG_TUD_CDC_EP_BUFSIZE, please update to use the new name
   #define CFG_TUD_CDC_EP_BUFSIZE    CFG_TUD_CDC_EPSIZE
@@ -53,15 +61,16 @@
 // Driver Configuration
 //--------------------------------------------------------------------+
 typedef struct TU_ATTR_PACKED {
-  uint8_t rx_persistent : 1; // keep rx fifo data even with bus reset or disconnect
-  uint8_t tx_persistent : 1; // keep tx fifo data even with reset or disconnect
-  uint8_t tx_overwritabe_if_not_connected : 1; // if not connected, tx fifo can be overwritten
+  bool rx_persistent : 1; // keep rx fifo data even with bus reset or disconnect
+  bool tx_persistent : 1; // keep tx fifo data even with reset or disconnect
+  bool tx_overwritabe_if_not_connected : 1; // if not connected, tx fifo can be overwritten
 } tud_cdc_configure_t;
+TU_VERIFY_STATIC(sizeof(tud_cdc_configure_t) == 1, "size is not correct");
 
 #define TUD_CDC_CONFIGURE_DEFAULT() { \
-  .rx_persistent = 0, \
-  .tx_persistent = 0, \
-  .tx_overwritabe_if_not_connected = 1, \
+  .rx_persistent = false, \
+  .tx_persistent = false, \
+  .tx_overwritabe_if_not_connected = true, \
 }
 
 // Configure CDC driver behavior
@@ -132,11 +141,37 @@ bool tud_cdc_n_write_clear(uint8_t itf);
 
 
 #if CFG_TUD_CDC_NOTIFY
+bool tud_cdc_n_notify_msg(uint8_t itf, cdc_notify_msg_t *msg);
+
 // Send UART status notification: DCD, DSR etc ..
-bool tud_cdc_n_notify_uart_state(uint8_t itf, const cdc_notify_uart_state_t *state);
+TU_ATTR_ALWAYS_INLINE static inline bool tud_cdc_n_notify_uart_state(uint8_t                        itf,
+                                                                     const cdc_notify_uart_state_t *state) {
+  cdc_notify_msg_t notify_msg;
+  notify_msg.request.bmRequestType = CDC_REQ_TYPE_NOTIF;
+  notify_msg.request.bRequest      = CDC_NOTIF_SERIAL_STATE;
+  notify_msg.request.wValue        = 0;
+  notify_msg.request.wIndex        = 0; // filled later
+  notify_msg.request.wLength       = sizeof(cdc_notify_uart_state_t);
+  notify_msg.serial_state          = *state;
+  return tud_cdc_n_notify_msg(itf, &notify_msg);
+}
 
 // Send connection speed change notification
-bool tud_cdc_n_notify_conn_speed_change(uint8_t itf, const cdc_notify_conn_speed_change_t* conn_speed_change);
+TU_ATTR_ALWAYS_INLINE static inline bool
+tud_cdc_n_notify_conn_speed_change(uint8_t itf, const cdc_notify_conn_speed_change_t *conn_speed_change) {
+  cdc_notify_msg_t notify_msg;
+  notify_msg.request.bmRequestType = CDC_REQ_TYPE_NOTIF;
+  notify_msg.request.bRequest      = CDC_NOTIF_CONNECTION_SPEED_CHANGE;
+  notify_msg.request.wValue        = 0;
+  notify_msg.request.wIndex        = 0; // filled later
+  notify_msg.request.wLength       = sizeof(cdc_notify_conn_speed_change_t);
+  notify_msg.conn_speed_change     = *conn_speed_change;
+  return tud_cdc_n_notify_msg(itf, &notify_msg);
+}
+
+TU_ATTR_ALWAYS_INLINE static inline bool tud_cdc_notify_msg(cdc_notify_msg_t *msg) {
+  return tud_cdc_n_notify_msg(0, msg);
+}
 
 TU_ATTR_ALWAYS_INLINE static inline bool tud_cdc_notify_uart_state(const cdc_notify_uart_state_t* state) {
  return tud_cdc_n_notify_uart_state(0, state);
@@ -257,4 +292,4 @@ bool     cdcd_xfer_cb         (uint8_t rhport, uint8_t ep_addr, xfer_result_t re
  }
 #endif
 
-#endif /* _TUSB_CDC_DEVICE_H_ */
+#endif /* TUSB_CDC_DEVICE_H_ */
