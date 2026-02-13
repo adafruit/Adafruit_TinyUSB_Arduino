@@ -144,6 +144,17 @@ void Adafruit_USBH_Host::task(uint32_t timeout_ms, bool in_isr) {
   tuh_task_ext(timeout_ms, in_isr);
 }
 
+// Invoked when received report from device via interrupt endpoint
+TU_ATTR_WEAK void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
+                                             uint8_t const *report,
+                                             uint16_t len) {
+  (void)dev_addr;
+  (void)instance;
+  (void)report;
+  (void)len;
+}
+
+
 //--------------------------------------------------------------------+
 // USB Host using MAX3421E
 //--------------------------------------------------------------------+
