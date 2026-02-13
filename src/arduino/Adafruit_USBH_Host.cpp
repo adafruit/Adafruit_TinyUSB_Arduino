@@ -154,7 +154,6 @@ TU_ATTR_WEAK void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
   (void)len;
 }
 
-
 //--------------------------------------------------------------------+
 // USB Host using MAX3421E
 //--------------------------------------------------------------------+
