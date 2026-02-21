@@ -51,7 +51,9 @@ Following is cores without built-in support
 
 - **mbed_rp2040**
 - **[stm32duino/Arduino_Core_STM32](https://github.com/stm32duino/Arduino_Core_STM32)**
-  - Still WIP, only support/tested with F4, only support OTG_FS  
+  - Still WIP, only supports F1, F4 & G4 so far. Requires additions to stm32duino boards.txt which can be found in /ports/stm32. No longer needs manual initialization/CDC flushing. DFU entry working. Serial now works as normal. 
+
+
 
 It is still possible to use TinyUSB but with some limits such as:
 
