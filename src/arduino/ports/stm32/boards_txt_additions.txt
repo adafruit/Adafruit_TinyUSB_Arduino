@@ -1,0 +1,29 @@
+# boards.txt additions for Adafruit TinyUSB (STM32)
+#
+# These lines need to be added to the STM32duino core's boards.txt file, located at:
+#
+#   Arduino15/packages/STMicroelectronics/hardware/stm32/[version]/boards.txt
+#
+# HOW TO FIND YOUR BOARD'S PREFIX:
+#   Search boards.txt for your board name (e.g. "BlackPill", "BluePill", "Nucleo").
+#   The prefix is the part before the first dot on any existing line for that board.
+#   For example, if you see "GenF4.name=Generic F4", your prefix is "GenF4".
+#
+# HOW TO ADD:
+#   Find the section for your board and add the appropriate lines below.
+#   Replace the prefix (GenF4 / GenF1 / GenG4) with the one for your board.
+#   Add the lines alongside any existing menu.usb entries for that board.
+#
+# -----------------------------------------------------------------------
+
+# STM32F4 (e.g. Generic F4 -- tested on WeAct STM32F411 BlackPill)
+GenF4.menu.usb.TinyUSB=Adafruit TinyUSB
+GenF4.menu.usb.TinyUSB.build.usb_flags={build.extra_flags} -DARDUINO_ARCH_TINYUSB
+
+# STM32F1 (e.g. Generic F1 -- tested on STM32F103 BluePill)
+GenF1.menu.usb.TinyUSB=Adafruit TinyUSB
+GenF1.menu.usb.TinyUSB.build.usb_flags={build.extra_flags} -DARDUINO_ARCH_TINYUSB
+
+# STM32G4 (e.g. Generic G4 -- tested on WeAct STM32G431)
+GenG4.menu.usb.TinyUSB=Adafruit TinyUSB
+GenG4.menu.usb.TinyUSB.build.usb_flags={build.extra_flags} -DARDUINO_ARCH_TINYUSB
