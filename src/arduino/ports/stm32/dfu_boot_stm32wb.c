@@ -38,13 +38,21 @@ static void dfu_boot_check(void)
     }
 }
 
+// Minimal naked wrapper that sets SP and branches to the C reset handler.
 __attribute__((naked, used))
 void Reset_Handler(void)
 {
     __asm volatile (
-        "ldr r0, =_estack \n"
-        "mov sp, r0       \n"
+        "ldr r0, =_estack     \n"
+        "mov sp, r0           \n"
+        "b   Reset_Handler_C  \n"
     );
+}
+
+// Standard C reset handler: performs DFU check, system init, and
+// data/BSS initialisation before entering main().
+static void Reset_Handler_C(void)
+{
     dfu_boot_check();
     SystemInit();
     {

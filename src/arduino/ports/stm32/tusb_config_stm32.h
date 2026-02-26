@@ -26,7 +26,7 @@
 #define TUSB_CONFIG_STM32_H_
 
 // USB Port
-#define CFG_TUSB_RHPORT0_MODE  OPT_MODE_DEVICE
+#define CFG_TUSB_RHPORT0_MODE  (OPT_MODE_DEVICE | OPT_MODE_FULL_SPEED)
 #define CFG_TUSB_RHPORT0_SPEED OPT_FULL_SPEED
 #define CFG_TUSB_RHPORT1_MODE  OPT_MODE_NONE
 
@@ -80,10 +80,10 @@
 
 // TINYUSB_NEED_POLLING_TASK is intentionally NOT defined here.
 //
-// The STM32 port implements yield() to call tud_task() automatically
-// whenever the Arduino core calls yield() (e.g. inside delay(), and at
-// the bottom of every loop() iteration on cores that wrap loop() with
-// a yield() call). This means TinyUSB is serviced without any explicit
+// The STM32 port implements the STM32 port implementation
+// relies on a HAL tick hook plus serialEventRun() to ensure 
+// tud_task() runs even when the core doesn’t call yield() from loop(). 
+// This means TinyUSB is serviced without any explicit
 // TinyUSBDevice.task() call in the sketch's loop().
 //
 // Sketches that still contain the legacy polling guard:

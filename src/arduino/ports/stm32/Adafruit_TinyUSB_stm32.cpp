@@ -147,16 +147,12 @@ void serialEventRun(void)
     yield();
 }
 
-// HAL_IncTick() is called every 1 ms from the SysTick_Handler ISR.
-// The STM32 HAL defines it as __weak, so we override it here.
-// We call the HAL's own uwTick increment, then set the flag for yield().
-extern "C" void HAL_IncTick(void)
+// Hook into the HAL SysTick callback instead of overriding HAL_IncTick().
+// This preserves the HAL's own tick behaviour (including configurable
+// tick frequency) while still giving us a reliable 1 ms-ish pump for
+// tud_task().
+extern "C" void HAL_SYSTICK_Callback(void)
 {
-    // Keep the HAL tick counter running (normally done by the weak default).
-    extern __IO uint32_t uwTick;
-    uwTick += 1U;
-
-    // Signal yield() to run tud_task() at the next thread-context opportunity.
     _tusb_task_pending = true;
 }
 
