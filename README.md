@@ -50,7 +50,7 @@ Note: For ESP32 port, version before v3.0 requires all descriptors must be speci
 The following are cores without built-in support
 
 - **[stm32duino/Arduino_Core_STM32](https://github.com/stm32duino/Arduino_Core_STM32)**
-  - Still WIP. Fully functional but with limited number of MCUs supported so far (F1xx, F4xx, some G4xx & WB55). Requires lines added to stm32duino boards.txt which can be found in /ports/stm32/boards_txt_additions.txt. 
+  - Still WIP. Fully functional but with limited number of MCUs supported so far (F1xx, F4xx, some G4xx & WB55). Requires lines added to stm32duino boards.txt which can be found in src/arduino/ports/stm32/boards_txt_additions.txt. 
 
 - **mbed_rp2040**
   - It is still possible to use TinyUSB but with some limits such as:
