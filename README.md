@@ -47,20 +47,18 @@ Note: For ESP32 port, version before v3.0 requires all descriptors must be speci
 
 ### Cores without built-in support
 
-Following is cores without built-in support
+The following are cores without built-in support
+
+- **[stm32duino/Arduino_Core_STM32](https://github.com/stm32duino/Arduino_Core_STM32)**
+  - Still WIP. Fully functional but with limited number of MCUs supported so far (F1xx, F4xx, some G4xx & WB55). Requires lines added to stm32duino boards.txt which can be found in /ports/stm32/boards_txt_additions.txt. 
 
 - **mbed_rp2040**
-- **[stm32duino/Arduino_Core_STM32](https://github.com/stm32duino/Arduino_Core_STM32)**
-  - Still WIP, only supports F1, F4 & G4 so far. Requires lines added to stm32duino boards.txt which can be found in /ports/stm32/boards_additions.txt. No longer needs manual initialization/CDC flushing. DFU entry working. Serial now works as normal. 
+  - It is still possible to use TinyUSB but with some limits such as:
+    - `TinyUSB_Device_Init()` need to be manually called in setup()
+    - `TinyUSB_Device_Task()` and/or `TinyUSB_Device_FlushCDC()` may (or not) need to be manually called in loop()
+    - Use `SerialTinyUSB` name instead of Serial for serial monitor
 
-
-
-It is still possible to use TinyUSB but with some limits such as:
-
-- `TinyUSB_Device_Init()` need to be manually called in setup()
-- `TinyUSB_Device_Task()` and/or `TinyUSB_Device_FlushCDC()` may (or not) need to be manually called in loop()
-- Use `SerialTinyUSB` name instead of Serial for serial monitor
-- And there could be more other issues, using on these cores should be considered as experimental
+There could be more other issues on cores without built in support, using on these cores should be considered experimental.
 
 ## Class Driver API
 

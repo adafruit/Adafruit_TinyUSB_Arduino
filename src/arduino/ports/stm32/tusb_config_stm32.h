@@ -37,8 +37,10 @@
   #define CFG_TUSB_MCU OPT_MCU_STM32F4
 #elif defined(STM32G4xx)
   #define CFG_TUSB_MCU OPT_MCU_STM32G4
+#elif defined(STM32WBxx)
+  #define CFG_TUSB_MCU OPT_MCU_STM32WB
 #else
-  #error "Unsupported STM32 family - only F1xx, F4xx and G4xx are currently supported"
+  #error "Unsupported STM32 family - only F1xx, F4xx, G4xx and WBxx are currently supported"
 #endif
 
 #define CFG_TUSB_OS  OPT_OS_NONE

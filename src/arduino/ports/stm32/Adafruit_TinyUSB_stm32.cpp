@@ -40,8 +40,20 @@
   #include "stm32g4xx_hal_rcc.h"
   #include "stm32g4xx_hal_rcc_ex.h"
   #define GPIO_AF10_USB 0x0AU  // AF10 = USB FS on STM32G4xx (no named macro in HAL)
+#elif defined(STM32WBxx)
+  #include "stm32wbxx_hal.h"
+  #include "stm32wbxx_hal_rcc.h"
+  #include "stm32wbxx_hal_rcc_ex.h"
+  #include "stm32wbxx_hal_gpio_ex.h"
+  #include "stm32wbxx_ll_hsem.h"
+  #include "stm32wbxx_ll_rcc.h"
+  #if defined(STM32WB55xx)
+    #include "stm32wb55xx.h"
+  #elif defined(STM32WB35xx)
+    #include "stm32wb35xx.h"
+  #endif
 #else
-  #error "Unsupported STM32 family - only F1xx, F4xx and G4xx are currently supported"
+  #error "Unsupported STM32 family - only F1xx, F4xx, G4xx and WBxx are currently supported"
 #endif
 
 #include "Arduino.h"
@@ -79,6 +91,18 @@ void USB_HP_IRQHandler(void)
     tud_int_handler(0);
 }
 void USBWakeUp_IRQHandler(void)
+{
+    tud_int_handler(0);
+}
+#endif // USBCON
+
+#elif defined(STM32WBxx)
+#ifndef USBCON
+void USB_LP_IRQHandler(void)
+{
+    tud_int_handler(0);
+}
+void USB_HP_IRQHandler(void)
 {
     tud_int_handler(0);
 }
@@ -129,9 +153,6 @@ void serialEventRun(void)
 extern "C" void HAL_IncTick(void)
 {
     // Keep the HAL tick counter running (normally done by the weak default).
-    // uwTickFreq (HAL_TickFreqTypeDef) was added in newer HAL versions and is
-    // not present in the HAL bundled with the STM32 Arduino core, so we
-    // increment by 1 directly — correct for the default 1 ms SysTick period.
     extern __IO uint32_t uwTick;
     uwTick += 1U;
 
@@ -150,14 +171,24 @@ extern "C" void HAL_IncTick(void)
 // tud_task() is serviced every 1 ms via HAL_IncTick() → _tusb_task_pending
 // → yield(), ensuring host setup packets are answered even if the sketch
 // never calls delay() or TinyUSBDevice.task().
+//
+// NOTE: We do NOT wait for tud_mounted() here. Doing so would block until
+// enumeration completes, meaning any MIDI.begin() or other USB interface
+// registrations in setup() would be called too late to appear in the
+// descriptor. Let setup() run freely and register all interfaces before
+// the host finishes enumeration.
+//--------------------------------------------------------------------+
+//--------------------------------------------------------------------+
+// Initialization
 //--------------------------------------------------------------------+
 void initVariant(void)
 {
     TinyUSB_Device_Init(0);
 }
 
+
 //--------------------------------------------------------------------+
-// Porting API
+// Hardware Initialisation
 //--------------------------------------------------------------------+
 void TinyUSB_Port_InitDevice(uint8_t rhport)
 {
@@ -168,11 +199,9 @@ void TinyUSB_Port_InitDevice(uint8_t rhport)
     // STM32F4xx: USB OTG FS Configuration
     //=================================================================
 
-    // Enable clocks FIRST
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_USB_OTG_FS_CLK_ENABLE();
 
-    // Configure USB pins (PA11 = DM, PA12 = DP)
     GPIO_InitTypeDef GPIO_InitStruct = {};
     GPIO_InitStruct.Pin       = GPIO_PIN_11 | GPIO_PIN_12;
     GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
@@ -181,7 +210,6 @@ void TinyUSB_Port_InitDevice(uint8_t rhport)
     GPIO_InitStruct.Alternate = GPIO_AF10_OTG_FS;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-    // Enable USB IRQ
     NVIC_SetPriority(OTG_FS_IRQn, 0);
     NVIC_EnableIRQ(OTG_FS_IRQn);
 
@@ -200,7 +228,6 @@ void TinyUSB_Port_InitDevice(uint8_t rhport)
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_USB_CLK_ENABLE();
 
-    // Enable USB IRQ
     NVIC_SetPriority(USB_LP_CAN1_RX0_IRQn, 0);
     NVIC_EnableIRQ(USB_LP_CAN1_RX0_IRQn);
 
@@ -210,27 +237,18 @@ void TinyUSB_Port_InitDevice(uint8_t rhport)
     //=================================================================
 
     // ---- Step 1: Enable HSI48 if not already on --------------------
-    // Most Arduino core variants for G4 do NOT enable HSI48 by default.
-    // On G4, HSI48 is in the CRRCR register (Clock Recovery RC Register),
-    // not the CR register. We use direct register access to avoid
-    // disrupting the already-running PLL that feeds SYSCLK.
     if (!(RCC->CRRCR & RCC_CRRCR_HSI48ON)) {
-        RCC->CRRCR |= RCC_CRRCR_HSI48ON;           // Turn on HSI48
-        while (!(RCC->CRRCR & RCC_CRRCR_HSI48RDY)); // Wait for it to stabilize
+        RCC->CRRCR |= RCC_CRRCR_HSI48ON;
+        while (!(RCC->CRRCR & RCC_CRRCR_HSI48RDY));
     }
 
     // ---- Step 2: Route HSI48 to the USB clock domain ---------------
-    // The USB peripheral mux might default to PLLQ (which would be 170MHz
-    // and completely wrong). Force it to HSI48 (48 MHz).
     RCC_PeriphCLKInitTypeDef periphClk = {};
     periphClk.PeriphClockSelection = RCC_PERIPHCLK_USB;
     periphClk.UsbClockSelection    = RCC_USBCLKSOURCE_HSI48;
     HAL_RCCEx_PeriphCLKConfig(&periphClk);
 
     // ---- Step 3: Enable CRS for HSI48 auto-trimming via USB SOF ----
-    // HSI48 alone is ~1% (10000 ppm) accurate. CRS uses USB SOF
-    // pulses (every 1 ms) to trim it down to <500 ppm, well within
-    // the USB FS spec of ±2500 ppm.
     __HAL_RCC_CRS_CLK_ENABLE();
     RCC_CRSInitTypeDef crs = {};
     crs.Prescaler             = RCC_CRS_SYNC_DIV1;
@@ -245,13 +263,12 @@ void TinyUSB_Port_InitDevice(uint8_t rhport)
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_USB_CLK_ENABLE();
 
-    // Configure PA11 (DM) and PA12 (DP) as USB alternate function (AF10)
     GPIO_InitTypeDef GPIO_InitStruct = {};
     GPIO_InitStruct.Pin       = GPIO_PIN_11 | GPIO_PIN_12;
     GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull      = GPIO_NOPULL;
     GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF10_USB; // defined as 0x0AU above
+    GPIO_InitStruct.Alternate = GPIO_AF10_USB;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
     // ---- Step 5: Enable USB interrupts -----------------------------
@@ -262,70 +279,237 @@ void TinyUSB_Port_InitDevice(uint8_t rhport)
     NVIC_SetPriority(USBWakeUp_IRQn, 0);
     NVIC_EnableIRQ(USBWakeUp_IRQn);
 
-    // ---- Step 6: Enable USB peripheral power -----------------------
-    // The USB peripheral on G4 has a power domain switch (USBRST).
-    // We must explicitly bring the peripheral out of reset.
+    // ---- Step 6: Reset USB peripheral ------------------------------
     __HAL_RCC_USB_FORCE_RESET();
     HAL_Delay(1);
     __HAL_RCC_USB_RELEASE_RESET();
 
-#endif
+#elif defined(STM32WBxx)
+    //=================================================================
+    // STM32WBxx: USB FS Device Configuration (WB55, WB35)
+    //
+    // CPU2 (the RF coprocessor) uses HSI48 to clock its RNG. When CPU2
+    // finishes with the RNG it will shut HSI48 down UNLESS CPU1 holds
+    // hardware semaphore 5, which is the convention agreed between the
+    // two cores for signalling "CPU1 is using HSI48, leave it alone".
+    //
+    // We acquire semaphore 5 with a 1-step lock BEFORE enabling HSI48.
+    // This is a lightweight register write — it does not require the
+    // SHCI/IPCC BLE stack machinery at all. CPU2 respects the semaphore
+    // regardless of whether a BLE stack is running.
+    //
+    // HSI48 is trimmed to exactly 48 MHz by the CRS peripheral, which
+    // synchronises against USB SOF frames. This is the clock source the
+    // WB55 ROM bootloader also expects, so DFU entry is seamless.
+    //=================================================================
+
+    // ---- Step 1: Acquire HSEM 5 to prevent CPU2 killing HSI48 -----
+    LL_HSEM_1StepLock(HSEM, 5);
+
+    // ---- Step 2: Enable HSI48 and wait for it to be ready ----------
+    LL_RCC_HSI48_Enable();
+    while (!LL_RCC_HSI48_IsReady());
+
+    // ---- Step 3: Route HSI48 to the USB clock domain ---------------
+    RCC_PeriphCLKInitTypeDef periphClk = {};
+    periphClk.PeriphClockSelection = RCC_PERIPHCLK_USB;
+    periphClk.UsbClockSelection    = RCC_USBCLKSOURCE_HSI48;
+    HAL_RCCEx_PeriphCLKConfig(&periphClk);
+
+    // ---- Step 4: Enable CRS for HSI48 auto-trimming via USB SOF ----
+    __HAL_RCC_CRS_CLK_ENABLE();
+    RCC_CRSInitTypeDef crs = {};
+    crs.Prescaler             = RCC_CRS_SYNC_DIV1;
+    crs.Source                = RCC_CRS_SYNC_SOURCE_USB;
+    crs.Polarity              = RCC_CRS_SYNC_POLARITY_RISING;
+    crs.ReloadValue           = RCC_CRS_RELOADVALUE_DEFAULT;
+    crs.ErrorLimitValue       = RCC_CRS_ERRORLIMIT_DEFAULT;
+    crs.HSI48CalibrationValue = RCC_CRS_HSI48CALIBRATION_DEFAULT;
+    HAL_RCCEx_CRSConfig(&crs);
+
+    // ---- Step 5: Enable VddUSB, GPIO, and USB peripheral clocks ----
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+
+    // Enable USB VDD supply — required on WB55 before the USB peripheral
+    // will come out of reset
+    HAL_PWREx_EnableVddUSB();
+
+    __HAL_RCC_USB_CLK_ENABLE();
+
+    GPIO_InitTypeDef GPIO_InitStruct = {};
+    GPIO_InitStruct.Pin       = GPIO_PIN_11 | GPIO_PIN_12;
+    GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull      = GPIO_NOPULL;
+    GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF10_USB;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    // ---- Step 6: Enable USB interrupts -----------------------------
+    // WB55 USB IRQs at priority 3 (leave room for BLE stack at 0-2)
+    NVIC_SetPriority(USB_LP_IRQn, 3);
+    NVIC_EnableIRQ(USB_LP_IRQn);
+    NVIC_SetPriority(USB_HP_IRQn, 3);
+    NVIC_EnableIRQ(USB_HP_IRQn);
+
+    // ---- Step 7: Reset USB peripheral ------------------------------
+    __HAL_RCC_USB_FORCE_RESET();
+    HAL_Delay(5);
+    __HAL_RCC_USB_RELEASE_RESET();
+    HAL_Delay(5);
+
+#endif // MCU family hardware init
 
     // Initialize TinyUSB device stack (common for all MCUs)
     tud_init(rhport);
+
+#if defined(STM32WBxx)
+    // Assert D+ pull-up AFTER tud_init — tud_init resets the USB peripheral
+    // which clears BCDR, so setting DPPU before tud_init would have no effect.
+    USB->BCDR |= USB_BCDR_DPPU;
+#endif
 
     // Give the peripheral a moment to stabilize before attempting connection
     HAL_Delay(10);
 }
 
+//--------------------------------------------------------------------+
+// DFU Bootloader Entry
+//--------------------------------------------------------------------+
 void TinyUSB_Port_EnterDFU(void)
 {
-    // Reboot into the ST system-memory (ROM) DFU bootloader.
-    //
-    // This is called by the Adafruit TinyUSB library (Adafruit_USBD_CDC.cpp)
-    // when it detects the Arduino IDE "touch 1200" sequence (CDC port opened
-    // at 1200 baud then closed).
-    //
-    // Approach: write the STM32duino magic value (0x515B) into the appropriate
-    // backup register, then issue a system reset. The STM32duino core startup
-    // code checks this register and jumps to the ST ROM DFU bootloader if the
-    // value matches.
-    //
-    // We disconnect from USB first and give the host time to register the
-    // disconnection before resetting, so the IDE knows to start looking for
-    // a DFU device rather than waiting for the COM port to reappear.
+#if defined(STM32F4xx)
+    //=================================================================
+    // STM32F4xx: soft-disconnect via DCTL, then direct jump
+    //=================================================================
+    __HAL_RCC_SYSCFG_CLK_ENABLE();
+    #if defined(USE_USB_HS)
+        USB_OTG_DeviceTypeDef* otg_dev = (USB_OTG_DeviceTypeDef*)((uint32_t)USB_OTG_HS + USB_OTG_DEVICE_BASE);
+    #else
+        USB_OTG_DeviceTypeDef* otg_dev = (USB_OTG_DeviceTypeDef*)((uint32_t)USB_OTG_FS + USB_OTG_DEVICE_BASE);
+    #endif
+    otg_dev->DCTL |= USB_OTG_DCTL_SDIS;
+    HAL_Delay(20);
 
-    tud_disconnect();
+#elif defined(STM32F1xx)
+    //=================================================================
+    // STM32F1xx: pull D+ low to signal disconnect, then direct jump
+    //=================================================================
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin   = GPIO_PIN_12;
+    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, GPIO_PIN_RESET);
     HAL_Delay(100);
 
-    // Enable access to the backup domain
-    __HAL_RCC_PWR_CLK_ENABLE();
-    HAL_PWR_EnableBkUpAccess();
+#elif defined(STM32WBxx)
+    //=================================================================
+    // STM32WBxx: write magic value to RTC BKP0R, then NVIC_SystemReset().
+    // dfu_boot_stm32wb.c intercepts the reset in Reset_Handler, reads
+    // the magic value, and jumps to the bootloader before SystemInit()
+    // runs — giving the bootloader a near-clean chip state.
+    //=================================================================
 
-#if defined(STM32F1xx)
-    __HAL_RCC_BKP_CLK_ENABLE();
-    BKP->DR1 = 0x515B;
-#elif defined(STM32F4xx)
-    __HAL_RCC_RTC_ENABLE();
-    RTC->BKP4R = 0x515B;
-#elif defined(STM32G4xx)
-    __HAL_RCC_RTC_ENABLE();
-    TAMP->BKP4R = 0x515B;
+    // Gracefully disconnect USB from host
+    USB->BCDR &= ~USB_BCDR_DPPU;
+    HAL_Delay(20);
+
+    // Enable PWR clock and unlock backup domain register access
+    RCC->APB1ENR1 |= (1u << 28u);  // PWREN
+    __DSB();
+    PWR->CR1 |= (1u << 8u);        // DBP — backup domain write enable
+    __DSB();
+
+    // Write magic value to survive the reset
+    RTC->BKP0R = 0xDEADBEEFu;
+
+    // Trigger clean reset — never returns for WBxx.
+    // All code below this point is unreachable on WBxx;
+    // it is only executed by F1xx, F4xx, and G4xx.
+    NVIC_SystemReset();
+
 #endif
 
-    NVIC_SystemReset();
+    __disable_irq();
+
+    // Disable USB clock
+#if defined(STM32G4xx)
+    RCC->APB1ENR1 &= ~(RCC_APB1ENR1_USBEN);
+#elif defined(STM32F4xx)
+    RCC->AHB2ENR  &= ~(RCC_AHB2ENR_OTGFSEN);
+#elif defined(STM32F1xx)
+    RCC->APB1ENR  &= ~(RCC_APB1ENR_USBEN);
+#endif
+
+#if defined(STM32WBxx)
+    // Unreachable — WBxx exits via NVIC_SystemReset() above.
+    // Released here defensively in case of future refactoring.
+    LL_HSEM_ReleaseLock(HSEM, 5, 0);
+#endif
+
+    // Clear all pending interrupts
+    for (uint32_t i = 0; i < 5u; i++) {
+        NVIC->ICER[i] = 0xFFFFFFFFu;
+        NVIC->ICPR[i] = 0xFFFFFFFFu;
+    }
+
+    // Stop SysTick
+    SysTick->CTRL = 0u;
+    SysTick->LOAD = 0u;
+    SysTick->VAL  = 0u;
+
+    // Reset clocks to default
+#if defined(STM32F4xx)
+    // Manual reset — more reliable than HAL_RCC_DeInit on F405
+    RCC->CR |= RCC_CR_HSION;
+    while (!(RCC->CR & RCC_CR_HSIRDY));
+    RCC->CFGR = 0x00000000;
+    while ((RCC->CFGR & RCC_CFGR_SWS) != 0x00);
+    RCC->CR      &= ~(RCC_CR_PLLON | RCC_CR_HSEON);
+    RCC->PLLCFGR  = 0x24003010;
+#elif defined(STM32WBxx)
+    // Reconfigure USB pins as floating inputs before reset
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin  = GPIO_PIN_11 | GPIO_PIN_12;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+#else
+    HAL_RCC_DeInit();
+#endif
+
+    __enable_irq();
+
+    // Remap system memory to 0x00000000 and jump to bootloader
+#if defined(STM32G4xx) || defined(STM32F4xx) || defined(STM32WBxx)
+    //HAL_Delay(20);
+    __HAL_SYSCFG_REMAPMEMORY_SYSTEMFLASH();
+    #define BOOTLOADER_ADDR 0x1FFF0000u
+#elif defined(STM32F1xx)
+    #define BOOTLOADER_ADDR 0x1FFFF000u
+#endif
+
+    typedef void (*BootJump_t)(void);
+    const uint32_t sp = *(volatile uint32_t *)BOOTLOADER_ADDR;
+    const uint32_t pc = *(volatile uint32_t *)(BOOTLOADER_ADDR + 4u);
+    __set_MSP(sp);
+    __DSB();
+    __ISB();
+    ((BootJump_t)pc)();
+    while (1) {}
 }
 
+//--------------------------------------------------------------------+
+// Serial Number
+//--------------------------------------------------------------------+
 uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16])
 {
 #if defined(STM32F4xx)
-    // STM32F4xx UID base address (e.g. F411)
     volatile uint32_t *uid = (volatile uint32_t *)0x1FFF7A10;
 #elif defined(STM32F1xx)
-    // STM32F1xx UID base address (e.g. F103)
     volatile uint32_t *uid = (volatile uint32_t *)0x1FFFF7E8;
-#elif defined(STM32G4xx)
-    // STM32G4xx UID base address (e.g. G431, G474)
+#elif defined(STM32G4xx) || defined(STM32WBxx)
     volatile uint32_t *uid = (volatile uint32_t *)0x1FFF7590;
 #endif
 

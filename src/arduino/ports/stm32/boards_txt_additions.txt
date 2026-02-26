@@ -14,16 +14,38 @@
 #   Replace the prefix (GenF4 / GenF1 / GenG4) with the one for your board.
 #   Add the lines alongside any existing menu.usb entries for that board.
 #
+# STM32WB55 -- NOT SUPPORTED via generic board definitions
+#
+# Generic WB55 variants lack USB clock configuration and will not enumerate.
+# Use the P-NUCLEO-WB55 or NUCLEO WB55 USB Dongle board definition instead
+# (covered by the Nucleo_64 entry above). Custom WB55 boards with a 32MHz
+# HSE crystal should also work with these definitions.
+#
+# Proper generic support requires upstream changes to the STM32duino core.
 # -----------------------------------------------------------------------
 
-# STM32F4 (e.g. Generic F4 -- tested on WeAct STM32F411 BlackPill)
+
+# STM32F4 (e.g. Generic F4 -- tested on WeAct STM32F411 BlackPill and WeAct STM32F405)
 GenF4.menu.usb.TinyUSB=Adafruit TinyUSB
 GenF4.menu.usb.TinyUSB.build.usb_flags={build.extra_flags} -DARDUINO_ARCH_TINYUSB
+GenF4.menu.usb.TinyUSB.upload.use_1200bps_touch=true
+GenF4.menu.usb.TinyUSB.upload.wait_for_upload_port=false
 
 # STM32F1 (e.g. Generic F1 -- tested on STM32F103 BluePill)
 GenF1.menu.usb.TinyUSB=Adafruit TinyUSB
 GenF1.menu.usb.TinyUSB.build.usb_flags={build.extra_flags} -DARDUINO_ARCH_TINYUSB
+GenF1.menu.usb.TinyUSB.upload.use_1200bps_touch=true
+GenF1.menu.usb.TinyUSB.upload.wait_for_upload_port=false
 
-# STM32G4 (e.g. Generic G4 -- tested on WeAct STM32G431)
+# STM32G4 (e.g. Generic G4 -- tested on WeAct STM32G431 and WeAct STM32G474)
 GenG4.menu.usb.TinyUSB=Adafruit TinyUSB
 GenG4.menu.usb.TinyUSB.build.usb_flags={build.extra_flags} -DARDUINO_ARCH_TINYUSB
+GenG4.menu.usb.TinyUSB.upload.use_1200bps_touch=true
+GenG4.menu.usb.TinyUSB.upload.wait_for_upload_port=false
+
+# Nucleo-64 boards -- added primarily for STM32WB55 support (see WB55 note above).
+# Also enables TinyUSB for most Nucleo-64 boards with F1, F4, or G4 MCUs.
+Nucleo_64.menu.usb.TinyUSB=Adafruit TinyUSB
+Nucleo_64.menu.usb.TinyUSB.build.usb_flags={build.extra_flags} -DARDUINO_ARCH_TINYUSB
+Nucleo_64.menu.usb.TinyUSB.upload.use_1200bps_touch=true
+Nucleo_64.menu.usb.TinyUSB.upload.wait_for_upload_port=false
