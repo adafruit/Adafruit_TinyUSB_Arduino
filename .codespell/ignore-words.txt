@@ -6,7 +6,9 @@ fro
 hsi
 inout
 mot
+pring
 pris
+ptd
 ser
 sie
 synopsys
