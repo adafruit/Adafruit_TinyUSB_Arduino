@@ -24,8 +24,8 @@
  * This file is part of the TinyUSB stack.
  */
 
-#ifndef _TUSB_DWC2_BCM_H_
-#define _TUSB_DWC2_BCM_H_
+#ifndef TUSB_DWC2_BCM_H_
+#define TUSB_DWC2_BCM_H_
 
 #ifdef __cplusplus
  extern "C" {
@@ -70,6 +70,13 @@ static inline void dwc2_phy_init(dwc2_regs_t * dwc2, uint8_t hs_phy_type)
   (void) dwc2;
   (void) hs_phy_type;
 
+  // nothing to do
+}
+
+// MCU specific PHY deinit, disable PHY power
+static inline void dwc2_phy_deinit(dwc2_regs_t * dwc2, uint8_t hs_phy_type) {
+  (void) dwc2;
+  (void) hs_phy_type;
   // nothing to do
 }
 
