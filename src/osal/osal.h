@@ -24,8 +24,8 @@
  * This file is part of the TinyUSB stack.
  */
 
-#ifndef _TUSB_OSAL_H_
-#define _TUSB_OSAL_H_
+#ifndef TUSB_OSAL_H_
+#define TUSB_OSAL_H_
 
 #ifdef __cplusplus
  extern "C" {
@@ -33,7 +33,7 @@
 
 #include "common/tusb_common.h"
 
-typedef void (*osal_task_func_t)( void * );
+typedef void (*osal_task_func_t)(void* param);
 
 // Timeout
 #define OSAL_TIMEOUT_NOTIMEOUT     (0)          // Return immediately
@@ -65,16 +65,19 @@ typedef void (*osal_task_func_t)( void * );
   #include "osal_rtx4.h"
 #elif CFG_TUSB_OS == OPT_OS_ZEPHYR
   #include "osal_zephyr.h"
+#elif CFG_TUSB_OS == OPT_OS_THREADX
+  #include "osal_threadx.h"
 #elif CFG_TUSB_OS == OPT_OS_CUSTOM
   #include "tusb_os_custom.h" // implemented by application
 #else
   #error OS is not supported yet
 #endif
 
-//--------------------------------------------------------------------+
-// OSAL Porting API
-// Should be implemented as static inline function in osal_port.h header
-/*
+/*--------------------------------------------------------------------
+  OSAL Porting API
+  Should be implemented as static inline function in osal_port.h header
+   uint32_t osal_time_millis(void);
+
    void osal_spin_init(osal_spinlock_t *ctx);
    void osal_spin_lock(osal_spinlock_t *ctx, bool in_isr)
    void osal_spin_unlock(osal_spinlock_t *ctx, bool in_isr);
@@ -83,7 +86,7 @@ typedef void (*osal_task_func_t)( void * );
    bool osal_semaphore_delete(osal_semaphore_t semd_hdl);
    bool osal_semaphore_post(osal_semaphore_t sem_hdl, bool in_isr);
    bool osal_semaphore_wait(osal_semaphore_t sem_hdl, uint32_t msec);
-   void osal_semaphore_reset(osal_semaphore_t sem_hdl); // TODO removed
+   void osal_semaphore_reset(osal_semaphore_t sem_hdl);
 
    osal_mutex_t osal_mutex_create(osal_mutex_def_t* mdef);
    bool osal_mutex_delete(osal_mutex_t mutex_hdl)
@@ -95,11 +98,11 @@ typedef void (*osal_task_func_t)( void * );
    bool osal_queue_receive(osal_queue_t qhdl, void* data, uint32_t msec);
    bool osal_queue_send(osal_queue_t qhdl, void const * data, bool in_isr);
    bool osal_queue_empty(osal_queue_t qhdl);
-*/
-//--------------------------------------------------------------------+
+--------------------------------------------------------------------------*/
+
 
 #ifdef __cplusplus
  }
 #endif
 
-#endif /* _TUSB_OSAL_H_ */
+#endif

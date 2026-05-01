@@ -104,10 +104,9 @@ TU_ATTR_WEAK void tuh_umount_cb(uint8_t daddr) {
 //--------------------------------------------------------------------+
 // Data Structure
 //--------------------------------------------------------------------+
-typedef struct {
-  tuh_bus_info_t bus_info;
 
-  // Device Descriptor
+// Device Descriptor (without bLength and bDescriptorType header)
+typedef struct TU_ATTR_PACKED {
   uint16_t bcdUSB;
   uint8_t  bDeviceClass;
   uint8_t  bDeviceSubClass;
@@ -120,6 +119,13 @@ typedef struct {
   uint8_t  iProduct;
   uint8_t  iSerialNumber;
   uint8_t  bNumConfigurations;
+} desc_device_noheader_t;
+
+TU_VERIFY_STATIC( sizeof(desc_device_noheader_t) == 16u, "size is not correct");
+
+typedef struct {
+  tuh_bus_info_t bus_info;
+  desc_device_noheader_t desc_device;
 
   // Device State
   struct TU_ATTR_PACKED {
@@ -169,6 +175,12 @@ static OSAL_SPINLOCK_DEF(_usbh_spin, usbh_int_set);
 OSAL_QUEUE_DEF(usbh_int_set, _usbh_qdef, CFG_TUH_TASK_QUEUE_SZ, hcd_event_t);
 static osal_queue_t _usbh_q;
 
+  #if CFG_TUH_HUB
+// Deferred attachment queue, only needed when using hub
+OSAL_QUEUE_DEF(usbh_int_set, _usbh_daqdef, CFG_TUH_HUB, hcd_event_t);
+static osal_queue_t _usbh_daq;
+  #endif
+
 // Control transfers: since most controllers do not support multiple control transfers
 // on multiple devices concurrently and control transfers are not used much except for
 // enumeration, we will only execute control transfers one at a time.
@@ -184,11 +196,18 @@ typedef struct {
 } usbh_ctrl_xfer_info_t;
 
 typedef struct {
+  tusb_defer_func_t func;
+  uintptr_t         arg;
+  uint32_t          at_ms;
+} usbh_call_after_t;
+
+typedef struct {
   uint8_t controller_id;      // controller ID
   uint8_t enumerating_daddr;  // device address of the device being enumerated
   uint8_t attach_debouncing_bm;  // bitmask for roothub port attach debouncing
   tuh_bus_info_t dev0_bus;    // bus info for dev0 in enumeration
   usbh_ctrl_xfer_info_t ctrl_xfer_info; // control transfer
+  usbh_call_after_t call_after;
 } usbh_data_t;
 
 static usbh_data_t _usbh_data = {
@@ -292,13 +311,17 @@ static uint8_t _app_driver_count = 0;
 
 #define TOTAL_DRIVER_COUNT    (_app_driver_count + BUILTIN_DRIVER_COUNT)
 
-static inline usbh_class_driver_t const *get_driver(uint8_t drv_id) {
+// virtually joins built-in and application drivers together.
+// Application is positioned first to allow overwriting built-in ones.
+TU_ATTR_ALWAYS_INLINE static inline usbh_class_driver_t const *get_driver(uint8_t drv_id) {
   usbh_class_driver_t const *driver = NULL;
-
-  if ( drv_id < _app_driver_count ) {
+  if (drv_id < _app_driver_count) {
     driver = &_app_driver[drv_id];
-  } else if ( drv_id < TOTAL_DRIVER_COUNT && BUILTIN_DRIVER_COUNT > 0) {
-    driver = &usbh_class_drivers[drv_id - _app_driver_count];
+  } else {
+    drv_id -= _app_driver_count;
+    if (drv_id < BUILTIN_DRIVER_COUNT) {
+      driver = &usbh_class_drivers[drv_id];
+    }
   }
 
   return driver;
@@ -307,8 +330,10 @@ static inline usbh_class_driver_t const *get_driver(uint8_t drv_id) {
 //--------------------------------------------------------------------+
 // Function Inline and Prototypes
 //--------------------------------------------------------------------+
-static bool enum_new_device(hcd_event_t* event);
-static void process_removed_device(uint8_t rhport, uint8_t hub_addr, uint8_t hub_port);
+static void enum_new_device(hcd_event_t* event);
+static void enum_delay_async(uintptr_t state);
+static void process_remove_event(hcd_event_t *event);
+static void remove_device_tree(uint8_t rhport, uint8_t hub_addr, uint8_t hub_port);
 static bool usbh_edpt_control_open(uint8_t dev_addr, uint8_t max_packet_size);
 static bool usbh_control_xfer_cb (uint8_t daddr, uint8_t ep_addr, xfer_result_t result, uint32_t xferred_bytes);
 
@@ -318,7 +343,7 @@ TU_ATTR_ALWAYS_INLINE static inline usbh_device_t* get_device(uint8_t dev_addr) 
 }
 
 TU_ATTR_ALWAYS_INLINE static inline bool is_hub_addr(uint8_t daddr) {
-  return (CFG_TUH_HUB > 0) && (daddr > CFG_TUH_DEVICE_MAX);
+  return (CFG_TUH_HUB > 0) && (daddr > CFG_TUH_DEVICE_MAX); //-V560
 }
 
 TU_ATTR_ALWAYS_INLINE static inline bool queue_event(hcd_event_t const * event, bool in_isr) {
@@ -344,6 +369,15 @@ TU_ATTR_ALWAYS_INLINE static inline bool usbh_setup_send(uint8_t daddr, const ui
   return ret;
 }
 
+bool usbh_defer_func_ms_async(uint32_t ms, tusb_defer_func_t func, uintptr_t param) {
+  TU_ASSERT(_usbh_data.call_after.func == NULL);
+  TU_LOG_USBH("USBH schedule function after %u ms\r\n", (unsigned int)ms);
+  _usbh_data.call_after.func  = func;
+  _usbh_data.call_after.arg   = param;
+  _usbh_data.call_after.at_ms = tusb_time_millis_api() + ms;
+  return true;
+}
+
 TU_ATTR_ALWAYS_INLINE static inline void usbh_device_close(uint8_t rhport, uint8_t daddr) {
   hcd_device_close(rhport, daddr);
 
@@ -355,6 +389,10 @@ TU_ATTR_ALWAYS_INLINE static inline void usbh_device_close(uint8_t rhport, uint8
   // invalidate if enumerating
   if (daddr == _usbh_data.enumerating_daddr) {
     _usbh_data.enumerating_daddr = TUSB_INDEX_INVALID_8;
+    // clear enum delay function of the device being removed
+    if (_usbh_data.call_after.func == enum_delay_async) {
+      _usbh_data.call_after.func = NULL;
+    }
   }
 }
 
@@ -372,7 +410,8 @@ bool tuh_connected(uint8_t daddr) {
     return _usbh_data.enumerating_daddr == 0;
   } else {
     const usbh_device_t* dev = get_device(daddr);
-    return dev && dev->connected;
+    TU_VERIFY(dev != NULL);
+    return dev->connected;
   }
 }
 
@@ -380,10 +419,10 @@ bool tuh_vid_pid_get(uint8_t dev_addr, uint16_t *vid, uint16_t *pid) {
   *vid = *pid = 0;
 
   usbh_device_t const *dev = get_device(dev_addr);
-  TU_VERIFY(dev && dev->addressed && dev->idVendor != 0);
+  TU_VERIFY(dev && dev->addressed && dev->desc_device.idVendor != 0);
 
-  *vid = dev->idVendor;
-  *pid = dev->idProduct;
+  *vid = dev->desc_device.idVendor;
+  *pid = dev->desc_device.idProduct;
 
   return true;
 }
@@ -394,18 +433,7 @@ bool tuh_descriptor_get_device_local(uint8_t daddr, tusb_desc_device_t* desc_dev
 
   desc_device->bLength = sizeof(tusb_desc_device_t);
   desc_device->bDescriptorType = TUSB_DESC_DEVICE;
-  desc_device->bcdUSB = dev->bcdUSB;
-  desc_device->bDeviceClass = dev->bDeviceClass;
-  desc_device->bDeviceSubClass = dev->bDeviceSubClass;
-  desc_device->bDeviceProtocol = dev->bDeviceProtocol;
-  desc_device->bMaxPacketSize0 = dev->bMaxPacketSize0;
-  desc_device->idVendor = dev->idVendor;
-  desc_device->idProduct = dev->idProduct;
-  desc_device->bcdDevice = dev->bcdDevice;
-  desc_device->iManufacturer = dev->iManufacturer;
-  desc_device->iProduct = dev->iProduct;
-  desc_device->iSerialNumber = dev->iSerialNumber;
-  desc_device->bNumConfigurations = dev->bNumConfigurations;
+  memcpy((uint8_t*) desc_device + offsetof(tusb_desc_device_t, bcdUSB), &dev->desc_device, sizeof(desc_device_noheader_t));
 
   return true;
 }
@@ -439,8 +467,8 @@ bool tuh_configure(uint8_t rhport, uint32_t cfg_id, const void *cfg_param) {
 
 static void clear_device(usbh_device_t* dev) {
   tu_memclr(dev, sizeof(usbh_device_t));
-  memset(dev->itf2drv, TUSB_INDEX_INVALID_8, sizeof(dev->itf2drv)); // invalid mapping
-  memset(dev->ep2drv , TUSB_INDEX_INVALID_8, sizeof(dev->ep2drv )); // invalid mapping
+  (void) memset(dev->itf2drv, TUSB_INDEX_INVALID_8, sizeof(dev->itf2drv)); // invalid mapping
+  (void) memset(dev->ep2drv , TUSB_INDEX_INVALID_8, sizeof(dev->ep2drv )); // invalid mapping
 }
 
 bool tuh_inited(void) {
@@ -487,11 +515,17 @@ bool tuh_rhport_init(uint8_t rhport, const tusb_rhport_init_t* rh_init) {
     _usbh_q = osal_queue_create(&_usbh_qdef);
     TU_ASSERT(_usbh_q != NULL);
 
-#if OSAL_MUTEX_REQUIRED
+  #if CFG_TUH_HUB
+    // Deferred attachment queue
+    _usbh_daq = osal_queue_create(&_usbh_daqdef);
+    TU_ASSERT(_usbh_daq != NULL);
+  #endif
+
+  #if OSAL_MUTEX_REQUIRED
     // Init mutex
     _usbh_mutex = osal_mutex_create(&_usbh_mutexdef);
     TU_ASSERT(_usbh_mutex);
-#endif
+  #endif
 
     // Get application driver if available
     _app_driver = usbh_app_driver_get_cb(&_app_driver_count);
@@ -510,7 +544,7 @@ bool tuh_rhport_init(uint8_t rhport, const tusb_rhport_init_t* rh_init) {
     // Class drivers
     for (uint8_t drv_id = 0; drv_id < TOTAL_DRIVER_COUNT; drv_id++) {
       usbh_class_driver_t const* driver = get_driver(drv_id);
-      if (driver) {
+      if (driver != NULL) {
         TU_LOG_USBH("%s init\r\n", driver->name);
         driver->init();
       }
@@ -532,11 +566,11 @@ bool tuh_deinit(uint8_t rhport) {
 
   // deinit host controller
   hcd_int_disable(rhport);
-  hcd_deinit(rhport);
+  TU_ASSERT(hcd_deinit(rhport));
   _usbh_data.controller_id = TUSB_INDEX_INVALID_8;
 
-  // "unplug" all devices on this rhport (hub_addr = 0, hub_port = 0)
-  process_removed_device(rhport, 0, 0);
+  // remove all devices on this rhport (hub_addr = 0, hub_port = 0)
+  remove_device_tree(rhport, 0, 0);
 
   // deinit host stack if no controller is active
   if (!tuh_inited()) {
@@ -552,11 +586,16 @@ bool tuh_deinit(uint8_t rhport) {
     osal_queue_delete(_usbh_q);
     _usbh_q = NULL;
 
-    #if OSAL_MUTEX_REQUIRED
+  #if CFG_TUH_HUB
+    osal_queue_delete(_usbh_daq);
+    _usbh_daq = NULL;
+  #endif
+
+  #if OSAL_MUTEX_REQUIRED
     // TODO make sure there is no task waiting on this mutex
     osal_mutex_delete(_usbh_mutex);
     _usbh_mutex = NULL;
-    #endif
+  #endif
   }
 
   return true;
@@ -564,9 +603,19 @@ bool tuh_deinit(uint8_t rhport) {
 
 bool tuh_task_event_ready(void) {
   if (!tuh_inited()) {
-    return false; // Skip if stack is not initialized
+    return false; // Skip if tusb stack is not initialized
   }
-  return !osal_queue_empty(_usbh_q);
+  if (!osal_queue_empty(_usbh_q)) {
+    return true;
+  }
+
+  #if CFG_TUH_HUB
+  if (!osal_queue_empty(_usbh_daq)) {
+    return true;
+  }
+  #endif
+
+  return false;
 }
 
 /* USB Host Driver task
@@ -586,49 +635,88 @@ bool tuh_task_event_ready(void) {
     @endcode
  */
 void tuh_task_ext(uint32_t timeout_ms, bool in_isr) {
-  (void) in_isr; // not implemented yet
-
   // Skip if stack is not initialized
   if (!tuh_inited()) {
     return;
   }
 
-  // Loop until there is no more events in the queue
-  while (1) {
+  (void) in_isr; // not implemented yet
+
+  // Loop until there are no more events in the queue or CFG_TUH_TASK_EVENTS_PER_RUN is reached
+  for (unsigned epr = 0;; epr++) {
+  #if CFG_TUH_TASK_EVENTS_PER_RUN > 0
+    if (epr >= CFG_TUH_TASK_EVENTS_PER_RUN) {
+      TU_LOG_USBH("USBH event limit (" TU_XSTRING(CFG_TUH_TASK_EVENTS_PER_RUN) ") reached\r\n");
+      break;
+    }
+  #endif
+
+    // Process call_after_ms function if ms is reached
+    tusb_defer_func_t after_cb = _usbh_data.call_after.func;
+    if (after_cb) {
+      int32_t remain_ms = (int32_t)(_usbh_data.call_after.at_ms - tusb_time_millis_api());
+      if (remain_ms <= 0) {
+        // delay expired, run callback now
+        TU_LOG_USBH("USBH invoke scheduled function\r\n");
+        _usbh_data.call_after.func = NULL;
+        after_cb(_usbh_data.call_after.arg);
+      }
+
+      // above after_cb() can re-schedule another function, we need to re-check and reduce timeout of
+      // the main event timeout to make sure we aren't blocking more than call_after remaining ms.
+      if (_usbh_data.call_after.func != NULL) {
+        remain_ms = (int32_t) (_usbh_data.call_after.at_ms - tusb_time_millis_api());
+        if (remain_ms <= 0) {
+          timeout_ms = 0; // expired already
+        } else if (timeout_ms > (uint32_t)remain_ms) {
+          timeout_ms = (uint32_t)remain_ms;
+        }
+      }
+    }
+
     hcd_event_t event;
-    if (!osal_queue_receive(_usbh_q, &event, timeout_ms)) { return; }
+
+  #if CFG_TUH_HUB
+    // Get deferred device attachments if none is enumerating
+    bool has_deferred_attach = false;
+    if (_usbh_data.enumerating_daddr == TUSB_INDEX_INVALID_8) {
+      // zero wait to avoid blocking the main event queue
+      has_deferred_attach = osal_queue_receive(_usbh_daq, &event, 0);
+    }
+
+    if (!has_deferred_attach) // skip event queue to process deferred attach
+  #endif
+    {
+      if (!osal_queue_receive(_usbh_q, &event, timeout_ms)) {
+        return;
+      }
+    }
 
     switch (event.event_id) {
       case HCD_EVENT_DEVICE_ATTACH:
+        // Should we miss the hub detach event due to high traffic, Or due to physical debouncing, some devices can
+        // cause multiple attaches (actually reset) without a detached event.
+        // Force remove currently mounted with the same bus info (rhport, hub addr, hub port) if exists
+        process_remove_event(&event);
+
         // due to the shared control buffer, we must fully complete enumerating one device first.
-        // TODO better to have an separated queue for newly attached devices
         if (_usbh_data.enumerating_daddr == TUSB_INDEX_INVALID_8) {
           // New device attached and we are ready
           TU_LOG_USBH("[%u:] USBH Device Attach\r\n", event.rhport);
           _usbh_data.enumerating_daddr = 0; // enumerate new device with address 0
           enum_new_device(&event);
-        } else {
-          // currently enumerating another device
-          TU_LOG_USBH("[%u:] USBH Defer Attach until current enumeration complete\r\n", event.rhport);
-          const bool is_empty = osal_queue_empty(_usbh_q);
-          queue_event(&event, in_isr);
-          if (is_empty) {
-            return; // Exit if this is the only event in the queue, otherwise we loop forever
-          }
         }
+  #if CFG_TUH_HUB
+        else {
+          TU_LOG_USBH("[%u:] USBH Defer Attach until current enumeration complete\r\n", event.rhport);
+          TU_ASSERT(osal_queue_send(_usbh_daq, &event, in_isr), );
+        }
+  #endif
         break;
 
       case HCD_EVENT_DEVICE_REMOVE:
-        TU_LOG_USBH("[%u:%u:%u] USBH DEVICE REMOVED\r\n", event.rhport, event.connection.hub_addr, event.connection.hub_port);
-        if (_usbh_data.enumerating_daddr == 0 &&
-            event.rhport == _usbh_data.dev0_bus.rhport &&
-            event.connection.hub_addr == _usbh_data.dev0_bus.hub_addr &&
-            event.connection.hub_port == _usbh_data.dev0_bus.hub_port) {
-          // dev0 is unplugged while enumerating (not yet assigned an address)
-          usbh_device_close(_usbh_data.dev0_bus.rhport, 0);
-        } else {
-          process_removed_device(event.rhport, event.connection.hub_addr, event.connection.hub_port);
-        }
+        TU_LOG_USBH("[%u:%u:%u] USBH Device Removed\r\n", event.rhport, event.connection.hub_addr, event.connection.hub_port);
+        process_remove_event(&event);
         break;
 
       case HCD_EVENT_XFER_COMPLETE: {
@@ -657,7 +745,7 @@ void tuh_task_ext(uint32_t timeout_ms, bool in_isr) {
             // with enabled driver e.g HID endpoint
             #if CFG_TUH_API_EDPT_XFER
             tuh_xfer_cb_t const complete_cb = dev->ep_callback[epnum][ep_dir].complete_cb;
-            if ( complete_cb ) {
+            if (complete_cb != NULL) {
               // re-construct xfer info
               tuh_xfer_t xfer = {
                   .daddr       = event.dev_addr,
@@ -675,7 +763,7 @@ void tuh_task_ext(uint32_t timeout_ms, bool in_isr) {
             {
               uint8_t drv_id = dev->ep2drv[epnum][ep_dir];
               usbh_class_driver_t const* driver = get_driver(drv_id);
-              if (driver) {
+              if (driver != NULL) {
                 TU_LOG_USBH("  %s xfer callback\r\n", driver->name);
                 driver->xfer_cb(event.dev_addr, ep_addr, (xfer_result_t) event.xfer_complete.result,
                                 event.xfer_complete.len);
@@ -690,17 +778,18 @@ void tuh_task_ext(uint32_t timeout_ms, bool in_isr) {
       }
 
       case USBH_EVENT_FUNC_CALL:
-        if (event.func_call.func) event.func_call.func(event.func_call.param);
+        if (event.func_call.func != NULL) {
+          event.func_call.func(event.func_call.param);
+        }
         break;
 
       default:
+        // unknown event
         break;
     }
 
-#if CFG_TUSB_OS != OPT_OS_NONE && CFG_TUSB_OS != OPT_OS_PICO
-    // return if there is no more events, for application to run other background
-    if (osal_queue_empty(_usbh_q)) return;
-#endif
+    // allow to exit tuh_task() if there is no event in the next run
+    timeout_ms = 0;
   }
 }
 
@@ -743,7 +832,7 @@ bool tuh_control_xfer (tuh_xfer_t* xfer) {
                   tu_str_std_request[xfer->setup->bRequest] : "Class Request");
   TU_LOG_BUF_USBH(xfer->setup, 8);
 
-  if (xfer->complete_cb) {
+  if (xfer->complete_cb != NULL) {
     TU_ASSERT(usbh_setup_send(daddr, (uint8_t const *) &_usbh_epbuf.request));
   }else {
     // blocking if complete callback is not provided
@@ -758,10 +847,8 @@ bool tuh_control_xfer (tuh_xfer_t* xfer) {
 
     while (result == XFER_RESULT_INVALID) {
       // Note: this can be called within an callback ie. part of tuh_task()
-      // therefore event with RTOS tuh_task() still need to be invoked
-      if (tuh_task_event_ready()) {
-        tuh_task();
-      }
+      // therefore even with RTOS tuh_task_ext() still need to be invoked
+      tuh_task_ext(0, false);
       // TODO probably some timeout to prevent hanged
     }
 
@@ -795,7 +882,7 @@ static void _control_xfer_complete(uint8_t daddr, xfer_result_t result) {
 
   _control_set_xfer_stage(CONTROL_STAGE_IDLE);
 
-  if (xfer_temp.complete_cb) {
+  if (xfer_temp.complete_cb != NULL) {
     xfer_temp.complete_cb(&xfer_temp);
   }
 }
@@ -834,7 +921,7 @@ static bool usbh_control_xfer_cb (uint8_t daddr, uint8_t ep_addr, xfer_result_t 
     case XFER_RESULT_SUCCESS:
       switch(ctrl_info->stage) {
         case CONTROL_STAGE_SETUP:
-          if (request->wLength) {
+          if (request->wLength > 0) {
             // DATA stage: initial data toggle is always 1
             _control_set_xfer_stage(CONTROL_STAGE_DATA);
             const uint8_t ep_data = tu_edpt_addr(0, request->bmRequestType_bit.direction);
@@ -844,7 +931,7 @@ static bool usbh_control_xfer_cb (uint8_t daddr, uint8_t ep_addr, xfer_result_t 
           TU_ATTR_FALLTHROUGH;
 
         case CONTROL_STAGE_DATA: {
-            if (request->wLength) {
+            if (request->wLength > 0) {
               TU_LOG_USBH("[%u:%u] Control data:\r\n", rhport, daddr);
               TU_LOG_MEM_USBH(ctrl_info->buffer, xferred_bytes, 2);
             }
@@ -1058,7 +1145,14 @@ static bool usbh_edpt_control_open(uint8_t dev_addr, uint8_t max_packet_size) {
 }
 
 bool tuh_edpt_open(uint8_t dev_addr, tusb_desc_endpoint_t const* desc_ep) {
-  TU_ASSERT(tu_edpt_validate(desc_ep, tuh_speed_get(dev_addr), true));
+  // HACK: some device incorrectly always reports 512 bulk regardless of link speed, overwrite descriptor to force 64
+  if (desc_ep->bmAttributes.xfer == TUSB_XFER_BULK && tu_edpt_packet_size(desc_ep) > 64 &&
+      tuh_speed_get(dev_addr) == TUSB_SPEED_FULL) {
+    TU_LOG1("  WARN: EP max packet size is 512 in fullspeed, force to 64\r\n");
+    tusb_desc_endpoint_t *hacked_ep = (tusb_desc_endpoint_t *)(uintptr_t)desc_ep;
+    hacked_ep->wMaxPacketSize       = tu_htole16(64);
+  }
+  TU_ASSERT(tu_edpt_validate(desc_ep, tuh_speed_get(dev_addr)));
   return hcd_edpt_open(usbh_get_rhport(dev_addr), dev_addr, desc_ep);
 }
 
@@ -1084,7 +1178,7 @@ bool usbh_edpt_busy(uint8_t dev_addr, uint8_t ep_addr) {
 
 bool tuh_bus_info_get(uint8_t daddr, tuh_bus_info_t* bus_info) {
   usbh_device_t const* dev = get_device(daddr);
-  if (dev) {
+  if (dev != NULL) {
     *bus_info = dev->bus_info;
   } else {
     *bus_info = _usbh_data.dev0_bus;
@@ -1109,7 +1203,9 @@ TU_ATTR_FAST_FUNC void hcd_event_handler(hcd_event_t const* event, bool in_isr) 
       }
       break;
 
-    default: break;
+    default:
+      // nothing to do
+      break;
   }
 
   queue_event(event, in_isr);
@@ -1174,24 +1270,24 @@ bool tuh_descriptor_get_manufacturer_string(uint8_t daddr, uint16_t language_id,
                                             tuh_xfer_cb_t complete_cb, uintptr_t user_data)
 {
   usbh_device_t const* dev = get_device(daddr);
-  TU_VERIFY(dev && dev->iManufacturer);
-  return tuh_descriptor_get_string(daddr, dev->iManufacturer, language_id, buffer, len, complete_cb, user_data);
+  TU_VERIFY(dev && dev->desc_device.iManufacturer);
+  return tuh_descriptor_get_string(daddr, dev->desc_device.iManufacturer, language_id, buffer, len, complete_cb, user_data);
 }
 
 // Get product string descriptor
 bool tuh_descriptor_get_product_string(uint8_t daddr, uint16_t language_id, void* buffer, uint16_t len,
                                        tuh_xfer_cb_t complete_cb, uintptr_t user_data) {
   usbh_device_t const* dev = get_device(daddr);
-  TU_VERIFY(dev && dev->iProduct);
-  return tuh_descriptor_get_string(daddr, dev->iProduct, language_id, buffer, len, complete_cb, user_data);
+  TU_VERIFY(dev && dev->desc_device.iProduct);
+  return tuh_descriptor_get_string(daddr, dev->desc_device.iProduct, language_id, buffer, len, complete_cb, user_data);
 }
 
 // Get serial string descriptor
 bool tuh_descriptor_get_serial_string(uint8_t daddr, uint16_t language_id, void* buffer, uint16_t len,
                                       tuh_xfer_cb_t complete_cb, uintptr_t user_data) {
   usbh_device_t const* dev = get_device(daddr);
-  TU_VERIFY(dev && dev->iSerialNumber);
-  return tuh_descriptor_get_string(daddr, dev->iSerialNumber, language_id, buffer, len, complete_cb, user_data);
+  TU_VERIFY(dev && dev->desc_device.iSerialNumber);
+  return tuh_descriptor_get_string(daddr, dev->desc_device.iSerialNumber, language_id, buffer, len, complete_cb, user_data);
 }
 
 // Get HID report descriptor
@@ -1304,8 +1400,22 @@ bool tuh_interface_set(uint8_t daddr, uint8_t itf_num, uint8_t itf_alt,
 //--------------------------------------------------------------------+
 // Detaching
 //--------------------------------------------------------------------+
-// a device unplugged from rhport:hub_addr:hub_port
-static void process_removed_device(uint8_t rhport, uint8_t hub_addr, uint8_t hub_port) {
+
+// process detach event from rhport:hub_addr:hub_port
+static void process_remove_event(hcd_event_t *event) {
+  if (_usbh_data.enumerating_daddr == 0 &&
+      event->rhport == _usbh_data.dev0_bus.rhport &&
+      event->connection.hub_addr == _usbh_data.dev0_bus.hub_addr &&
+      event->connection.hub_port == _usbh_data.dev0_bus.hub_port) {
+    // dev0 is unplugged while enumerating (not yet assigned an address)
+    usbh_device_close(_usbh_data.dev0_bus.rhport, 0);
+  } else {
+    remove_device_tree(event->rhport, event->connection.hub_addr, event->connection.hub_port);
+  }
+}
+
+// remove a device at rhport:hub_addr:hub_port and all of its downstream
+static void remove_device_tree(uint8_t rhport, uint8_t hub_addr, uint8_t hub_port) {
   // Find the all devices (star-network) under port that is unplugged
   #if CFG_TUH_HUB
   uint8_t removing_hubs[CFG_TUH_HUB] = { 0 };
@@ -1314,7 +1424,7 @@ static void process_removed_device(uint8_t rhport, uint8_t hub_addr, uint8_t hub
   do {
     for (uint8_t dev_id = 0; dev_id < TOTAL_DEVICES; dev_id++) {
       usbh_device_t* dev = &_usbh_devices[dev_id];
-      uint8_t const daddr = dev_id + 1;
+      uint8_t const daddr = dev_id + 1u;
 
       // hub_addr = 0 means roothub, hub_port = 0 means all devices of downstream hub
       if (dev->bus_info.rhport == rhport && dev->connected &&
@@ -1336,7 +1446,7 @@ static void process_removed_device(uint8_t rhport, uint8_t hub_addr, uint8_t hub
         // Close class driver
         for (uint8_t drv_id = 0; drv_id < TOTAL_DRIVER_COUNT; drv_id++) {
           usbh_class_driver_t const* driver = get_driver(drv_id);
-          if (driver) {
+          if (driver != NULL) {
             driver->close(daddr);
           }
         }
@@ -1354,7 +1464,7 @@ static void process_removed_device(uint8_t rhport, uint8_t hub_addr, uint8_t hub
 
     // find a marked hub to process
     for (uint8_t h_id = 0; h_id < CFG_TUH_HUB; h_id++) {
-      if (removing_hubs[h_id]) {
+      if (0 != removing_hubs[h_id]) {
         removing_hubs[h_id] = 0;
 
         // update hub_addr and hub_port for next loop
@@ -1376,21 +1486,22 @@ static void process_removed_device(uint8_t rhport, uint8_t hub_addr, uint8_t hub
 // NOTE: due to the shared control buffer, we must complete enumerating
 // one device before enumerating another one.
 //--------------------------------------------------------------------+
-enum {                               // USB 2.0 specs 7.1.7 for timing
-  ENUM_DEBOUNCING_DELAY_MS = 150,    // T(ATTDB)  minimum 100 ms for stable connection
-  ENUM_RESET_ROOT_DELAY_MS = 50,     // T(DRSTr)  minimum 50 ms for reset from root port
-  ENUM_RESET_HUB_DELAY_MS = 20,      // T(DRST)   10-20 ms for hub reset
-  ENUM_RESET_RECOVERY_DELAY_MS = 10, // T(RSTRCY) minimum 10 ms for reset recovery
-  ENUM_SET_ADDRESS_RECOVERY_DELAY_MS = 2, // USB 2.0 Spec 9.2.6.3 min is 2 ms
+enum {                                      // USB 2.0 specs 7.1.7 for timing
+  ENUM_DEBOUNCING_DELAY_MS           = 150, // T(ATTDB)  minimum 100 ms for stable connection
+  ENUM_RESET_ROOT_DELAY_MS           = 50,  // T(DRSTr)  minimum 50 ms for reset from root port
+  ENUM_RESET_ROOT_POST_DELAY_MS      = 2,   // 2 ms delay after root port reset before getting speed/status
+  ENUM_RESET_HUB_DELAY_MS            = 20,  // T(DRST)   10-20 ms for hub reset
+  ENUM_RESET_RECOVERY_DELAY_MS       = 10,  // T(RSTRCY) minimum 10 ms for reset recovery
+  ENUM_SET_ADDRESS_RECOVERY_DELAY_MS = 2,   // USB 2.0 Spec 9.2.6.3 min is 2 ms
 };
 
 enum {
   ENUM_IDLE,
   ENUM_HUB_RERSET,
-  ENUM_HUB_GET_STATUS_AFTER_RESET,
+  ENUM_HUB_RESET_COMPLETE,
   ENUM_HUB_CLEAR_RESET,
+  ENUM_HUB_CLEAR_RESET_RETRY, // 2nd attempt waiting for hub reset
   ENUM_HUB_CLEAR_RESET_COMPLETE,
-
   ENUM_ADDR0_DEVICE_DESC,
   ENUM_SET_ADDR,
   ENUM_GET_DEVICE_DESC,
@@ -1409,140 +1520,175 @@ enum {
 };
 
 static uint8_t enum_get_new_address(bool is_hub);
-static bool enum_parse_configuration_desc (uint8_t dev_addr, tusb_desc_configuration_t const* desc_cfg);
-static void enum_full_complete(void);
-static void process_enumeration(tuh_xfer_t* xfer);
+static bool    enum_parse_configuration_desc(uint8_t dev_addr, const tusb_desc_configuration_t *desc_cfg);
+static void    enum_full_complete(bool success);
+static void    process_enumeration(tuh_xfer_t *xfer);
+
+enum {
+  ENUM_AFTER_DEBOUNCING_DELAY,
+  ENUM_AFTER_RESET_ROOT_DELAY,
+  ENUM_AFTER_RESET_ROOT_POST_DELAY,
+  ENUM_AFTER_RESET_HUB_DELAY,
+  ENUM_AFTER_RESET_HUB_DELAY_RETRY,
+  ENUM_AFTER_RESET_RECOVERY_DELAY,
+  ENUM_AFTER_SET_ADDRESS_RECOVERY_DELAY,
+};
+
+// process async delay in enumeration
+static void enum_delay_async(uintptr_t state) {
+  tuh_bus_info_t *dev0_bus = &_usbh_data.dev0_bus;
+  switch (state) {
+    case ENUM_AFTER_DEBOUNCING_DELAY:
+  #if CFG_TUH_HUB
+      if (dev0_bus->hub_addr != 0) {
+        // connected via hub
+        TU_VERIFY(dev0_bus->hub_port != 0, );
+        TU_ASSERT(hub_port_get_status(dev0_bus->hub_addr, dev0_bus->hub_port, NULL, process_enumeration,
+                                      ENUM_HUB_RERSET), );
+      } else
+  #endif
+      {
+        // connected directly to roothub
+        _usbh_data.attach_debouncing_bm &= (uint8_t)~TU_BIT(dev0_bus->rhport); // clear roothub debouncing delay
+        if (!hcd_port_connect_status(dev0_bus->rhport)) {
+          TU_LOG_USBH("Device unplugged while debouncing\r\n");
+          enum_full_complete(false);
+          return;
+        }
+        hcd_port_reset(dev0_bus->rhport); // reset port
+        usbh_defer_func_ms_async(ENUM_RESET_ROOT_DELAY_MS, enum_delay_async, ENUM_AFTER_RESET_ROOT_DELAY);
+      }
+      break;
+
+    case ENUM_AFTER_RESET_ROOT_DELAY:
+      hcd_port_reset_end(dev0_bus->rhport);
+      usbh_defer_func_ms_async(ENUM_RESET_ROOT_POST_DELAY_MS, enum_delay_async, ENUM_AFTER_RESET_ROOT_POST_DELAY);
+      break;
+
+    case ENUM_AFTER_RESET_ROOT_POST_DELAY:
+      if (!hcd_port_connect_status(dev0_bus->rhport)) {
+        // device unplugged while delaying
+        enum_full_complete(false);
+        return;
+      }
+
+      dev0_bus->speed = hcd_port_speed_get(dev0_bus->rhport);
+      TU_LOG_USBH("%s Speed\r\n", tu_str_speed[dev0_bus->speed]);
+
+      // fake transfer to kick-off the enumeration process
+      tuh_xfer_t xfer;
+      xfer.daddr     = 0;
+      xfer.result    = XFER_RESULT_SUCCESS;
+      xfer.user_data = ENUM_ADDR0_DEVICE_DESC;
+      process_enumeration(&xfer);
+      break;
+
+  #if CFG_TUH_HUB
+    case ENUM_AFTER_RESET_HUB_DELAY:
+    case ENUM_AFTER_RESET_HUB_DELAY_RETRY:
+      // get status after reset complete to check for reset change
+      TU_ASSERT(hub_port_get_status(dev0_bus->hub_addr, dev0_bus->hub_port, NULL, process_enumeration,
+                                    state == ENUM_AFTER_RESET_HUB_DELAY ? ENUM_HUB_CLEAR_RESET
+                                                                        : ENUM_HUB_CLEAR_RESET_RETRY), );
+      break;
+  #endif
+
+    case ENUM_AFTER_RESET_RECOVERY_DELAY:
+      // TODO probably doesn't need to open/close each enumeration
+      if (!usbh_edpt_control_open(0, 8)) {
+        TU_LOG_USBH("Failed to open dev0's control endpoint\r\n");
+        enum_full_complete(false); // Stop enumeration gracefully
+        return;
+      }
+      // Get first 8 bytes of device descriptor for control endpoint size
+      TU_LOG_USBH("Get 8 byte of Device Descriptor\r\n");
+      TU_ASSERT(tuh_descriptor_get_device(0, _usbh_epbuf.ctrl, 8, process_enumeration, ENUM_SET_ADDR), );
+      break;
+
+    case ENUM_AFTER_SET_ADDRESS_RECOVERY_DELAY: {
+      const uint8_t  new_addr = _usbh_data.enumerating_daddr;
+      usbh_device_t *new_dev  = get_device(new_addr);
+      TU_ASSERT(new_dev, );
+      if (!usbh_edpt_control_open(new_addr, new_dev->desc_device.bMaxPacketSize0)) {
+        TU_LOG_USBH("Failed to open new device's control endpoint\r\n");
+        clear_device(new_dev);
+        enum_full_complete(false);
+        return;
+      }
+      TU_LOG_USBH("Get Device Descriptor\r\n");
+      TU_ASSERT(tuh_descriptor_get_device(new_addr, _usbh_epbuf.ctrl, sizeof(tusb_desc_device_t), process_enumeration,
+                                          ENUM_GET_STRING_LANGUAGE_ID_LEN), );
+      break;
+    }
+
+    default:
+      break;
+  }
+}
 
 // start a new enumeration process
-static bool enum_new_device(hcd_event_t* event) {
-  tuh_bus_info_t* dev0_bus = &_usbh_data.dev0_bus;
-  dev0_bus->rhport = event->rhport;
-  dev0_bus->hub_addr = event->connection.hub_addr;
-  dev0_bus->hub_port = event->connection.hub_port;
-
-  // wait until device connection is stable TODO non blocking
-  tusb_time_delay_ms_api(ENUM_DEBOUNCING_DELAY_MS);
-
-  // clear roothub debouncing delay
-  if (dev0_bus->hub_addr == 0) {
-    _usbh_data.attach_debouncing_bm &= (uint8_t) ~TU_BIT(dev0_bus->rhport);
-  }
-
-  if (dev0_bus->hub_addr == 0) {
-    // connected directly to roothub
-    // USB bus not active and frame number is not available yet.
-    // need to depend on tusb_time_millis_api() TODO non blocking
-
-    if (!hcd_port_connect_status(dev0_bus->rhport)) {
-      TU_LOG_USBH("Device unplugged while debouncing\r\n");
-      enum_full_complete();
-      return true;
-    }
-
-    // reset device
-    hcd_port_reset(dev0_bus->rhport);
-    tusb_time_delay_ms_api(ENUM_RESET_ROOT_DELAY_MS);
-    hcd_port_reset_end(dev0_bus->rhport);
-
-    if (!hcd_port_connect_status(dev0_bus->rhport)) {
-      // device unplugged while delaying
-      enum_full_complete();
-      return true;
-    }
-
-    dev0_bus->speed = hcd_port_speed_get(dev0_bus->rhport);
-    TU_LOG_USBH("%s Speed\r\n", tu_str_speed[dev0_bus->speed]);
-
-    // fake transfer to kick-off the enumeration process
-    tuh_xfer_t xfer;
-    xfer.daddr = 0;
-    xfer.result = XFER_RESULT_SUCCESS;
-    xfer.user_data = ENUM_ADDR0_DEVICE_DESC;
-    process_enumeration(&xfer);
-  }
-  #if CFG_TUH_HUB
-  else {
-    // connected via hub
-    TU_VERIFY(dev0_bus->hub_port != 0);
-    TU_ASSERT(hub_port_get_status(dev0_bus->hub_addr, dev0_bus->hub_port, NULL,
-                                  process_enumeration, ENUM_HUB_RERSET));
-  }
-  #endif // hub
-
-  return true;
+static void enum_new_device(hcd_event_t *event) {
+  tuh_bus_info_t *dev0_bus = &_usbh_data.dev0_bus;
+  dev0_bus->rhport         = event->rhport;
+  dev0_bus->hub_addr       = event->connection.hub_addr;
+  dev0_bus->hub_port       = event->connection.hub_port;
+  usbh_defer_func_ms_async(ENUM_DEBOUNCING_DELAY_MS, enum_delay_async, ENUM_AFTER_DEBOUNCING_DELAY);
 }
 
 // process device enumeration
-static void process_enumeration(tuh_xfer_t* xfer) {
-  // Retry a few times while enumerating since device can be unstable when starting up
-  static uint8_t failed_count = 0;
+static void process_enumeration(tuh_xfer_t *xfer) {
   if (XFER_RESULT_FAILED == xfer->result) {
-    enum {
-      ATTEMPT_COUNT_MAX = 3,
-      ATTEMPT_DELAY_MS = 100
-    };
-
-    // retry if not reaching max attempt
-    failed_count++;
-    bool retry = (_usbh_data.enumerating_daddr != TUSB_INDEX_INVALID_8) && (failed_count < ATTEMPT_COUNT_MAX);
-    if (retry) {
-      tusb_time_delay_ms_api(ATTEMPT_DELAY_MS); // delay a bit
-      TU_LOG_USBH("Enumeration attempt %u/%u\r\n", failed_count+1, ATTEMPT_COUNT_MAX);
-      retry = tuh_control_xfer(xfer);
-    }
-
-    if (!retry) {
-      enum_full_complete(); // complete as failed
-    }
+    enum_full_complete(false); // failed to enum
     return;
   }
-  failed_count = 0;
 
-  uint8_t const daddr = xfer->daddr;
-  uintptr_t const state = xfer->user_data;
-  usbh_device_t* dev = get_device(daddr);
-  tuh_bus_info_t* dev0_bus = &_usbh_data.dev0_bus;
+  const uint8_t   daddr    = xfer->daddr;
+  const uintptr_t state    = xfer->user_data;
+  usbh_device_t  *dev      = get_device(daddr);
+  tuh_bus_info_t *dev0_bus = &_usbh_data.dev0_bus;
   if (daddr > 0) {
-    TU_ASSERT(dev,);
+    TU_ASSERT(dev != NULL,);
   }
   uint16_t langid = 0x0409; // default is English
+  bool is_enum_failed = false;
 
   switch (state) {
-    #if CFG_TUH_HUB
+  #if CFG_TUH_HUB
     case ENUM_HUB_RERSET: {
       hub_port_status_response_t port_status;
       hub_port_get_status_local(dev0_bus->hub_addr, dev0_bus->hub_port, &port_status);
 
-      if (!port_status.status.connection) {
+      if (0 == port_status.status.connection) {
         TU_LOG_USBH("Device unplugged from hub while debouncing\r\n");
-        enum_full_complete();
-        return;
+        is_enum_failed = true;
+      } else {
+        TU_ASSERT(hub_port_reset(dev0_bus->hub_addr, dev0_bus->hub_port, process_enumeration,
+                                 ENUM_HUB_RESET_COMPLETE), );
       }
-
-      TU_ASSERT(hub_port_reset(dev0_bus->hub_addr, dev0_bus->hub_port, process_enumeration, ENUM_HUB_GET_STATUS_AFTER_RESET),);
       break;
     }
 
-    case ENUM_HUB_GET_STATUS_AFTER_RESET: {
-      tusb_time_delay_ms_api(ENUM_RESET_HUB_DELAY_MS); // wait for reset to take effect
-
-      // get status to check for reset change
-      TU_ASSERT(hub_port_get_status(dev0_bus->hub_addr, dev0_bus->hub_port, NULL, process_enumeration, ENUM_HUB_CLEAR_RESET),);
+    case ENUM_HUB_RESET_COMPLETE:
+      // wait for reset to take effect
+      usbh_defer_func_ms_async(ENUM_RESET_HUB_DELAY_MS, enum_delay_async, ENUM_AFTER_RESET_HUB_DELAY);
       break;
-    }
 
-    case ENUM_HUB_CLEAR_RESET: {
+    case ENUM_HUB_CLEAR_RESET:
+    case ENUM_HUB_CLEAR_RESET_RETRY: {
       hub_port_status_response_t port_status;
       hub_port_get_status_local(dev0_bus->hub_addr, dev0_bus->hub_port, &port_status);
 
-      if (port_status.change.reset) {
+      if (1 == port_status.change.reset) {
         // Acknowledge Port Reset Change
-        TU_ASSERT(hub_port_clear_reset_change(dev0_bus->hub_addr, dev0_bus->hub_port, process_enumeration, ENUM_HUB_CLEAR_RESET_COMPLETE),);
+        TU_ASSERT(hub_port_clear_reset_change(dev0_bus->hub_addr, dev0_bus->hub_port, process_enumeration,
+                                              ENUM_HUB_CLEAR_RESET_COMPLETE), );
+      } else if (state == ENUM_HUB_CLEAR_RESET) {
+        // retry one more time if reset change not set yet
+        usbh_defer_func_ms_async(ENUM_RESET_HUB_DELAY_MS, enum_delay_async, ENUM_AFTER_RESET_HUB_DELAY_RETRY);
       } else {
-        // maybe retry if reset change not set but we need timeout to prevent infinite loop
-        // TU_ASSERT(hub_port_get_status(dev0_bus->hub_addr, dev0_bus->hub_port, NULL, process_enumeration, ENUM_HUB_CLEAR_RESET_COMPLETE),);
+        // retry but still not set --> failed
+        is_enum_failed = true;
       }
-
       break;
     }
 
@@ -1550,67 +1696,52 @@ static void process_enumeration(tuh_xfer_t* xfer) {
       hub_port_status_response_t port_status;
       hub_port_get_status_local(dev0_bus->hub_addr, dev0_bus->hub_port, &port_status);
 
-      if (!port_status.status.connection) {
+      if (0 == port_status.status.connection) {
         TU_LOG_USBH("Device unplugged from hub (not addressed yet)\r\n");
-        enum_full_complete();
-        return;
+        is_enum_failed = true;
+        break;
       }
 
-      dev0_bus->speed = (port_status.status.high_speed) ? TUSB_SPEED_HIGH :
-                        (port_status.status.low_speed) ? TUSB_SPEED_LOW : TUSB_SPEED_FULL;
-
+      dev0_bus->speed = (port_status.status.high_speed)  ? TUSB_SPEED_HIGH
+                        : (port_status.status.low_speed) ? TUSB_SPEED_LOW
+                                                         : TUSB_SPEED_FULL;
       TU_ATTR_FALLTHROUGH;
     }
-    #endif
+  #endif
 
-    case ENUM_ADDR0_DEVICE_DESC: {
-      tusb_time_delay_ms_api(ENUM_RESET_RECOVERY_DELAY_MS); // reset recovery
-
-      // TODO probably doesn't need to open/close each enumeration
-      uint8_t const addr0 = 0;
-      TU_ASSERT(usbh_edpt_control_open(addr0, 8),);
-
-      // Get first 8 bytes of device descriptor for control endpoint size
-      TU_LOG_USBH("Get 8 byte of Device Descriptor\r\n");
-      TU_ASSERT(tuh_descriptor_get_device(addr0, _usbh_epbuf.ctrl, 8,
-                                          process_enumeration, ENUM_SET_ADDR),);
+    case ENUM_ADDR0_DEVICE_DESC:
+      usbh_defer_func_ms_async(ENUM_RESET_RECOVERY_DELAY_MS, enum_delay_async, ENUM_AFTER_RESET_RECOVERY_DELAY);
       break;
-    }
 
     case ENUM_SET_ADDR: {
-      // Due to physical debouncing, some devices can cause multiple attaches (actually reset) without detach event
-      // Force remove currently mounted with the same bus info (rhport, hub addr, hub port) if exists
-      process_removed_device(dev0_bus->rhport, dev0_bus->hub_addr, dev0_bus->hub_port);
-
       const tusb_desc_device_t *desc_device = (const tusb_desc_device_t *) _usbh_epbuf.ctrl;
+      if (!(desc_device->bDescriptorType == TUSB_DESC_DEVICE && desc_device->bMaxPacketSize0 >= 8)) {
+        TU_LOG_USBH("Invalid Device descriptor\r\n");
+        is_enum_failed = true;
+        break;
+      }
+
       const uint8_t new_addr = enum_get_new_address(desc_device->bDeviceClass == TUSB_CLASS_HUB);
       TU_ASSERT(new_addr != 0,);
 
       usbh_device_t* new_dev = get_device(new_addr);
       new_dev->bus_info = *dev0_bus;
       new_dev->connected = 1;
-      new_dev->bMaxPacketSize0 = desc_device->bMaxPacketSize0;
+      new_dev->desc_device.bMaxPacketSize0 = desc_device->bMaxPacketSize0;
 
-      TU_ASSERT(tuh_address_set(0, new_addr, process_enumeration, ENUM_GET_DEVICE_DESC),);
+      TU_ASSERT(tuh_address_set(0, new_addr, process_enumeration, ENUM_GET_DEVICE_DESC), );
       break;
     }
 
     case ENUM_GET_DEVICE_DESC: {
-      tusb_time_delay_ms_api(ENUM_SET_ADDRESS_RECOVERY_DELAY_MS); // set address recovery
-
-      const uint8_t new_addr = (uint8_t) tu_le16toh(xfer->setup->wValue);
-      usbh_device_t* new_dev = get_device(new_addr);
-      TU_ASSERT(new_dev,);
-      new_dev->addressed = 1;
+      const uint8_t  new_addr = (uint8_t)tu_le16toh(xfer->setup->wValue);
+      usbh_device_t *new_dev  = get_device(new_addr);
+      TU_ASSERT(new_dev, );
+      new_dev->addressed           = 1;
       _usbh_data.enumerating_daddr = new_addr;
 
       usbh_device_close(dev0_bus->rhport, 0); // close dev0
-
-      TU_ASSERT(usbh_edpt_control_open(new_addr, new_dev->bMaxPacketSize0),); // open new control endpoint
-
-      TU_LOG_USBH("Get Device Descriptor\r\n");
-      TU_ASSERT(tuh_descriptor_get_device(new_addr, _usbh_epbuf.ctrl, sizeof(tusb_desc_device_t),
-                                          process_enumeration, ENUM_GET_STRING_LANGUAGE_ID_LEN),);
+      usbh_defer_func_ms_async(ENUM_SET_ADDRESS_RECOVERY_DELAY_MS, enum_delay_async, ENUM_AFTER_SET_ADDRESS_RECOVERY_DELAY);
       break;
     }
 
@@ -1619,18 +1750,8 @@ static void process_enumeration(tuh_xfer_t* xfer) {
     case ENUM_GET_STRING_LANGUAGE_ID_LEN: {
       // save the received device descriptor
       tusb_desc_device_t const *desc_device = (tusb_desc_device_t const *) _usbh_epbuf.ctrl;
-      dev->bcdUSB = desc_device->bcdUSB;
-      dev->bDeviceClass = desc_device->bDeviceClass;
-      dev->bDeviceSubClass = desc_device->bDeviceSubClass;
-      dev->bDeviceProtocol = desc_device->bDeviceProtocol;
-      dev->bMaxPacketSize0 = desc_device->bMaxPacketSize0;
-      dev->idVendor = desc_device->idVendor;
-      dev->idProduct = desc_device->idProduct;
-      dev->bcdDevice = desc_device->bcdDevice;
-      dev->iManufacturer = desc_device->iManufacturer;
-      dev->iProduct = desc_device->iProduct;
-      dev->iSerialNumber = desc_device->iSerialNumber;
-      dev->bNumConfigurations = desc_device->bNumConfigurations;
+
+      memcpy(&dev->desc_device, (const uint8_t*) desc_device + offsetof(tusb_desc_device_t, bcdUSB), sizeof(desc_device_noheader_t));
 
       tuh_enum_descriptor_device_cb(daddr, desc_device); // callback
       tuh_descriptor_get_string_langid(daddr, _usbh_epbuf.ctrl, 2,
@@ -1650,73 +1771,69 @@ static void process_enumeration(tuh_xfer_t* xfer) {
       if (desc_langid->bLength >= 4) {
         langid = tu_le16toh(desc_langid->utf16le[0]); // previous request is langid
       }
-      if (dev->iManufacturer != 0) {
-        tuh_descriptor_get_string(daddr, dev->iManufacturer, langid, _usbh_epbuf.ctrl, 2,
+      if (dev->desc_device.iManufacturer != 0) {
+        tuh_descriptor_get_string(daddr, dev->desc_device.iManufacturer, langid, _usbh_epbuf.ctrl, 2,
                                   process_enumeration, ENUM_GET_STRING_MANUFACTURER);
         break;
-      }else {
-        TU_ATTR_FALLTHROUGH;
       }
+      TU_ATTR_FALLTHROUGH;
     }
 
     case ENUM_GET_STRING_MANUFACTURER: {
-      if (dev->iManufacturer != 0)  {
+      if (dev->desc_device.iManufacturer != 0)  {
         langid = tu_le16toh(xfer->setup->wIndex); // langid from length's request
         const uint8_t str_len = xfer->buffer[0];
-        tuh_descriptor_get_string(daddr, dev->iManufacturer, langid, _usbh_epbuf.ctrl, str_len,
+        tuh_descriptor_get_string(daddr, dev->desc_device.iManufacturer, langid, _usbh_epbuf.ctrl, str_len,
                                   process_enumeration, ENUM_GET_STRING_PRODUCT_LEN);
         break;
-      } else {
-        TU_ATTR_FALLTHROUGH;
       }
+      TU_ATTR_FALLTHROUGH;
     }
 
-    case ENUM_GET_STRING_PRODUCT_LEN:
-      if (dev->iProduct != 0) {
+    case ENUM_GET_STRING_PRODUCT_LEN: {
+      if (dev->desc_device.iProduct != 0) {
         if (state == ENUM_GET_STRING_PRODUCT_LEN) {
           langid = tu_le16toh(xfer->setup->wIndex); // get langid from previous setup packet if not fall through
         }
-        tuh_descriptor_get_string(daddr, dev->iProduct, langid, _usbh_epbuf.ctrl, 2,
-                                  process_enumeration, ENUM_GET_STRING_PRODUCT);
+        tuh_descriptor_get_string(
+            daddr, dev->desc_device.iProduct, langid, _usbh_epbuf.ctrl, 2, process_enumeration, ENUM_GET_STRING_PRODUCT);
         break;
-      } else {
-        TU_ATTR_FALLTHROUGH;
       }
-
-    case ENUM_GET_STRING_PRODUCT: {
-      if (dev->iProduct != 0) {
-        langid = tu_le16toh(xfer->setup->wIndex); // langid from length's request
-        const uint8_t str_len = xfer->buffer[0];
-        tuh_descriptor_get_string(daddr, dev->iProduct, langid, _usbh_epbuf.ctrl, str_len,
-                            process_enumeration, ENUM_GET_STRING_SERIAL_LEN);
-        break;
-      } else {
-        TU_ATTR_FALLTHROUGH;
-      }
+      TU_ATTR_FALLTHROUGH;
     }
 
-    case ENUM_GET_STRING_SERIAL_LEN:
-      if (dev->iSerialNumber != 0) {
+    case ENUM_GET_STRING_PRODUCT: {
+      if (dev->desc_device.iProduct != 0) {
+        langid = tu_le16toh(xfer->setup->wIndex); // langid from length's request
+        const uint8_t str_len = xfer->buffer[0];
+        tuh_descriptor_get_string(daddr, dev->desc_device.iProduct, langid, _usbh_epbuf.ctrl, str_len,
+                            process_enumeration, ENUM_GET_STRING_SERIAL_LEN);
+        break;
+      }
+      TU_ATTR_FALLTHROUGH;
+    }
+
+    case ENUM_GET_STRING_SERIAL_LEN: {
+      if (dev->desc_device.iSerialNumber != 0) {
         if (state == ENUM_GET_STRING_SERIAL_LEN) {
           langid = tu_le16toh(xfer->setup->wIndex); // get langid from previous setup packet if not fall through
         }
-        tuh_descriptor_get_string(daddr, dev->iSerialNumber, langid, _usbh_epbuf.ctrl, 2,
-                                  process_enumeration, ENUM_GET_STRING_SERIAL);
+        tuh_descriptor_get_string(
+            daddr, dev->desc_device.iSerialNumber, langid, _usbh_epbuf.ctrl, 2, process_enumeration, ENUM_GET_STRING_SERIAL);
         break;
-      } else {
-        TU_ATTR_FALLTHROUGH;
       }
+      TU_ATTR_FALLTHROUGH;
+    }
 
     case ENUM_GET_STRING_SERIAL: {
-      if (dev->iSerialNumber != 0) {
+      if (dev->desc_device.iSerialNumber != 0) {
         langid = tu_le16toh(xfer->setup->wIndex); // langid from length's request
         const uint8_t str_len = xfer->buffer[0];
-        tuh_descriptor_get_string(daddr, dev->iSerialNumber, langid, _usbh_epbuf.ctrl, str_len,
+        tuh_descriptor_get_string(daddr, dev->desc_device.iSerialNumber, langid, _usbh_epbuf.ctrl, str_len,
                                   process_enumeration, ENUM_GET_9BYTE_CONFIG_DESC);
         break;
-      } else {
-        TU_ATTR_FALLTHROUGH;
       }
+      TU_ATTR_FALLTHROUGH;
     }
 
     case ENUM_GET_9BYTE_CONFIG_DESC: {
@@ -1748,10 +1865,10 @@ static void process_enumeration(tuh_xfer_t* xfer) {
     case ENUM_SET_CONFIG: {
       uint8_t config_idx = (uint8_t) tu_le16toh(xfer->setup->wIndex);
       if (tuh_enum_descriptor_configuration_cb(daddr, config_idx, (const tusb_desc_configuration_t*) _usbh_epbuf.ctrl)) {
-        TU_ASSERT(tuh_configuration_set(daddr, config_idx+1, process_enumeration, ENUM_CONFIG_DRIVER),);
+        TU_ASSERT(tuh_configuration_set(daddr, config_idx+1u, process_enumeration, ENUM_CONFIG_DRIVER),);
       } else {
         config_idx++;
-        TU_ASSERT(config_idx < dev->bNumConfigurations,);
+        TU_ASSERT(config_idx < dev->desc_device.bNumConfigurations,);
         TU_LOG_USBH("Get Configuration[%u] Descriptor (9 bytes)\r\n", config_idx);
         TU_ASSERT(tuh_descriptor_get_configuration(daddr, config_idx, _usbh_epbuf.ctrl, 9,
                                                    process_enumeration, ENUM_GET_FULL_CONFIG_DESC),);
@@ -1762,6 +1879,13 @@ static void process_enumeration(tuh_xfer_t* xfer) {
     case ENUM_CONFIG_DRIVER: {
       TU_LOG_USBH("Device configured\r\n");
       dev->configured = 1;
+
+  #if CFG_TUH_HUB
+      // get next hub status now since device can be unplugged before set_configure() is complete
+      if (_usbh_data.dev0_bus.hub_addr != 0) {
+        hub_edpt_status_xfer(_usbh_data.dev0_bus.hub_addr);
+      }
+  #endif
 
       // Parse configuration & set up drivers
       // driver_open() must not make any usb transfer
@@ -1776,8 +1900,12 @@ static void process_enumeration(tuh_xfer_t* xfer) {
     }
 
     default:
-      enum_full_complete(); // stop enumeration if unknown state
+      is_enum_failed = true;
       break;
+  }
+
+  if (is_enum_failed) {
+    enum_full_complete(false);
   }
 }
 
@@ -1794,10 +1922,16 @@ static uint8_t enum_get_new_address(bool is_hub) {
   }
 
   for (uint8_t idx = start; idx < end; idx++) {
-    if (!_usbh_devices[idx].connected) {
+    if (0 == _usbh_devices[idx].connected) {
       return (idx + 1);
     }
   }
+
+#if CFG_TUH_HUB
+  if ( is_hub ) {
+    TU_LOG1("All addresses are occupied, try to increase CFG_TUH_HUB value.\r\n");
+  }
+#endif // CFG_TUH_HUB
 
   return 0; // invalid address
 }
@@ -1810,86 +1944,52 @@ static bool enum_parse_configuration_desc(uint8_t dev_addr, tusb_desc_configurat
 
   TU_LOG_USBH("Parsing Configuration descriptor (wTotalLength = %u)\r\n", total_len);
 
-  // parse each interfaces
-  while( p_desc < desc_end ) {
-    if ( 0 == tu_desc_len(p_desc) ) {
-      // A zero length descriptor indicates that the device is off spec (e.g. wrong wTotalLength).
+  // parse all interfaces
+  while (tu_desc_in_bounds(p_desc, desc_end)) {
+    if (0 == tu_desc_len(p_desc)) {
+      // A zero-length descriptor indicates that the device is off spec (e.g. wrong wTotalLength).
       // Parsed interfaces should still be usable
       TU_LOG_USBH("Encountered a zero-length descriptor after %" PRIu32 " bytes\r\n", (uint32_t)p_desc - (uint32_t)desc_cfg);
       break;
     }
 
-    uint8_t assoc_itf_count = 1;
-
-    // Class will always starts with Interface Association (if any) and then Interface descriptor
-    if ( TUSB_DESC_INTERFACE_ASSOCIATION == tu_desc_type(p_desc) ) {
-      tusb_desc_interface_assoc_t const * desc_iad = (tusb_desc_interface_assoc_t const *) p_desc;
-      assoc_itf_count = desc_iad->bInterfaceCount;
-
-      p_desc = tu_desc_next(p_desc); // next to Interface
-
-      // IAD's first interface number and class should match with opened interface
-      //TU_ASSERT(desc_iad->bFirstInterface == desc_itf->bInterfaceNumber &&
-      //          desc_iad->bFunctionClass  == desc_itf->bInterfaceClass);
+    // skip if not interface
+    if (TUSB_DESC_INTERFACE != tu_desc_type(p_desc)) {
+      p_desc = tu_desc_next(p_desc);
+      continue;
     }
+    const tusb_desc_interface_t *desc_itf = (const tusb_desc_interface_t *)p_desc;
 
-    TU_ASSERT( TUSB_DESC_INTERFACE == tu_desc_type(p_desc) );
-    tusb_desc_interface_t const* desc_itf = (tusb_desc_interface_t const*) p_desc;
+    // uint16_t const drv_len = tu_desc_get_interface_total_len(desc_itf, assoc_itf_count, (uint16_t)
+    // (desc_end-p_desc)); TU_ASSERT(drv_len >= sizeof(tusb_desc_interface_t));
 
-#if CFG_TUH_MIDI
-    // MIDI has 2 interfaces (Audio Control v1 + MIDIStreaming) but does not have IAD
-    // manually force associated count = 2
-    if (1                              == assoc_itf_count              &&
-        TUSB_CLASS_AUDIO               == desc_itf->bInterfaceClass    &&
-        AUDIO_SUBCLASS_CONTROL         == desc_itf->bInterfaceSubClass &&
-        AUDIO_FUNC_PROTOCOL_CODE_UNDEF == desc_itf->bInterfaceProtocol) {
-      assoc_itf_count = 2;
-    }
-#endif
+    // Find a driver for this interface
+    const uint16_t remaining_len = (uint16_t)(desc_end - p_desc);
+    uint8_t        drv_id;
+    for (drv_id = 0; drv_id < TOTAL_DRIVER_COUNT; drv_id++) {
+      const usbh_class_driver_t *driver = get_driver(drv_id);
+      if (driver) {
+        const uint16_t drv_len = driver->open(dev->bus_info.rhport, dev_addr, desc_itf, remaining_len);
+        if ((sizeof(tusb_desc_interface_t) <= drv_len) && (drv_len <= remaining_len)) {
+          // open successfully
+          TU_LOG_USBH("  %s opened\r\n", driver->name);
 
-#if CFG_TUH_CDC
-    // Some legacy CDC device does not use IAD but rather use device class as hint to combine 2 interfaces
-    // manually force associated count = 2
-    if (1                                        == assoc_itf_count              &&
-        TUSB_CLASS_CDC                           == desc_itf->bInterfaceClass    &&
-        CDC_COMM_SUBCLASS_ABSTRACT_CONTROL_MODEL == desc_itf->bInterfaceSubClass) {
-      assoc_itf_count = 2;
-    }
-#endif
+          // bind found driver to all interfaces and endpoint within drv_len
+          tu_bind_driver_to_ep_itf(drv_id, dev->ep2drv, dev->itf2drv, CFG_TUH_INTERFACE_MAX, p_desc, drv_len);
 
-    uint16_t const drv_len = tu_desc_get_interface_total_len(desc_itf, assoc_itf_count, (uint16_t) (desc_end-p_desc));
-    TU_ASSERT(drv_len >= sizeof(tusb_desc_interface_t));
-
-    // Find driver for this interface
-    for (uint8_t drv_id = 0; drv_id < TOTAL_DRIVER_COUNT; drv_id++) {
-      usbh_class_driver_t const * driver = get_driver(drv_id);
-      if (driver && driver->open(dev->bus_info.rhport, dev_addr, desc_itf, drv_len) ) {
-        // open successfully
-        TU_LOG_USBH("  %s opened\r\n", driver->name);
-
-        // bind (associated) interfaces to found driver
-        for(uint8_t i=0; i<assoc_itf_count; i++) {
-          uint8_t const itf_num = desc_itf->bInterfaceNumber+i;
-
-          // Interface number must not be used already
-          TU_ASSERT( TUSB_INDEX_INVALID_8 == dev->itf2drv[itf_num] );
-          dev->itf2drv[itf_num] = drv_id;
+          p_desc += drv_len; // next Interface
+          break;             // exit driver find loop
         }
-
-        // bind all endpoints to found driver
-        tu_edpt_bind_driver(dev->ep2drv, desc_itf, drv_len, drv_id);
-
-        break; // exit driver find loop
-      }
-
-      if (drv_id == TOTAL_DRIVER_COUNT - 1) {
-        TU_LOG_USBH("[%u:%u] Interface %u: class = %u subclass = %u protocol = %u is not supported\r\n",
-               dev->bus_info.rhport, dev_addr, desc_itf->bInterfaceNumber, desc_itf->bInterfaceClass, desc_itf->bInterfaceSubClass, desc_itf->bInterfaceProtocol);
       }
     }
 
-    // next Interface or IAD descriptor
-    p_desc += drv_len;
+    // no driver found
+    if (drv_id == TOTAL_DRIVER_COUNT) {
+      p_desc = tu_desc_next(p_desc); // skip this interface
+      TU_LOG_USBH("[%u:%u] Interface %u: class = %u subclass = %u protocol = %u is not supported\r\n",
+                  dev->bus_info.rhport, dev_addr, desc_itf->bInterfaceNumber, desc_itf->bInterfaceClass,
+                  desc_itf->bInterfaceSubClass, desc_itf->bInterfaceProtocol);
+    }
   }
 
   return true;
@@ -1904,16 +2004,16 @@ void usbh_driver_set_config_complete(uint8_t dev_addr, uint8_t itf_num) {
     // with usbh_driver_set_config_complete()
     uint8_t const drv_id = dev->itf2drv[itf_num];
     usbh_class_driver_t const * driver = get_driver(drv_id);
-    if (driver) {
+    if (driver != NULL) {
       TU_LOG_USBH("%s set config: itf = %u\r\n", driver->name, itf_num);
       driver->set_config(dev_addr, itf_num);
       break;
     }
   }
 
-  // all interface are configured
+  // all interfaces are configured
   if (itf_num == CFG_TUH_INTERFACE_MAX) {
-    enum_full_complete();
+    enum_full_complete(true);
 
     if (is_hub_addr(dev_addr)) {
       TU_LOG_USBH("HUB address = %u is mounted\r\n", dev_addr);
@@ -1924,16 +2024,19 @@ void usbh_driver_set_config_complete(uint8_t dev_addr, uint8_t itf_num) {
   }
 }
 
-static void enum_full_complete(void) {
-  // mark enumeration as complete
-  _usbh_data.enumerating_daddr = TUSB_INDEX_INVALID_8;
+static void enum_full_complete(bool success) {
+  (void)success;
+  TU_LOG_USBH("Enumeration complete: success = %u\r\n", success);
 
-#if CFG_TUH_HUB
-  if (_usbh_data.dev0_bus.hub_addr != 0) {
-    hub_edpt_status_xfer(_usbh_data.dev0_bus.hub_addr); // get next hub status
+  _usbh_data.enumerating_daddr = TUSB_INDEX_INVALID_8; // mark enumeration as complete
+  _usbh_data.call_after.func = NULL;
+
+  #if CFG_TUH_HUB
+  // Hub status is already requested in case of successful enumeration
+  if (!success && _usbh_data.dev0_bus.hub_addr != 0) {
+    hub_edpt_status_xfer(_usbh_data.dev0_bus.hub_addr);
   }
-#endif
-
+  #endif
 }
 
 #endif

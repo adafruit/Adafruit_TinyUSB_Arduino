@@ -50,6 +50,8 @@ Note: For ESP32 port, version before v3.0 requires all descriptors must be speci
 Following is cores without built-in support
 
 - **mbed_rp2040**
+- **[stm32duino/Arduino_Core_STM32](https://github.com/stm32duino/Arduino_Core_STM32)**
+  - Still WIP, only support/tested with F4, only support OTG_FS  
 
 It is still possible to use TinyUSB but with some limits such as:
 

@@ -1,3 +1,6 @@
 feather_esp32_v2
+feather_esp32s2
+feather_esp32s3
+esp32p4
 pico_rp2040_tinyusb_host
 CH32V20x_EVT

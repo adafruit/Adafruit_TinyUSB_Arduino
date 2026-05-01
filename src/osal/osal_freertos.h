@@ -70,15 +70,15 @@ typedef struct {
 } osal_queue_def_t;
 
 #if defined(configQUEUE_REGISTRY_SIZE) && (configQUEUE_REGISTRY_SIZE>0)
-  #define _OSAL_Q_NAME(_name) .name = #_name
+  #define OSAL_Q_NAME(_name) .name = #_name
 #else
-  #define _OSAL_Q_NAME(_name)
+  #define OSAL_Q_NAME(_name)
 #endif
 
 // _int_set is not used with an RTOS
 #define OSAL_QUEUE_DEF(_int_set, _name, _depth, _type) \
   static _type _name##_##buf[_depth];\
-  osal_queue_def_t _name = { .depth = _depth, .item_sz = sizeof(_type), .buf = _name##_##buf, _OSAL_Q_NAME(_name) }
+  osal_queue_def_t _name = { .depth = _depth, .item_sz = sizeof(_type), .buf = _name##_##buf, OSAL_Q_NAME(_name) }
 
 //--------------------------------------------------------------------+
 // TASK API
@@ -99,13 +99,17 @@ TU_ATTR_ALWAYS_INLINE static inline void osal_task_delay(uint32_t msec) {
   vTaskDelay(pdMS_TO_TICKS(msec));
 }
 
+TU_ATTR_ALWAYS_INLINE static inline uint32_t osal_time_millis(void) {
+  return pdTICKS_TO_MS(xTaskGetTickCount());
+}
+
 //--------------------------------------------------------------------+
 // Spinlock API
 //--------------------------------------------------------------------+
 #define OSAL_SPINLOCK_DEF(_name, _int_set) \
   osal_spinlock_t _name
 
-#if TUSB_MCU_VENDOR_ESPRESSIF
+#ifdef ESP_PLATFORM
 // Espressif critical take spinlock as argument and does not use in_isr
 typedef portMUX_TYPE osal_spinlock_t;
 
@@ -137,11 +141,12 @@ TU_ATTR_ALWAYS_INLINE static inline void osal_spin_init(osal_spinlock_t *ctx) {
 
 TU_ATTR_ALWAYS_INLINE static inline void osal_spin_lock(osal_spinlock_t *ctx, bool in_isr) {
   if (in_isr) {
-    if (!TUP_MCU_MULTIPLE_CORE) {
-      (void) ctx;
-      return; // single core MCU does not need to lock in ISR
-    }
+  #if TUP_MCU_MULTIPLE_CORE
     *ctx = taskENTER_CRITICAL_FROM_ISR();
+  #else
+    (void) ctx;
+    return; // single core MCU does not need to lock in ISR
+  #endif
   } else {
     taskENTER_CRITICAL();
   }
@@ -149,11 +154,12 @@ TU_ATTR_ALWAYS_INLINE static inline void osal_spin_lock(osal_spinlock_t *ctx, bo
 
 TU_ATTR_ALWAYS_INLINE static inline void osal_spin_unlock(osal_spinlock_t *ctx, bool in_isr) {
   if (in_isr) {
-    if (!TUP_MCU_MULTIPLE_CORE) {
-      (void) ctx;
-      return; // single core MCU does not need to lock in ISR
-    }
+  #if TUP_MCU_MULTIPLE_CORE
     taskEXIT_CRITICAL_FROM_ISR(*ctx);
+  #else
+    (void) ctx;
+    return; // single core MCU does not need to lock in ISR
+  #endif
   } else {
     taskEXIT_CRITICAL();
   }
@@ -166,7 +172,7 @@ TU_ATTR_ALWAYS_INLINE static inline void osal_spin_unlock(osal_spinlock_t *ctx, 
 //--------------------------------------------------------------------+
 TU_ATTR_ALWAYS_INLINE static inline osal_semaphore_t osal_semaphore_create(osal_semaphore_def_t *semdef) {
 #if configSUPPORT_STATIC_ALLOCATION
-  return xSemaphoreCreateBinaryStatic(semdef);
+  return xSemaphoreCreateBinaryStatic((StaticSemaphore_t*) semdef);
 #else
   (void) semdef;
   return xSemaphoreCreateBinary();
@@ -174,7 +180,7 @@ TU_ATTR_ALWAYS_INLINE static inline osal_semaphore_t osal_semaphore_create(osal_
 }
 
 TU_ATTR_ALWAYS_INLINE static inline bool osal_semaphore_delete(osal_semaphore_t semd_hdl) {
-  vSemaphoreDelete(semd_hdl);
+  vSemaphoreDelete((SemaphoreHandle_t) semd_hdl);
   return true;
 }
 
