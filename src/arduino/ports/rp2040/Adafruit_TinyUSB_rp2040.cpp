@@ -98,7 +98,11 @@ static void usb_task_trigger_irq(void) { irq_set_pending(USB_TASK_IRQ); }
 void TinyUSB_Port_InitDevice(uint8_t rhport) {
   mutex_init(&__usb_mutex);
 
-  tud_init(rhport);
+  const tusb_rhport_init_t rh_init = {
+      .role = TUSB_ROLE_DEVICE,
+      .speed = TUSB_SPEED_FULL,
+  };
+  tusb_init(rhport, &rh_init);
 
   // soft irq for task runner
 #if (PICO_SDK_VERSION_MAJOR * 100 + PICO_SDK_VERSION_MINOR) >= 104

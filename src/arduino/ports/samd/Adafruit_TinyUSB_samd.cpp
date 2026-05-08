@@ -113,7 +113,11 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
 #endif
 
   // Init port 0 as device
-  tud_init(0);
+  const tusb_rhport_init_t rh_init = {
+      .role = TUSB_ROLE_DEVICE,
+      .speed = TUSB_SPEED_FULL,
+  };
+  tusb_init(0, &rh_init);
 }
 
 void TinyUSB_Port_EnterDFU(void) {

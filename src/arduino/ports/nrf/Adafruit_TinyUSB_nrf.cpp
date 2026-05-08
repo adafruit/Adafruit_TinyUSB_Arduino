@@ -69,7 +69,11 @@ static void usb_device_task(void *param) {
   NVIC_SetPriority(USBD_IRQn, 2);
 
   // init device on rhport0
-  tud_init(0);
+  const tusb_rhport_init_t rh_init = {
+      .role = TUSB_ROLE_DEVICE,
+      .speed = TUD_OPT_HIGH_SPEED ? TUSB_SPEED_HIGH : TUSB_SPEED_FULL,
+  };
+  tusb_init(0, &rh_init);
 
   usb_hardware_init();
 

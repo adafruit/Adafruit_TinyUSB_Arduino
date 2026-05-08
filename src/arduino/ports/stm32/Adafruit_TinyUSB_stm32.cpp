@@ -80,7 +80,11 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
   USB_OTG_FS->GCCFG &= ~USB_OTG_GCCFG_VBUSASEN;
 
   // Initialize TinyUSB device stack
-  tud_init(rhport);
+  const tusb_rhport_init_t rh_init = {
+      .role = TUSB_ROLE_DEVICE,
+      .speed = TUD_OPT_HIGH_SPEED ? TUSB_SPEED_HIGH : TUSB_SPEED_FULL,
+  };
+  tusb_init(rhport, &rh_init);
 }
 
 void TinyUSB_Port_EnterDFU(void) {

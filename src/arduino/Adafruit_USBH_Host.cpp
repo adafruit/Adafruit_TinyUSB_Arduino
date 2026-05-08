@@ -137,7 +137,11 @@ bool Adafruit_USBH_Host::begin(uint8_t rhport) {
 #endif
 
   _rhport = rhport;
-  return tuh_init(rhport);
+  const tusb_rhport_init_t rh_init = {
+      .role = TUSB_ROLE_HOST,
+      .speed = TUH_OPT_HIGH_SPEED ? TUSB_SPEED_HIGH : TUSB_SPEED_FULL,
+  };
+  return tusb_init(rhport, &rh_init);
 }
 
 void Adafruit_USBH_Host::task(uint32_t timeout_ms, bool in_isr) {
