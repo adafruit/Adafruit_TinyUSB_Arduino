@@ -148,22 +148,23 @@ static void dma_setup_prepare(uint8_t rhport) {
 
 
 /* Device Data FIFO scheme
+  The controller has a single SPRAM of otg_dfifo_depth 32-bit words shared between all FIFOs and optional DMA metadata.
+  otg_dfifo_depth = ghwcfg3.dfifo_depth + EP_LOC_CNT. It is split up into:
 
-  The FIFO is split up into
-  - EPInfo: for storing DMA metadata, only required when use DMA. Maximum size is called
-    EP_LOC_CNT = ep_fifo_size - ghwcfg3.dfifo_depth. For value less than EP_LOC_CNT, gdfifocfg must be configured before
-    gahbcfg.dmaen is set
-      - Buffer mode: 1 word per endpoint direction
-      - Scatter/Gather DMA: 4 words per endpoint direction
+  - EPInfo: for storing DMA address registers (DxEPDMAn), only required when DMA is used.
+    gdfifocfg.EPINFOBASE and gdfifocfg.GDFIFOCfg must be configured before gahbcfg.dmaen is set.
+    The number of words needed per endpoint direction depends on the DMA mode used at runtime:
+      - Buffer DMA mode: 1 word per endpoint direction
+      - Scatter/Gather DMA mode: 4 words per endpoint direction
   - TX FIFO: one fifo for each IN endpoint. Size is dynamic depending on packet size, starting from top with EP0 IN.
   - Shared RX FIFO: a shared fifo for all OUT endpoints. Typically, can hold up to 2 packets of the largest EP size.
 
-  We allocated TX FIFO from top to bottom (using top pointer), this to allow the RX FIFO to grow dynamically which is
+  We allocate TX FIFOs from top to bottom (using a top pointer), this to allow the RX FIFO to grow dynamically, which is
   possible since the free space is located between the RX and TX FIFOs.
 
-   ---------------- ep_fifo_size
-  |  DxEPIDMAn  |
-  |-------------|-- gdfifocfg.EPINFOBASE (max is ghwcfg3.dfifo_depth)
+   --------------- otg_dfifo_depth
+  |  EPInfo      |   DxEPDMAn (DMA only, sized per runtime DMA mode)
+  |-------------|-- gdfifocfg.EPINFOBASE (start of EPInfo; FIFO space sized by GDFIFOCFG)
   | IN FIFO 0   |       control EP
   |-------------|
   | IN FIFO 1   |
@@ -184,13 +185,13 @@ static void dma_setup_prepare(uint8_t rhport) {
     - 13 for setup packets + control words (up to 3 setup packets).
     - 1 for global NAK (not required/used here).
     - Largest-EPsize/4 + 1. (FS: 64 bytes, HS: 512 bytes). Recommended is  "2 x (Largest-EPsize/4 + 1)"
-    - 2 for each used OUT endpoint
+    - 2 for each used OUT endpoint.
 
-    Therefore GRXFSIZ = 13 + 1 + 2 x (Largest-EPsize/4 + 1) + 2 x EPOUTnum
+    Therefore, GRXFSIZ = 13 + 1 + 2 x (Largest-EPsize/4 + 1) + 2 x EPOUTnum
 */
 
 TU_ATTR_ALWAYS_INLINE static inline uint16_t calc_device_grxfsiz(uint16_t largest_ep_size, uint8_t ep_count) {
-  return 13 + 1 + 2 * ((largest_ep_size / 4) + 1) + 2 * ep_count;
+  return (uint16_t)(13 + 1 + 2 * ((largest_ep_size / 4) + 1) + 2 * ep_count);
 }
 
 static bool dfifo_alloc(uint8_t rhport, uint8_t ep_addr, uint16_t packet_size, bool is_bulk) {
@@ -202,7 +203,7 @@ static bool dfifo_alloc(uint8_t rhport, uint8_t ep_addr, uint16_t packet_size, b
 
   TU_ASSERT(epnum < ep_count);
 
-  uint16_t fifo_size = tu_div_ceil(packet_size, 4);
+  uint16_t fifo_size = (uint16_t)tu_div_ceil(packet_size, 4);
   if (dir == TUSB_DIR_OUT) {
     // Calculate required size of RX FIFO
     const uint16_t new_sz = calc_device_grxfsiz(4 * fifo_size, ep_count);
@@ -249,7 +250,7 @@ static void dfifo_device_init(uint8_t rhport) {
 
   // Scatter/Gather DMA mode is not yet supported. Buffer DMA only need 1 words per endpoint direction
   const bool is_dma = dma_device_enabled(dwc2);
-  _dcd_data.dfifo_top = dwc2_controller->ep_fifo_size/4;
+  _dcd_data.dfifo_top = dwc2_controller->otg_dfifo_depth;
   if (is_dma) {
     _dcd_data.dfifo_top -= 2 * dwc2_controller->ep_count;
   }
@@ -345,6 +346,11 @@ static void edpt_disable(uint8_t rhport, uint8_t ep_addr, bool stall) {
       dwc2->dctl |= DCTL_CGONAK;
     }
   }
+
+  // Clear ActEP
+  if (!stall && epnum != 0) {
+    dep->ctl &= ~EPCTL_USBAEP;
+  }
 }
 
 // Since this function returns void, it is not possible to return a boolean success message
@@ -365,7 +371,7 @@ static void edpt_schedule_packets(uint8_t rhport, const uint8_t epnum, const uin
     num_packets = 1;
   } else {
     total_bytes = xfer->total_len;
-    num_packets = tu_div_ceil(total_bytes, xfer->max_size);
+    num_packets = (uint16_t)tu_div_ceil(total_bytes, xfer->max_size);
     if (num_packets == 0) {
       num_packets = 1; // zero length packet still count as 1
     }
@@ -436,12 +442,12 @@ bool dcd_configure(uint8_t rhport, uint32_t cfg_id, const void* cfg_param) {
 }
 
 bool dcd_init(uint8_t rhport, const tusb_rhport_init_t* rh_init) {
-  (void) rh_init;
-  dwc2_regs_t* dwc2 = DWC2_REG(rhport);
+  dwc2_clock_init(rhport, rh_init->role);
 
   tu_memclr(&_dcd_data, sizeof(_dcd_data));
 
   // Core Initialization
+  dwc2_regs_t* dwc2 = DWC2_REG(rhport);
   const bool is_hs_phy = dwc2_core_is_highspeed_phy(dwc2, TUD_OPT_HIGH_SPEED);
   const bool is_dma = dma_device_enabled(dwc2);
   TU_ASSERT(dwc2_core_init(rhport, is_hs_phy, is_dma));
@@ -535,8 +541,9 @@ void dcd_remote_wakeup(uint8_t rhport) {
 void dcd_connect(uint8_t rhport) {
   dwc2_regs_t* dwc2 = DWC2_REG(rhport);
 
-#ifdef TUP_USBIP_DWC2_ESP32
-  // On ESP32-P4 HS PHY, do not write to USB_WRAP register which belongs to FS PHY
+#if defined(TUP_USBIP_DWC2_ESP32) && !TU_CHECK_MCU(OPT_MCU_ESP32S31)
+  // S31 is excluded at compile time (no USB_WRAP peripheral).
+  // On P4, the HS PHY (port 1) must not touch USB_WRAP which belongs to the FS PHY.
   if (rhport == 0) {
     usb_wrap_otg_conf_reg_t conf = USB_WRAP.otg_conf;
     conf.pad_pull_override = 0;
@@ -554,8 +561,9 @@ void dcd_connect(uint8_t rhport) {
 void dcd_disconnect(uint8_t rhport) {
   dwc2_regs_t* dwc2 = DWC2_REG(rhport);
 
-#ifdef TUP_USBIP_DWC2_ESP32
-  // On ESP32-P4 HS PHY, do not write to USB_WRAP register which belongs to FS PHY
+#if defined(TUP_USBIP_DWC2_ESP32) && !TU_CHECK_MCU(OPT_MCU_ESP32S31)
+  // S31 is excluded at compile time (no USB_WRAP peripheral).
+  // On P4, the HS PHY (port 1) must not touch USB_WRAP which belongs to the FS PHY.
   if (rhport == 0) {
     usb_wrap_otg_conf_reg_t conf = USB_WRAP.otg_conf;
     conf.pad_pull_override = 1;

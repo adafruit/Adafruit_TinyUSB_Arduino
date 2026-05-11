@@ -134,6 +134,7 @@
 #define OPT_MCU_ESP32C5           908 ///< Espressif ESP32-C5
 #define OPT_MCU_ESP32C61          909 ///< Espressif ESP32-C61
 #define OPT_MCU_ESP32H4           910 ///< Espressif ESP32-H4
+#define OPT_MCU_ESP32S31          911 ///< Espressif ESP32-S31
 
 // Dialog
 #define OPT_MCU_DA1469X          1000 ///< Dialog Semiconductor DA1469x
@@ -535,10 +536,6 @@
 // OS selection
 #ifndef CFG_TUSB_OS
   #define CFG_TUSB_OS           OPT_OS_NONE
-#endif
-
-#ifndef CFG_TUSB_OS_HAS_SCHEDULER
-  #define CFG_TUSB_OS_HAS_SCHEDULER (CFG_TUSB_OS != OPT_OS_NONE && CFG_TUSB_OS != OPT_OS_PICO)
 #endif
 
 #ifndef CFG_TUSB_OS_INC_PATH
