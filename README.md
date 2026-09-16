@@ -51,7 +51,7 @@ Following is cores without built-in support
 
 - **mbed_rp2040**
 - **[stm32duino/Arduino_Core_STM32](https://github.com/stm32duino/Arduino_Core_STM32)**
-  - Still WIP, only support/tested with F4, only support OTG_FS  
+  - Still WIP, only support/tested with F4, F7 and H7, only support OTG_FS (or the equivalent single OTG_HS-in-FS-mode peripheral on H7 parts without a separate OTG_FS instance)  
 
 It is still possible to use TinyUSB but with some limits such as:
 
