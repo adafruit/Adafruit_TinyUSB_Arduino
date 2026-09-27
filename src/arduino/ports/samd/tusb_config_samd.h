@@ -32,8 +32,10 @@ extern "C" {
 //--------------------------------------------------------------------
 // COMMON CONFIGURATION
 //--------------------------------------------------------------------
-#ifdef __SAMD51__
+#if defined(__SAMD51__) || defined(__SAME51__)
 #define CFG_TUSB_MCU OPT_MCU_SAMD51
+#elif defined(__SAME53__) || defined(__SAME54__)
+#define CFG_TUSB_MCU OPT_MCU_SAME5X
 #else
 #define CFG_TUSB_MCU OPT_MCU_SAMD21
 #endif

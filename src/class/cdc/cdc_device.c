@@ -56,6 +56,14 @@ typedef struct {
   tu_edpt_stream_t tx_stream;
   tu_edpt_stream_t rx_stream;
 
+  bool direct_mode;
+  bool direct_tx_active;
+  bool direct_tx_zlp;
+  bool direct_rx_active;
+  const void* direct_tx_buffer;
+  uint32_t direct_tx_bytes;
+  void* direct_rx_buffer;
+
   uint8_t tx_ff_buf[CFG_TUD_CDC_TX_BUFSIZE];
   uint8_t rx_ff_buf[CFG_TUD_CDC_RX_BUFSIZE];
 } cdcd_interface_t;
@@ -90,6 +98,22 @@ TU_ATTR_WEAK void tud_cdc_rx_wanted_cb(uint8_t itf, char wanted_char) {
 
 TU_ATTR_WEAK void tud_cdc_tx_complete_cb(uint8_t itf) {
   (void)itf;
+}
+
+TU_ATTR_WEAK void tud_cdc_direct_tx_complete_cb(uint8_t itf, const void* buffer, uint32_t xferred_bytes,
+                                                xfer_result_t result) {
+  (void)itf;
+  (void)buffer;
+  (void)xferred_bytes;
+  (void)result;
+}
+
+TU_ATTR_WEAK void tud_cdc_direct_rx_complete_cb(uint8_t itf, void* buffer, uint32_t xferred_bytes,
+                                                xfer_result_t result) {
+  (void)itf;
+  (void)buffer;
+  (void)xferred_bytes;
+  (void)result;
 }
 
 TU_ATTR_WEAK void tud_cdc_notify_complete_cb(uint8_t itf) {
@@ -183,28 +207,87 @@ void tud_cdc_n_set_wanted_char(uint8_t itf, char wanted) {
   _cdcd_itf[itf].wanted_char = wanted;
 }
 
+bool tud_cdc_n_set_direct_mode(uint8_t itf, bool enabled) {
+  TU_VERIFY(itf < CFG_TUD_CDC);
+  cdcd_interface_t* p_cdc = &_cdcd_itf[itf];
+  TU_VERIFY(!tu_edpt_stream_is_opened(&p_cdc->tx_stream));
+  TU_VERIFY(!tu_edpt_stream_is_opened(&p_cdc->rx_stream));
+  TU_VERIFY(!p_cdc->direct_tx_active && !p_cdc->direct_rx_active);
+  p_cdc->direct_mode = enabled;
+  return true;
+}
+
+bool tud_cdc_n_direct_write(uint8_t itf, const void* buffer, uint32_t length) {
+  TU_VERIFY(itf < CFG_TUD_CDC);
+  cdcd_interface_t* p_cdc = &_cdcd_itf[itf];
+  TU_VERIFY(p_cdc->direct_mode && tud_ready());
+  TU_VERIFY(tu_edpt_stream_is_opened(&p_cdc->tx_stream));
+  TU_VERIFY(buffer != NULL || length == 0);
+  TU_VERIFY(length <= UINT16_MAX);
+  TU_VERIFY(!p_cdc->direct_tx_active);
+  TU_VERIFY(usbd_edpt_claim(p_cdc->rhport, p_cdc->tx_stream.ep_addr));
+
+  p_cdc->direct_tx_active = true;
+  p_cdc->direct_tx_zlp = false;
+  p_cdc->direct_tx_buffer = buffer;
+  p_cdc->direct_tx_bytes = 0;
+  if (!usbd_edpt_xfer(p_cdc->rhport, p_cdc->tx_stream.ep_addr, (uint8_t*)(uintptr_t)buffer,
+                      (uint16_t) length, false)) {
+    // usbd_edpt_xfer() clears BUSY and CLAIMED when the DCD rejects submission.
+    p_cdc->direct_tx_active = false;
+    p_cdc->direct_tx_buffer = NULL;
+    return false;
+  }
+  return true;
+}
+
+bool tud_cdc_n_direct_read(uint8_t itf, void* buffer, uint32_t length) {
+  TU_VERIFY(itf < CFG_TUD_CDC);
+  cdcd_interface_t* p_cdc = &_cdcd_itf[itf];
+  TU_VERIFY(p_cdc->direct_mode && tud_ready());
+  TU_VERIFY(tu_edpt_stream_is_opened(&p_cdc->rx_stream));
+  TU_VERIFY(buffer != NULL && length > 0);
+  TU_VERIFY(length <= UINT16_MAX);
+  TU_VERIFY(!p_cdc->direct_rx_active);
+  TU_VERIFY(usbd_edpt_claim(p_cdc->rhport, p_cdc->rx_stream.ep_addr));
+
+  p_cdc->direct_rx_active = true;
+  p_cdc->direct_rx_buffer = buffer;
+  if (!usbd_edpt_xfer(p_cdc->rhport, p_cdc->rx_stream.ep_addr, buffer, (uint16_t) length, false)) {
+    // usbd_edpt_xfer() clears BUSY and CLAIMED when the DCD rejects submission.
+    p_cdc->direct_rx_active = false;
+    p_cdc->direct_rx_buffer = NULL;
+    return false;
+  }
+  return true;
+}
+
 //--------------------------------------------------------------------+
 // READ API
 //--------------------------------------------------------------------+
 uint32_t tud_cdc_n_available(uint8_t itf) {
   TU_VERIFY(itf < CFG_TUD_CDC, 0);
+  TU_VERIFY(!_cdcd_itf[itf].direct_mode, 0);
   return tu_edpt_stream_read_available(&_cdcd_itf[itf].rx_stream);
 }
 
 uint32_t tud_cdc_n_read(uint8_t itf, void* buffer, uint32_t bufsize) {
   TU_VERIFY(itf < CFG_TUD_CDC, 0);
   cdcd_interface_t *p_cdc = &_cdcd_itf[itf];
+  TU_VERIFY(!p_cdc->direct_mode, 0);
   return tu_edpt_stream_read(&p_cdc->rx_stream, buffer, bufsize);
 }
 
 bool tud_cdc_n_peek(uint8_t itf, uint8_t *chr) {
   TU_VERIFY(itf < CFG_TUD_CDC);
+  TU_VERIFY(!_cdcd_itf[itf].direct_mode);
   return tu_edpt_stream_peek(&_cdcd_itf[itf].rx_stream, chr);
 }
 
 void tud_cdc_n_read_flush(uint8_t itf) {
   TU_VERIFY(itf < CFG_TUD_CDC, );
   cdcd_interface_t *p_cdc = &_cdcd_itf[itf];
+  TU_VERIFY(!p_cdc->direct_mode, );
   tu_edpt_stream_clear(&p_cdc->rx_stream);
   tu_edpt_stream_read_xfer(&p_cdc->rx_stream);
 }
@@ -215,24 +298,28 @@ void tud_cdc_n_read_flush(uint8_t itf) {
 uint32_t tud_cdc_n_write(uint8_t itf, const void* buffer, uint32_t bufsize) {
   TU_VERIFY(itf < CFG_TUD_CDC, 0);
   cdcd_interface_t *p_cdc = &_cdcd_itf[itf];
+  TU_VERIFY(!p_cdc->direct_mode, 0);
   return tu_edpt_stream_write(&p_cdc->tx_stream, buffer, bufsize);
 }
 
 uint32_t tud_cdc_n_write_flush(uint8_t itf) {
   TU_VERIFY(itf < CFG_TUD_CDC, 0);
   cdcd_interface_t *p_cdc = &_cdcd_itf[itf];
+  TU_VERIFY(!p_cdc->direct_mode, 0);
   return tu_edpt_stream_write_xfer(&p_cdc->tx_stream);
 }
 
 uint32_t tud_cdc_n_write_available(uint8_t itf) {
   TU_VERIFY(itf < CFG_TUD_CDC, 0);
   cdcd_interface_t *p_cdc = &_cdcd_itf[itf];
+  TU_VERIFY(!p_cdc->direct_mode, 0);
   return tu_edpt_stream_write_available(&p_cdc->tx_stream);
 }
 
 bool tud_cdc_n_write_clear(uint8_t itf) {
   TU_VERIFY(itf < CFG_TUD_CDC);
   cdcd_interface_t *p_cdc = &_cdcd_itf[itf];
+  TU_VERIFY(!p_cdc->direct_mode);
   tu_edpt_stream_clear(&p_cdc->tx_stream);
   return true;
 }
@@ -285,6 +372,13 @@ void cdcd_reset(uint8_t rhport) {
   for (uint8_t i = 0; i < CFG_TUD_CDC; i++) {
     cdcd_interface_t* p_cdc = &_cdcd_itf[i];
     tu_memclr(p_cdc, ITF_MEM_RESET_SIZE);
+
+    p_cdc->direct_tx_active = false;
+    p_cdc->direct_tx_zlp = false;
+    p_cdc->direct_rx_active = false;
+    p_cdc->direct_tx_buffer = NULL;
+    p_cdc->direct_tx_bytes = 0;
+    p_cdc->direct_rx_buffer = NULL;
 
     tu_fifo_set_overwritable(&p_cdc->tx_stream.ff, CFG_TUD_CDC_TX_OVERWRITABLE_IF_NOT_CONNECTED); // back to default
     tu_edpt_stream_close(&p_cdc->rx_stream);
@@ -361,7 +455,9 @@ uint16_t cdcd_open(uint8_t rhport, const tusb_desc_interface_t* itf_desc, uint16
           tu_edpt_stream_clear(stream_rx);
   #endif
 
-          TU_ASSERT(tu_edpt_stream_read_xfer(stream_rx) > 0, 0); // prepare for incoming data
+          if (!p_cdc->direct_mode) {
+            TU_ASSERT(tu_edpt_stream_read_xfer(stream_rx) > 0, 0); // prepare for incoming data
+          }
         }
       }
 
@@ -469,6 +565,15 @@ bool cdcd_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint32_
 
   // Received new data, move to fifo
   if (ep_addr == stream_rx->ep_addr) {
+    if (p_cdc->direct_mode) {
+      TU_ASSERT(p_cdc->direct_rx_active);
+      void* buffer = p_cdc->direct_rx_buffer;
+      p_cdc->direct_rx_active = false;
+      p_cdc->direct_rx_buffer = NULL;
+      tud_cdc_direct_rx_complete_cb(itf, buffer, xferred_bytes, result);
+      return true;
+    }
+
     tu_edpt_stream_read_xfer_complete(stream_rx, xferred_bytes);
 
     // Check for wanted char and invoke wanted callback
@@ -515,6 +620,27 @@ bool cdcd_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint32_
   // Data sent to host, we continue to fetch from tx fifo to send.
   // Note: This will cause incorrect baudrate set in line coding. Though maybe the baudrate is not really important!
   if (ep_addr == stream_tx->ep_addr) {
+    if (p_cdc->direct_mode) {
+      TU_ASSERT(p_cdc->direct_tx_active);
+      if (!p_cdc->direct_tx_zlp && result == XFER_RESULT_SUCCESS && xferred_bytes > 0 &&
+          (xferred_bytes % stream_tx->mps) == 0) {
+        p_cdc->direct_tx_zlp = true;
+        p_cdc->direct_tx_bytes = xferred_bytes;
+        if (tu_edpt_stream_write_zlp_if_needed(stream_tx, xferred_bytes)) {
+          return true;
+        }
+        result = XFER_RESULT_FAILED;
+      }
+      const void* buffer = p_cdc->direct_tx_buffer;
+      const uint32_t completed_bytes = p_cdc->direct_tx_zlp ? p_cdc->direct_tx_bytes : xferred_bytes;
+      p_cdc->direct_tx_active = false;
+      p_cdc->direct_tx_zlp = false;
+      p_cdc->direct_tx_buffer = NULL;
+      p_cdc->direct_tx_bytes = 0;
+      tud_cdc_direct_tx_complete_cb(itf, buffer, completed_bytes, result);
+      return true;
+    }
+
     tud_cdc_tx_complete_cb(itf); // invoke callback to possibly refill tx fifo
 
     if (0 == tu_edpt_stream_write_xfer(stream_tx)) {

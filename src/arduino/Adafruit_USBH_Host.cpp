@@ -273,10 +273,19 @@ void tuh_max3421_int_api(uint8_t rhport, bool enabled) {
   (void)host;
 
 #ifdef ARDUINO_ARCH_SAMD
-  //--- SAMD51 ---//
-#ifdef __SAMD51__
+//--- SAMD51/SAME51 ---//
+#if TU_CHECK_MCU(OPT_MCU_SAMD51)
   const IRQn_Type irq =
       (IRQn_Type)(EIC_0_IRQn + g_APinDescription[host->_intr].ulExtInt);
+
+  if (enabled) {
+    NVIC_EnableIRQ(irq);
+  } else {
+    NVIC_DisableIRQ(irq);
+  }
+#elif TU_CHECK_MCU(OPT_MCU_SAME5X)
+  const IRQn_Type irq =
+      (IRQn_Type)(EIC_EXTINT_0_IRQn + g_APinDescription[host->_intr].ulExtInt);
 
   if (enabled) {
     NVIC_EnableIRQ(irq);
