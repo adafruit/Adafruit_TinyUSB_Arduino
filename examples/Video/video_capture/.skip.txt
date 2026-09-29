@@ -1,4 +1,5 @@
 feather_esp32_v2
 pico_rp2040_tinyusb_host
 CH32V20x_EVT
+ch32v20x_community
 metro_m0_tinyusb

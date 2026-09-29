@@ -2,3 +2,5 @@ feather_esp32_v2
 pico_rp2040_tinyusb_host
 CH32V20x_EVT
 # CH32V20x_EVT is not supported due to lacking of HardwareSerial::read(uint8_t [64], int)
+ch32v20x_community
+# CH32V20x_EVT is not supported due to lacking of HardwareSerial::read(uint8_t [64], int) (for now)
