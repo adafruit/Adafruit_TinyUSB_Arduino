@@ -39,6 +39,13 @@ extern "C" {
 //--------------------------------------------------------------------+
 // TASK API
 //--------------------------------------------------------------------+
+// Bare-metal single context: return a non-NULL sentinel so equality compares true.
+typedef void* osal_task_handle_t;
+
+TU_ATTR_ALWAYS_INLINE static inline osal_task_handle_t osal_task_get_current_handle(void) {
+  return (osal_task_handle_t) 1;
+}
+
 TU_ATTR_ALWAYS_INLINE static inline void osal_task_delay(uint32_t msec) {
   sleep_ms(msec);
 }
@@ -55,6 +62,10 @@ typedef critical_section_t osal_spinlock_t; // pico implement critical section w
 
 TU_ATTR_ALWAYS_INLINE static inline void osal_spin_init(osal_spinlock_t *ctx) {
   critical_section_init(ctx);
+}
+
+TU_ATTR_ALWAYS_INLINE static inline void osal_spin_deinit(osal_spinlock_t *ctx) {
+  critical_section_deinit(ctx);
 }
 
 TU_ATTR_ALWAYS_INLINE static inline void osal_spin_lock(osal_spinlock_t *ctx, bool in_isr) {

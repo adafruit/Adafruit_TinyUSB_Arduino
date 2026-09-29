@@ -83,6 +83,19 @@ typedef struct {
 //--------------------------------------------------------------------+
 // TASK API
 //--------------------------------------------------------------------+
+typedef TaskHandle_t osal_task_handle_t;
+
+// Requires INCLUDE_xTaskGetCurrentTaskHandle == 1 in FreeRTOSConfig.h. FreeRTOS
+// also exposes the symbol when configUSE_MUTEXES == 1, so accept either.
+#if !defined(INCLUDE_xTaskGetCurrentTaskHandle) || (INCLUDE_xTaskGetCurrentTaskHandle == 0)
+  #if !defined(configUSE_MUTEXES) || (configUSE_MUTEXES == 0)
+    #error "TinyUSB host stack requires INCLUDE_xTaskGetCurrentTaskHandle or configUSE_MUTEXES to be enabled in FreeRTOSConfig.h"
+  #endif
+#endif
+TU_ATTR_ALWAYS_INLINE static inline osal_task_handle_t osal_task_get_current_handle(void) {
+  return xTaskGetCurrentTaskHandle();
+}
+
 TU_ATTR_ALWAYS_INLINE static inline uint32_t _osal_ms2tick(uint32_t msec) {
   if (msec == OSAL_TIMEOUT_WAIT_FOREVER) { return portMAX_DELAY; }
   if (msec == 0) { return 0; }
@@ -117,6 +130,10 @@ TU_ATTR_ALWAYS_INLINE static inline void osal_spin_init(osal_spinlock_t *ctx) {
   spinlock_initialize(ctx);
 }
 
+TU_ATTR_ALWAYS_INLINE static inline void osal_spin_deinit(osal_spinlock_t *ctx) {
+  (void) ctx;
+}
+
 TU_ATTR_ALWAYS_INLINE static inline void osal_spin_lock(osal_spinlock_t *ctx, bool in_isr) {
   if (!TUP_MCU_MULTIPLE_CORE && in_isr) {
     return; // single core MCU does not need to lock in ISR
@@ -136,6 +153,10 @@ TU_ATTR_ALWAYS_INLINE static inline void osal_spin_unlock(osal_spinlock_t *ctx, 
 typedef UBaseType_t osal_spinlock_t;
 
 TU_ATTR_ALWAYS_INLINE static inline void osal_spin_init(osal_spinlock_t *ctx) {
+  (void) ctx;
+}
+
+TU_ATTR_ALWAYS_INLINE static inline void osal_spin_deinit(osal_spinlock_t *ctx) {
   (void) ctx;
 }
 

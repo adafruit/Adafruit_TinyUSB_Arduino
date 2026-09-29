@@ -254,6 +254,20 @@ static const usbd_class_driver_t _usbd_driver[] = {
     },
     #endif
 
+    #if CFG_TUD_MIDI2
+    {
+        .name             = DRIVER_NAME("MIDI2"),
+        .init             = midi2d_init,
+        .deinit           = midi2d_deinit,
+        .open             = midi2d_open,
+        .reset            = midi2d_reset,
+        .control_xfer_cb  = midi2d_control_xfer_cb,
+        .xfer_cb          = midi2d_xfer_cb,
+        .xfer_isr         = NULL,
+        .sof              = NULL
+    },
+    #endif
+
     #if CFG_TUD_VENDOR
     {
         .name             = DRIVER_NAME("VENDOR"),
@@ -622,6 +636,8 @@ bool tud_deinit(uint8_t rhport) {
   _usbd_mutex = NULL;
 #endif
 
+  osal_spin_deinit(&_usbd_spin);
+
   _usbd_rhport = RHPORT_INVALID;
 
   if (cfg_num > 0) {
@@ -900,6 +916,8 @@ static bool usbd_control_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t 
   // Data stage progress
   if (ctrl_xfer->request.bmRequestType_bit.direction == TUSB_DIR_OUT) {
     TU_VERIFY(ctrl_xfer->buffer);
+    // Clamp host overrun to remaining capacity (data_len) so memcpy can't overflow the caller buffer
+    xferred_bytes = tu_min32(xferred_bytes, ctrl_xfer->data_len - ctrl_xfer->total_xferred);
     if (ctrl_xfer->buffer != _ctrl_epbuf.buf) {
       memcpy(ctrl_xfer->buffer, _ctrl_epbuf.buf, xferred_bytes);
     }

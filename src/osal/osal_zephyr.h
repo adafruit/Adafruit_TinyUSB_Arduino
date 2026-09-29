@@ -31,6 +31,12 @@
 //--------------------------------------------------------------------+
 // TASK API
 //--------------------------------------------------------------------+
+typedef k_tid_t osal_task_handle_t;
+
+TU_ATTR_ALWAYS_INLINE static inline osal_task_handle_t osal_task_get_current_handle(void) {
+  return k_current_get();
+}
+
 TU_ATTR_ALWAYS_INLINE static inline void osal_task_delay(uint32_t msec) {
   k_msleep(msec);
 }
@@ -51,6 +57,10 @@ typedef struct {
   osal_spinlock_t _name
 
 TU_ATTR_ALWAYS_INLINE static inline void osal_spin_init(osal_spinlock_t *ctx) {
+  (void) ctx;
+}
+
+TU_ATTR_ALWAYS_INLINE static inline void osal_spin_deinit(osal_spinlock_t *ctx) {
   (void) ctx;
 }
 

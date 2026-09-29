@@ -206,6 +206,12 @@
   #define TUP_USBIP_FSDEV_DRD
   #define CFG_TUSB_FSDEV_PMA_SIZE 2048u
 
+#elif TU_CHECK_MCU(OPT_MCU_STM32C5)
+  #define TUP_USBIP_FSDEV
+  #define TUP_USBIP_FSDEV_STM32
+  #define TUP_USBIP_FSDEV_DRD
+  #define CFG_TUSB_FSDEV_PMA_SIZE 2048u
+
 #elif TU_CHECK_MCU(OPT_MCU_STM32F0)
   #define TUP_USBIP_FSDEV
   #define TUP_USBIP_FSDEV_STM32
@@ -393,6 +399,10 @@
       #define TUP_DCD_ENDPOINT_MAX 6
     #endif
   #endif
+
+  // TypeC controller
+  #define TUP_USBIP_TYPEC_STM32
+  #define TUP_TYPEC_RHPORTS_NUM 1
 
 #elif TU_CHECK_MCU(OPT_MCU_STM32WB)
   #define TUP_USBIP_FSDEV
@@ -616,10 +626,6 @@
     #define CFG_TUH_WCH_USBIP_USBFS 1
   #endif
 
-  #define TUP_USBIP_FSDEV
-  #define TUP_USBIP_FSDEV_CH32
-  #define CFG_TUSB_FSDEV_PMA_SIZE 512u
-
   // default to FSDEV for device
   #if !defined(CFG_TUD_WCH_USBIP_USBFS)
     #define CFG_TUD_WCH_USBIP_USBFS 0
@@ -627,6 +633,12 @@
 
   #if !defined(CFG_TUD_WCH_USBIP_FSDEV)
     #define CFG_TUD_WCH_USBIP_FSDEV (CFG_TUD_WCH_USBIP_USBFS ? 0 : 1)
+  #endif
+
+  #if CFG_TUD_WCH_USBIP_FSDEV
+    #define TUP_USBIP_FSDEV
+    #define TUP_USBIP_FSDEV_CH32
+    #define CFG_TUSB_FSDEV_PMA_SIZE 512u
   #endif
 
   #define TUP_DCD_ENDPOINT_MAX 8
@@ -650,6 +662,19 @@
   #if CFG_TUD_WCH_USBIP_USBHS
     #define TUP_DCD_EDPT_CLOSE_API
   #endif
+
+#elif TU_CHECK_MCU(OPT_MCU_CH583)
+  // CH582/583 USBFS: older WCH USBFS IP with a single combined per-endpoint control register
+  // (like CH32V103), driven by the shared dcd_ch32_usbfs.c on USB0 (rhport 0). Device only:
+  // the shared hcd_ch32_usbfs.c is CH32V20x-specific and does not support CH58x, so host /
+  // USB2 (rhport 1) is not provided here.
+  #define TUP_USBIP_WCH_USBFS
+
+  #ifndef CFG_TUD_WCH_USBIP_USBFS
+    #define CFG_TUD_WCH_USBIP_USBFS 1
+  #endif
+
+  #define TUP_DCD_ENDPOINT_MAX 8
 
 //--------------------------------------------------------------------+
 // Analog Devices
