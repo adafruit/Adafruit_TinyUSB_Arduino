@@ -64,7 +64,9 @@ extern "C" {
 // DEVICE CONFIGURATION
 //--------------------------------------------------------------------
 
+#ifndef CFG_TUD_ENDPOINT0_SIZE
 #define CFG_TUD_ENDPOINT0_SIZE 64
+#endif
 
 //------------- CLASS -------------//
 #ifndef CFG_TUD_CDC
@@ -100,7 +102,9 @@ extern "C" {
 #define CFG_TUD_MSC_EP_BUFSIZE 512
 
 // HID buffer size Should be sufficient to hold ID (if any) + Data
+#ifndef CFG_TUD_HID_EP_BUFSIZE
 #define CFG_TUD_HID_EP_BUFSIZE 64
+#endif
 
 // MIDI FIFO size of TX and RX
 #define CFG_TUD_MIDI_RX_BUFSIZE 128
