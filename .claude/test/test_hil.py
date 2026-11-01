@@ -193,10 +193,10 @@ class Admission(Base):
 
 
 class Battery(Base):
-    def run_board(self, step=None, restore=None, admit=None):
+    def run_board(self, step=None, restore=None, admit=None, probe=''):
         rec, root = self.record()
         board = ht.load_roster(self.roster)['metro_m4_express']
-        with mock.patch.object(ht, 'admit', admit or (lambda *a, **k: (json.loads(rec.read_text()),
+        with mock.patch.object(ht, 'probe_present', return_value=probe), mock.patch.object(ht, 'admit', admit or (lambda *a, **k: (json.loads(rec.read_text()),
                                                                         {'serial_echo': {'sha256': {}}}))), \
                 mock.patch.object(ht, 'step', step or (lambda *a: {'test': 'cdc_echo', 'pass': True,
                                                                     'detail': 'ok'})), \
@@ -252,6 +252,10 @@ class Battery(Base):
         row = self.run_board(admit=admit)
         self.assertEqual((ht.verdict(row), row['cleanup']['state'], len(self.lock.released)), ('not-run', 'untouched', 1))
 
+    def test_absent_probe_is_not_run_before_the_lock(self):
+        row = self.run_board(probe='probe 1 is not on this host\'s bus')
+        self.assertEqual((ht.verdict(row), self.lock.taken), ('not-run', []))
+
     def test_locked_and_blocked_boards(self):
         def locked(*a, **k):
             raise FakeLock.BoardLocked('held by ci')
@@ -270,6 +274,20 @@ class Battery(Base):
             row = self.run_board()
         self.assertFalse(row['ran'])
         self.assertIn('budget', row['tests'][0]['detail'])
+
+
+class Probe(Base):
+    def test_jlink_padded_serial_and_openocd_pin(self):
+        usb = ht.A.usb
+        usb.jlink_serial_candidates = lambda uid, serials: [k for k, v in serials.items() if v.lstrip('0') == uid]
+        usb.usb_scan.return_value = [{'busport': '11-2.4', 'serial': '000000123456'}]
+        self.assertEqual(ht.probe_present({'name': 'jlink', 'uid': '123456'}), '')
+        usb.usb_scan.return_value = []
+        self.assertIn('not on this host', ht.probe_present({'name': 'jlink', 'uid': '123456'}))
+        usb.usb_scan.return_value = [{'busport': '21-1.4', 'serial': 'E6614103E72C1D2F'}]
+        self.assertEqual(ht.probe_present({'name': 'openocd', 'uid': 'e6614103e72c1d2f', 'vid_pid': '0x2e8a 0x000c'}),
+                         '')
+        self.assertEqual(usb.usb_scan.call_args[1]['vid_pid'], ('2e8a', '000c'))
 
 
 class Manual(Base):

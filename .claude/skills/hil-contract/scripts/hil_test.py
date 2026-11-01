@@ -414,12 +414,31 @@ def restore(name, board, images, run_dir, tracker):
 
 # ---- the battery
 
+def probe_present(flasher):
+    """'' when exactly one probe with the flasher's serial is on this host's bus, else why not."""
+    if flasher['name'] == 'jlink':
+        serials = {d['busport']: d['serial'] for d in A.usb.usb_scan(vid='1366')}
+        found = A.usb.jlink_serial_candidates(flasher['uid'], serials)
+    else:
+        vid_pid = tuple(v[2:] for v in flasher['vid_pid'].split()) if 'vid_pid' in flasher else None
+        found = [d['busport'] for d in A.usb.usb_scan(vid_pid=vid_pid) if d['serial'].lower() ==
+                 flasher['uid'].lower()]
+    if len(found) == 1:
+        return ''
+    return f'probe {flasher["uid"]} is not on this host\'s bus' if not found else \
+        f'probe {flasher["uid"]} is ambiguous: {found}'
+
+
 def run_board(name, board, tests, record_path, roster_path, run_root, manifest):
     run_dir = Path(run_root) / name
     run_dir.mkdir(parents=True, exist_ok=True)
     row = {'board': name, 'ran': False, 'pass': False, 'locked': False, 'recoveryBlocker': False, 'tests': [],
            'cleanup': {'pass': True, 'state': 'untouched', 'evidence': '', 'holder': None, 'receipts': []},
            'firmware': None, 'detail': ''}
+    why = probe_present(board['flasher'])
+    if why:
+        row['detail'] = f'not run: {why}'
+        return row
     try:
         tracker = Tracker(run_dir)
     except OSError as e:
