@@ -410,7 +410,7 @@ def hex_runs(path):
         rec = bytes.fromhex(line.strip()[1:])
         if sum(rec) & 0xff:
             raise ValueError(f'{path}: bad checksum')
-        count, addr, kind, payload = rec[0], int.from_bytes(rec[1:3], 'big'), rec[3], rec[4:4 + rec[0]]
+        addr, kind, payload = int.from_bytes(rec[1:3], 'big'), rec[3], rec[4:4 + rec[0]]
         if kind == 0:
             start = base + addr
             if runs and runs[-1][0] + len(runs[-1][1]) == start:
