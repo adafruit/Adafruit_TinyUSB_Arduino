@@ -903,7 +903,12 @@ def cmd_commission(args):
             A.lock.release_board_lock(fh)
             raise
         out['error'] = f'{type(e).__name__}: {e}'
-        out['holder'] = hand_over(fh, args.board, {'cleanup': {'evidence': out['error']}}, tracker)
+        row = {'board': args.board, 'cleanup': {'evidence': out['error'], 'receipts': list(tracker.receipts)}}
+        if tracker.pending:   # as run_board: every later invocation refuses until they end
+            row['cleanup'].update(pending=list(tracker.pending), markError=mark_pending(args.board, tracker))
+        out['holder'] = row['cleanup']['holder'] = hand_over(fh, args.board, row, tracker)
+        out['results'] = [row]   # result.json is a `restore --report` input
+        (run_dir / 'result.json').write_text(json.dumps(out) + '\n')
         emit(out)
         return 4
     emit(out)

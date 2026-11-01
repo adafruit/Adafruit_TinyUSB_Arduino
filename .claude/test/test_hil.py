@@ -498,6 +498,28 @@ class Manual(Base):
         ht.held_by('metro_m4_express', 'mine')
 
 
+class Commission(Base):
+    def test_unclean_commission_marks_the_board_pending_and_keeps_a_report(self):
+        args = argparse.Namespace(board='metro_m4_express', roster=str(self.roster), record_dir=str(self.dir))
+
+        def detach(*a):
+            a[-1]._note('pending', {'pid': 7}, ['JLinkExe'])
+            a[-1].check()
+        with mock.patch.object(ht, 'ROOT', self.dir), mock.patch.object(ht, 'load_agentrc'), \
+                mock.patch.object(ht, 'admit', return_value=({}, {'serial_echo': {'vidPid': '239a:8020'}})), \
+                mock.patch.object(ht, 'scan', return_value=[]), mock.patch.object(ht, 'detach', detach), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(ht.cmd_commission(args), 4)
+        self.assertEqual(self.lock.pending[('metro_m4_express', ht.PENDING_KIND)], [{'receipt': {'pid': 7}}])
+        ht.A.process.recheck.return_value = 'pending'
+        self.assertIn('pending children', ht.pending_problem('metro_m4_express'))
+        report = next(self.dir.glob('build/hil-manual/commission-metro_m4_express-*/result.json'))
+        self.assertEqual(json.loads(report.read_text())['holder'], {'token': 'tok123'})
+        restore = argparse.Namespace(board='metro_m4_express', report=str(report))
+        with self.assertRaisesRegex(ht.Refused, 'not proven ended'):
+            ht.op_restore(restore, None, self.dir / 'run', None, None)
+
+
 class Flash(Base):
     def test_openocd_transcript_must_show_verify(self):
         op = mock.Mock(returncode=0, stdout='** Programming Finished **\n', stderr='', cleanup='done')

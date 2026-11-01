@@ -174,7 +174,9 @@ The lock helper is `hil_test.py lock (hold|release|status) ...`, agentrc's `hil_
 
 Recovery needs a separate dispatch naming the board. It applies to:
 
-- a report row with `cleanup.holder` (exit 4);
+- a report row with `cleanup.holder` (exit 4), or a `commission` that exited 4: its
+  `build/hil-manual/commission-<board>-<time>/result.json` carries the holder token and receipts and stands in
+  for the report in step 3;
 - a protected record left by a run that died;
 - a board's `arduino-hil` pending-session record;
 - a session whose `close` failed (its hold kept).
