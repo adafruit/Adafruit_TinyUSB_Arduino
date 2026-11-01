@@ -72,21 +72,17 @@ def head_of_clean_tree():
     return head
 
 
-def record_files(path, head, board=None, clean=True):
+def record_files(path, head, board, clean=True):
     """The checkout-relative files a build record stages (itself, its images, an experimental record's patch),
-    refusing one this run's HEAD and roster would refuse on the rig anyway."""
+    refusing one the rig would refuse (hil_test.record_problems)."""
     try:
         rec = json.loads(Path(path).read_text())
-        sketches, source = rec['sketches'], rec['source']
+        why = hil_test.record_problems(rec, board, head, not clean, 'HEAD')
+        files = [rel(path), *(f for s in rec['sketches'].values() for f in s['sha256'])]
     except (OSError, ValueError, KeyError, TypeError) as e:
         core.fail(f'build record {path}: {e!r}')
-    why = [board and rec.get('board') != board and f'it is for {rec.get("board")}, not {board}',
-           clean and rec.get('experimental') and 'it is experimental',
-           source.get('head') != head and f'it was built at {str(source.get("head"))[:12]}, HEAD is {head[:12]}']
-    why = [w for w in why if w]
     if why:
         core.fail(f'build record {path}: {"; ".join(why)}; rebuild with the build skill\'s --record')
-    files = [rel(path), *(f for s in sketches.values() for f in s['sha256'])]
     if rec.get('patch'):
         files.append(rec['patch']['path'])
     return rec, files
@@ -105,13 +101,17 @@ def snapshot(into, files, with_agentrc=False, bundle=None):
     return digests
 
 
-def check_images(rec, digests, bundle=None):
-    pinned = {f: d for s in rec['sketches'].values() for f, d in s['sha256'].items()}
-    if rec.get('patch'):
-        pinned[rec['patch']['path']] = rec['patch']['sha256']
-    bad = [f for f, d in pinned.items() if digests.get(f'{bundle}/{f}' if bundle else f) != d]
-    if bad:
-        core.fail(f'{rec["board"]}: {", ".join(bad[:3])} changed since the build record; rebuild')
+def snapshot_records(into, records, bundle=None):
+    """snapshot() of the records' files, refusing any whose copy no longer hashes as its record pins."""
+    digests = snapshot(into, [f for _, fs in records for f in fs], bundle=bundle)
+    for rec, _ in records:
+        pinned = {f: d for s in rec['sketches'].values() for f, d in s['sha256'].items()}
+        if rec.get('patch'):
+            pinned[rec['patch']['path']] = rec['patch']['sha256']
+        bad = [f for f, d in pinned.items() if digests.get(f'{bundle}/{f}' if bundle else f) != d]
+        if bad:
+            core.fail(f'{rec["board"]}: {", ".join(bad[:3])} changed since the build record; rebuild')
+    return digests
 
 
 def stage(tree, into, digests):
@@ -127,9 +127,7 @@ def staged_tree(run_id, host, roster, records, head, bundle=None):
     with tempfile.TemporaryDirectory(prefix='hil-remote-') as tmp:
         into = Path(tmp)
         digests = snapshot(into, [*HARNESS, roster], True)
-        digests.update(snapshot(into, [f for _, fs in records for f in fs], bundle=bundle))
-        for rec, _ in records:
-            check_images(rec, digests, bundle)
+        digests.update(snapshot_records(into, records, bundle))
         drift = core.checkout_drift(ROOT, head)
         if drift:
             core.fail(f'the checkout moved while it was copied: {"; ".join(drift)}')
@@ -251,9 +249,7 @@ def cmd_session_stage(a):
     records = [record_files(r, s['head'], s['board'], clean=False) for r in a.records]
     bundle = f'bundles/{time.strftime("%Y%m%d-%H%M%S")}-{secrets.token_hex(4)}'   # unique: stages may run at once
     with tempfile.TemporaryDirectory(prefix='hil-remote-') as tmp:
-        digests = snapshot(Path(tmp), [f for _, fs in records for f in fs], bundle=bundle)
-        for rec, _ in records:
-            check_images(rec, digests, bundle)
+        digests = snapshot_records(Path(tmp), records, bundle)
         stage(tree, Path(tmp), digests)
     print(json.dumps({'runId': a.run_id, 'bundle': bundle,
                       'use': [f'--bundle {bundle} --build-record {fs[0]}' for _, fs in records]}))

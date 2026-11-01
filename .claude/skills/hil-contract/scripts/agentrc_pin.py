@@ -58,10 +58,11 @@ def problem(root, commit):
 def fetch():
     url, commit = pin()
     dest = cache_dir(commit)
-    if dest.exists() and not problem(dest, commit):
-        return dest
     if dest.exists():
-        raise PinError(f'{dest} exists but {problem(dest, commit)}; remove it and fetch again')
+        why = problem(dest, commit)
+        if why:
+            raise PinError(f'{dest} exists but {why}; remove it and fetch again')
+        return dest
     tmp = dest.with_name(dest.name + f'.tmp-{os.getpid()}')
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True)

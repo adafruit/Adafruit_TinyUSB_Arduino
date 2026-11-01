@@ -347,10 +347,10 @@ class Manual(Base):
                 mock.patch.object(ht, 'flash_only', unclean), contextlib.redirect_stdout(out), \
                 mock.patch.object(ht.Tracker, '__init__', lambda s, d: s.__dict__.update(
                     receipts=[], pending=[], unclean='', log=Path(d) / 'hil.log')):
-            self.assertEqual(ht.manual(args, ht.op_flash(args)), 4)
+            self.assertEqual(ht.manual(args), 4)
             ht.A.process.recheck.return_value = 'pending'
             with self.assertRaisesRegex(ht.Refused, 'pending children'):
-                ht.manual(args, ht.op_flash(args))
+                ht.manual(args)
             ht.A.process.recheck.return_value = 'done'
         self.assertEqual(self.lock.pending[('metro_m4_express', ht.PENDING_KIND)], [{'receipt': {'pid': 7}}])
 
@@ -367,7 +367,7 @@ class Manual(Base):
                 mock.patch.object(ht, 'flash_only', flashed), contextlib.redirect_stdout(io.StringIO()), \
                 mock.patch.object(ht.Tracker, '__init__', lambda s, d: s.__dict__.update(
                     receipts=[], pending=[], unclean='', log=Path(d) / 'hil.log')):
-            self.assertEqual(ht.manual(args, ht.op_flash(args)), 0)
+            self.assertEqual(ht.manual(args), 0)
         load.assert_called_once_with(True)
         result = json.loads(next((root / 'build/hil-manual').glob('metro_m4_express-flash-*/result.json')).read_text())
         self.assertEqual((result['pass'], result['record'], result['experimental']), (True, str(rec), False))
@@ -384,7 +384,7 @@ class Manual(Base):
                                                           receipt={'pid': 5})
         with mock.patch.object(ht, 'ROOT', root), mock.patch.object(ht, 'load_agentrc'), \
                 contextlib.redirect_stdout(io.StringIO()) as out:
-            self.assertEqual(ht.manual(args, ht.op_exec(args)), 4)
+            self.assertEqual(ht.manual(args), 4)
         self.assertEqual(json.loads(out.getvalue())['survivors'], [{'receipt': {'pid': 5}}])
         self.assertEqual(self.lock.pending[('metro_m4_express', ht.PENDING_KIND)], [{'receipt': {'pid': 5}}])
 
@@ -394,7 +394,7 @@ class Manual(Base):
         with mock.patch.object(ht, 'ROOT', root), mock.patch.object(ht, 'load_agentrc'):
             with ht.one_session_command('metro_m4_express'):
                 with self.assertRaisesRegex(ht.Refused, 'still running'):
-                    ht.manual(args, ht.op_exec(args))
+                    ht.manual(args)
             with ht.one_session_command('metro_m4_express'):
                 pass
 
@@ -420,7 +420,7 @@ class Manual(Base):
             with mock.patch.object(ht, 'ROOT', root), mock.patch.object(ht, 'restore', return_value=restored), \
                     mock.patch.object(ht, 'git_identity', return_value=('abc', '')), \
                     mock.patch.object(ht, 'release_hold', return_value={'exit': exit_code}) as release:
-                row = ht.op_restore(args)(None, self.dir / 'run', None, None)
+                row = ht.op_restore(args, None, self.dir / 'run', None, None)
             release.assert_called_once_with('metro_m4_express')
             self.assertEqual(row['pass'], ok)
 
@@ -441,7 +441,7 @@ class Manual(Base):
         self.assertEqual(argv[:4], ['gdb-multiarch', '-batch', '-nx', '-ex'])
         self.assertEqual((argv[-5:], argv[-1]), (['-ex', 'info symbol main', '-ex', 'bt', 'fw.elf'], 'fw.elf'))
         pipe = ht.shlex.split(argv[4].removeprefix('target extended-remote | '))
-        self.assertEqual(pipe[-2:], ['-c', 'gdb_port pipe'])
+        self.assertEqual(pipe[-4:], ['-c', 'gdb_port pipe', '-c', 'gdb_memory_map disable'])
         self.assertIn('adapter serial E6614103E72C1D2F', pipe)
         self.assertIn('adapter usb vid_pid 0x2e8a 0x000c', pipe)
         self.assertIn('target/rp2040.cfg', pipe)
@@ -513,12 +513,26 @@ class Flash(Base):
         tracker = mock.Mock()
         tracker.check.side_effect = ht.Unclean('read-block: cleanup unknown')
         board = {'uid': 'ABC', 'flasher': {'name': 'jlink'}}
-        with mock.patch.object(ht, 'enumeration_of', return_value=None), \
-                mock.patch.object(ht, 'flash_fresh', return_value=('', '')), \
-                mock.patch.object(ht, 'wait_enumerated', return_value={'busport': '1-1', 'dir': '/x'}), \
+        with mock.patch.object(ht, 'flash_and_enumerate', return_value=('', '', {'busport': '1-1', 'dir': '/x'})), \
                 mock.patch.dict(ht.TEST_FUNCS, {'msc_ramdisk': mock.Mock(side_effect=OSError('boom'))}):
             with self.assertRaises(ht.Unclean):
                 ht.step('metro_m4_express', board, {'vidPid': '239a:8020'}, 'msc_ramdisk', self.dir, tracker)
+
+
+    def test_flash_and_enumerate_keeps_snapshot_detach_flash_wait_order(self):
+        calls = []
+        with mock.patch.object(ht, 'enumeration_of', lambda *a: calls.append('snapshot') or 'ino1'), \
+                mock.patch.object(ht, 'detach', lambda *a: calls.append('detach') or 'detached'), \
+                mock.patch.object(ht, 'flash', lambda *a: calls.append('flash') or ''), \
+                mock.patch.object(ht, 'wait_enumerated', lambda v, u, before: calls.append(('wait', before)) or {}):
+            self.assertEqual(ht.flash_and_enumerate('b', {'uid': 'U', 'flasher': {}}, {'vidPid': '1:2'}, self.dir, None),
+                             ('', 'detached', {}))
+        self.assertEqual(calls, ['snapshot', 'detach', 'flash', ('wait', 'ino1')])
+        with mock.patch.object(ht, 'enumeration_of', return_value=None), mock.patch.object(ht, 'detach'), \
+                mock.patch.object(ht, 'flash', return_value='openocd exit 1'), \
+                mock.patch.object(ht, 'wait_enumerated') as wait:
+            self.assertEqual(ht.flash_and_enumerate('b', {'uid': 'U', 'flasher': {}}, {'vidPid': '1:2'}, self.dir, None)[2], None)
+        wait.assert_not_called()
 
 
 class Report(Base):

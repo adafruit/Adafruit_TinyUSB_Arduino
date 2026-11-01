@@ -28,6 +28,7 @@ import os
 import secrets
 import select
 import shlex
+import shutil
 import signal
 import socket
 import subprocess
@@ -42,7 +43,8 @@ sys.path.insert(0, str(ROOT / '.claude' / 'skills' / 'build' / 'scripts'))
 import agentrc_pin  # noqa: E402
 import check_build  # noqa: E402
 
-SCRIPTS = ('skills/hil/scripts/hil_lock.py', 'skills/hil/scripts/hil_flash.py', 'skills/hil/scripts/hil_process.py',
+LOCK_SCRIPT = 'skills/hil/scripts/hil_lock.py'
+SCRIPTS = (LOCK_SCRIPT, 'skills/hil/scripts/hil_flash.py', 'skills/hil/scripts/hil_process.py',
            'skills/hil/scripts/hil_report_core.py', 'skills/hil/scripts/usb_observe.py')
 TESTS = {'cdc_echo': 'serial_echo', 'hid_inout': 'hid_generic_inout', 'msc_ramdisk': 'msc_ramdisk'}
 RESTORE_SKETCH = 'serial_echo'
@@ -79,9 +81,18 @@ class Unclean(Exception):
 A = None   # the loaded agentrc modules: lock, flash, process, report, usb
 
 
+def staged_tree():
+    """A rig tree hil_remote.py staged: no .git, its agentrc files under agentrc/."""
+    return not (ROOT / '.git').exists()
+
+
+def agentrc_root(staged):
+    return ROOT / 'agentrc' if staged else agentrc_pin.checkout()
+
+
 def load_agentrc(staged):
     global A
-    root = ROOT / 'agentrc' if staged else agentrc_pin.checkout()
+    root = agentrc_root(staged)
     agentrc_pin.closure(root, SCRIPTS)
     hl = agentrc_pin.loader(root)
     A = argparse.Namespace(lock=hl.load_file(SCRIPTS[0]), flash=hl.load_file(SCRIPTS[1]),
@@ -98,13 +109,10 @@ def emit(obj):
 
 def load_roster(path):
     try:
-        data = json.loads(Path(path).read_text())
-        boards = {b['name']: b for b in data['boards']}
-    except (OSError, ValueError, KeyError, TypeError) as e:
-        raise Refused(f'roster {path}: {e}')
+        boards = check_build.rig_roster(path)
+    except ValueError as e:
+        raise Refused(str(e))
     for name, b in boards.items():
-        if name not in check_build.BOARDS or 'span' not in check_build.BOARDS[name]:
-            raise Refused(f'roster {path}: {name} has no rig profile in check_build.BOARDS')
         if b.get('flasher', {}).get('name') not in ('openocd', 'jlink'):
             raise Refused(f'roster {path}: {name}: flasher must be openocd or jlink')
         unknown = set(b.get('arduino', {}).get('tests', [])) - set(TESTS)
@@ -129,6 +137,21 @@ def git_identity():
     return git('rev-parse', 'HEAD').strip(), git('status', '--porcelain', '--untracked-files=all').strip()
 
 
+def record_problems(rec, board, head, experimental_ok, where):
+    """Why a build record is not admissible for `board` built at `head` (None: any head), its images aside; [] when
+    it is. hil_remote.py asks the same before staging."""
+    if rec.get('kind') != 'arduino-hil-build' or rec.get('version') != check_build.SCHEMA:
+        return [f'not a version {check_build.SCHEMA} arduino-hil-build record']
+    why = []
+    if rec['board'] != board:
+        why.append(f'it is for {rec["board"]}, not {board}')
+    if rec['experimental'] and not experimental_ok:
+        why.append('it is experimental: the battery and restore take clean records only')
+    if head is not None and rec['source']['head'] != head:
+        why.append(f'it was built at {rec["source"]["head"][:12]}, the {where} is at {head[:12]}: rebuild it')
+    return why
+
+
 def admit(record_path, board, roster_path, run_dir, *, manifest=None, experimental_ok=False, base=None):
     """The record's images (checkout-relative paths, under `base` for a staged bundle) copied into the run dir once
     they hash as recorded, or Refused."""
@@ -136,21 +159,16 @@ def admit(record_path, board, roster_path, run_dir, *, manifest=None, experiment
         rec = json.loads(Path(record_path).read_text())
     except (OSError, ValueError) as e:
         raise Refused(f'build record {record_path}: {e}')
-    if rec.get('kind') != 'arduino-hil-build' or rec.get('version') != check_build.SCHEMA:
-        raise Refused(f'{record_path} is not a version {check_build.SCHEMA} arduino-hil-build record')
-    if rec['board'] != board:
-        raise Refused(f'{record_path} is for {rec["board"]}, not {board}')
-    if rec['experimental'] and not experimental_ok:
-        raise Refused(f'{record_path} is experimental: the battery and restore take clean records only')
+    head, status, where = None, '', 'checkout'
     if manifest is not None:
-        if rec['source']['head'] != manifest['head']:
-            raise Refused(f'record built at {rec["source"]["head"]}, staged tree is {manifest["head"]}')
-    elif not rec['experimental']:
+        head, where = manifest['head'], 'staged tree'
+    elif not rec.get('experimental'):
         head, status = git_identity()
-        if head != rec['source']['head']:
-            raise Refused(f'record built at {rec["source"]["head"]}, checkout is at {head}: rebuild it')
-        if status:
-            raise Refused(f'the checkout has changes since the record: {status.splitlines()[:5]}')
+    why = record_problems(rec, board, head, experimental_ok, where)
+    if why:
+        raise Refused(f'{record_path}: {"; ".join(why)}')
+    if status:
+        raise Refused(f'the checkout has changes since the record: {status.splitlines()[:5]}')
     if check_build.sha256(roster_path) != rec['roster']['sha256']:
         raise Refused(f'{roster_path} changed since the record was built: rebuild it')
     flasher = load_roster(roster_path)[board]['flasher']['name']
@@ -170,7 +188,7 @@ def admit(record_path, board, roster_path, run_dir, *, manifest=None, experiment
             (dest / Path(rel).name).write_bytes(data)
         images[name] = {'elf': str(dest / Path(s['elf']).name),
                         'hex': str(dest / Path(s['hex']).name) if s.get('hex') else None,
-                        'vidPid': s['vidPid'], 'example': s['example'], 'sha256': s['sha256']}
+                        'vidPid': s['vidPid'], 'sha256': s['sha256']}
     return rec, images
 
 
@@ -219,7 +237,7 @@ def _text(b):
 
 
 def jlink_device(flasher):
-    words = flasher.get('args', '').split()
+    words = shlex.split(flasher.get('args') or '')   # as hil_flash splits it for the flash session
     return words[words.index('-device') + 1]
 
 
@@ -274,10 +292,15 @@ def detach(name, board, vid_pid, tracker):
     return f'still enumerated {DETACH_WAIT}s after the detach'
 
 
-def flash_fresh(name, board, image, run_dir, tracker):
-    """Detach, then flash: (why it failed or '', detach evidence)."""
-    evidence = detach(name, board, image['vidPid'], tracker)
-    return flash(board['flasher'], image, run_dir, tracker), evidence
+def flash_and_enumerate(name, board, image, run_dir, tracker):
+    """Note the DUT's enumeration, detach, flash, then wait for it to enumerate anew: (why the flash failed or '',
+    detach evidence, the new device or None)."""
+    before = enumeration_of(image['vidPid'], board['uid'])
+    detached = detach(name, board, image['vidPid'], tracker)
+    why = flash(board['flasher'], image, run_dir, tracker)
+    if why:
+        return why, detached, None
+    return '', detached, wait_enumerated(image['vidPid'], board['uid'], before)
 
 
 def reset(flasher, tracker):
@@ -401,11 +424,9 @@ def step(name, board, image, test, run_dir, tracker):
     """Flash the test's sketch, wait for the DUT to enumerate anew, run the host check. A dict row."""
     started = time.monotonic()
     vid_pid, uid = image['vidPid'], board['uid']
-    before = enumeration_of(vid_pid, uid)
-    why, detached = flash_fresh(name, board, image, run_dir, tracker)
+    why, detached, dev = flash_and_enumerate(name, board, image, run_dir, tracker)
     if why:
         return {'test': test, 'pass': False, 'detail': why, 'detach': detached}
-    dev = wait_enumerated(vid_pid, uid, before)
     if not dev:
         others = [d['serial'] for d in scan(vid_pid)]
         return {'test': test, 'pass': False, 'detail': f'no {vid_pid} with serial {uid} enumerated within '
@@ -458,8 +479,7 @@ def probe_present(flasher):
         found = A.usb.jlink_serial_candidates(flasher['uid'], serials)
     else:
         vid_pid = tuple(v[2:] for v in flasher['vid_pid'].split()) if 'vid_pid' in flasher else None
-        found = [d['busport'] for d in A.usb.usb_scan(vid_pid=vid_pid) if d['serial'].lower() ==
-                 flasher['uid'].lower()]
+        found = [d['busport'] for d in A.usb.usb_scan(vid_pid=vid_pid, serial=flasher['uid'])]
     if len(found) == 1:
         return ''
     return f'probe {flasher["uid"]} is not on this host\'s bus' if not found else \
@@ -608,7 +628,7 @@ def cmd_run(args):
         raise Refused('pyserial is missing (python3 -m pip install pyserial, or the distro package)')
     for b in names:
         tool = {'openocd': 'openocd', 'jlink': 'JLinkExe'}[roster[b]['flasher']['name']]
-        if not any(os.access(os.path.join(p, tool), os.X_OK) for p in os.environ.get('PATH', '').split(':')):
+        if not shutil.which(tool):
             raise Refused(f'{b}: {tool} not on PATH')
     run_root = Path(args.run_dir or ROOT / 'build' / 'hil-run' / time.strftime('%Y%m%d-%H%M%S'))
     run_root.mkdir(parents=True, exist_ok=True)
@@ -642,7 +662,7 @@ def cmd_run(args):
 
 
 def cmd_report(args):
-    load_agentrc(staged=not (ROOT / '.git').exists())
+    load_agentrc(staged_tree())
     sch = schema()
     reading = A.report.read_document(Path(args.run_dir) / 'hil_report.json', sch)
     if reading.outcome != 'valid':
@@ -682,14 +702,14 @@ def one_session_command(name):
         yield
 
 
-def manual(args, op):
+def manual(args):
     with one_session_command(args.board):
-        return _manual(args, op)
+        return _manual(args)
 
 
-def _manual(args, op):
-    """A session command on a board the caller holds: op(board, run_dir, tracker, manifest) -> row. The JSON goes to
-    stdout and to result.json in the run dir, which outlives a dropped ssh session."""
+def _manual(args):
+    """A session command on a board the caller holds: OPS[args.cmd](args, board, run_dir, tracker, manifest) -> row.
+    The JSON goes to stdout and to result.json in the run dir, which outlives a dropped ssh session."""
     manifest = verify_staged(args.staged) if args.staged else None
     load_agentrc(manifest is not None)
     roster = load_roster(args.roster)
@@ -703,7 +723,7 @@ def _manual(args, op):
     run_dir.mkdir(parents=True, exist_ok=True)
     tracker = Tracker(run_dir)
     try:
-        row = op(roster[args.board], run_dir, tracker, manifest)
+        row = OPS[args.cmd](args, roster[args.board], run_dir, tracker, manifest)
         out, code = {'pass': row['pass'], 'board': args.board, **row, 'survivors': [], 'log': str(tracker.log)}, \
             0 if row['pass'] else 1
     except BaseException as e:   # an interrupt or crash can leave a child as unproven as Unclean does
@@ -737,33 +757,29 @@ def admit_sketch(args, sketch, run_dir, manifest, experimental_ok):
     return {'record': str(args.build_record), 'experimental': rec['experimental']}, images[sketch], images
 
 
-def op_flash(args):
-    def op(board, run_dir, tracker, manifest):
-        meta, image, _ = admit_sketch(args, args.sketch, run_dir, manifest, True)
-        return {**meta, **flash_only(args.board, board, image, run_dir, tracker)}
-    return op
+def op_flash(args, board, run_dir, tracker, manifest):
+    meta, image, _ = admit_sketch(args, args.sketch, run_dir, manifest, True)
+    return {**meta, **flash_only(args.board, board, image, run_dir, tracker)}
 
 
-def op_restore(args):
-    def op(board, run_dir, tracker, manifest):
-        if args.report:
-            failed = json.loads(Path(args.report).read_text())
-            open_receipts = [r for row in failed['results'] if row['board'] == args.board
-                             for r in row['cleanup'].get('receipts', []) if A.process.recheck(r) != 'done']
-            if open_receipts:
-                raise Refused(f'children of the failed run are not proven ended: {open_receipts}')
-        meta, _, images = admit_sketch(args, RESTORE_SKETCH, run_dir, manifest, False)
-        row = {**meta, **restore(args.board, board, images, run_dir, tracker)}
-        if args.release and row['pass']:
-            row['released'] = release_hold(args.board)
-            row['pass'] = row['released']['exit'] == 0
-        return row
-    return op
+def op_restore(args, board, run_dir, tracker, manifest):
+    if args.report:
+        failed = json.loads(Path(args.report).read_text())
+        open_receipts = [r for row in failed['results'] if row['board'] == args.board
+                         for r in row['cleanup'].get('receipts', []) if A.process.recheck(r) != 'done']
+        if open_receipts:
+            raise Refused(f'children of the failed run are not proven ended: {open_receipts}')
+    meta, _, images = admit_sketch(args, RESTORE_SKETCH, run_dir, manifest, False)
+    row = {**meta, **restore(args.board, board, images, run_dir, tracker)}
+    if args.release and row['pass']:
+        row['released'] = release_hold(args.board)
+        row['pass'] = row['released']['exit'] == 0
+    return row
 
 
 def release_hold(name):
     """End the caller's hold once its board is restored; under the session lock, so no command slips in between."""
-    r = subprocess.run([sys.executable, str(A.root / 'skills/hil/scripts/hil_lock.py'), 'release', name],
+    r = subprocess.run([sys.executable, str(A.root / LOCK_SCRIPT), 'release', name],
                        capture_output=True, text=True, timeout=30)
     return {'exit': r.returncode, 'output': (r.stdout + r.stderr).strip()[-1000:]}
 
@@ -775,36 +791,37 @@ def run_child(argv, timeout, tracker):
     return {'pass': r.returncode == 0, 'exit': r.returncode, 'output': out[-4000:]}
 
 
-def op_exec(args):
-    return lambda board, run_dir, tracker, manifest: run_child(args.argv, args.timeout, tracker)
+def op_exec(args, board, run_dir, tracker, manifest):
+    return run_child(args.argv, args.timeout, tracker)
 
 
 def gdb_argv(board, elf, commands):
     """gdb-multiarch in batch mode over an openocd it starts on a pipe, configured by the roster's debug.openocd and
-    pinned to the board's probe serial."""
+    pinned to the board's probe serial. With a memory map openocd probes every flash bank on gdb's connect
+    (gdb_server.c gdb_new_connection), and the RP2040's probe leaves the QSPI flash out of XIP mode, so the firmware
+    stops once gdb detaches: no map, no probe."""
     probe = {'name': 'openocd', 'uid': board['flasher']['uid'], 'args': board['debug']['openocd']}
     if board['flasher']['name'] == 'openocd' and 'vid_pid' in board['flasher']:
         probe['vid_pid'] = board['flasher']['vid_pid']
-    openocd = A.flash.openocd_cmd_base(probe) + ['-c', 'gdb_port pipe']
+    openocd = A.flash.openocd_cmd_base(probe) + ['-c', 'gdb_port pipe', '-c', 'gdb_memory_map disable']
     return ['gdb-multiarch', '-batch', '-nx', '-ex', f'target extended-remote | {shlex.join(openocd)}',
             *(w for c in commands for w in ('-ex', c)), elf]
 
 
-def op_gdb(args):
-    def op(board, run_dir, tracker, manifest):
-        if not board.get('debug', {}).get('openocd'):
-            raise Refused(f'{args.board} has no debug.openocd in {args.roster}')
-        meta, image, _ = admit_sketch(args, args.sketch, run_dir, manifest, True)
-        return {**meta, **run_child(gdb_argv(board, image['elf'], args.ex), args.timeout, tracker)}
-    return op
+def op_gdb(args, board, run_dir, tracker, manifest):
+    if not board.get('debug', {}).get('openocd'):
+        raise Refused(f'{args.board} has no debug.openocd in {args.roster}')
+    meta, image, _ = admit_sketch(args, args.sketch, run_dir, manifest, True)
+    return {**meta, **run_child(gdb_argv(board, image['elf'], args.ex), args.timeout, tracker)}
+
+
+OPS = {'flash': op_flash, 'restore': op_restore, 'gdb': op_gdb, 'exec': op_exec}
 
 
 def flash_only(name, board, image, run_dir, tracker):
-    before = enumeration_of(image['vidPid'], board['uid'])
-    why, detached = flash_fresh(name, board, image, run_dir, tracker)
+    why, detached, dev = flash_and_enumerate(name, board, image, run_dir, tracker)
     if why:
         return {'pass': False, 'detail': why, 'detach': detached}
-    dev = wait_enumerated(image['vidPid'], board['uid'], before)
     return {'pass': True, 'detail': f'flashed {Path(image["elf"]).name}; ' +
             (f'enumerated as {image["vidPid"]} at {dev["busport"]}' if dev else
              f'no {image["vidPid"]} with serial {board["uid"]} enumerated (the image may not run USB)')}
@@ -836,7 +853,8 @@ def cmd_commission(args):
             before = {d['serial']: d['ino'] for d in scan(image['vidPid'])}
             touched = True
             if action == 'flash':
-                why = flash_fresh(args.board, board, image, run_dir, tracker)[0]
+                detach(args.board, board, image['vidPid'], tracker)
+                why = flash(board['flasher'], image, run_dir, tracker)
             else:
                 detach(args.board, board, image['vidPid'], tracker)
                 why = reset(board['flasher'], tracker)
@@ -882,8 +900,7 @@ def cmd_read_block(args):
 
 
 def cmd_lock(rest):
-    root = agentrc_pin.checkout() if (ROOT / '.git').exists() else ROOT / 'agentrc'
-    os.execv(sys.executable, [sys.executable, str(root / 'skills/hil/scripts/hil_lock.py'), *rest])
+    os.execv(sys.executable, [sys.executable, str(agentrc_root(staged_tree()) / LOCK_SCRIPT), *rest])
 
 
 def parse(argv):
@@ -946,8 +963,7 @@ def main(argv=None):
         if args.cmd == 'commission':
             return cmd_commission(args)
         if args.cmd in ('flash', 'restore', 'gdb', 'exec'):
-            ops = {'flash': op_flash, 'restore': op_restore, 'gdb': op_gdb, 'exec': op_exec}
-            return manual(args, ops[args.cmd](args))
+            return manual(args)
         if args.cmd == 'report':
             return cmd_report(args)
         return cmd_read_block(args)

@@ -89,7 +89,8 @@ class Checkout(unittest.TestCase):
         elf = self.root / f'build/hil/{BOARD}/serial_echo/serial_echo.ino.elf'
         elf.parent.mkdir(parents=True, exist_ok=True)
         elf.write_bytes(b'elf')
-        rec = {'board': BOARD, 'experimental': False, 'source': {'head': self.head},
+        rec = {'kind': 'arduino-hil-build', 'version': 1, 'board': BOARD, 'experimental': False,
+               'source': {'head': self.head},
                'sketches': {'serial_echo': {'sha256': {elf.relative_to(self.root).as_posix():
                                                        hashlib.sha256(b'elf').hexdigest()}}}}
         rec.update(over)

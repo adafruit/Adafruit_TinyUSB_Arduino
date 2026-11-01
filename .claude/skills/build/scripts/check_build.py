@@ -67,7 +67,6 @@ REPRESENTATIVES = {
     'esp32': ['feather_esp32s3'],
     'ch32': ['CH32V20x_EVT'],
 }
-PORT_FAMILY = {'rp2040': 'rp2040', 'samd': 'samd', 'nrf': 'nrf', 'esp32': 'esp32', 'ch32': 'ch32'}
 PORTABLE_FAMILY = {
     'raspberrypi/rp2040': 'rp2040', 'raspberrypi/pio_usb': 'rp2040', 'microchip/samd': 'samd',
     'nordic/nrf5x': 'nrf', 'synopsys/dwc2': 'esp32', 'wch': 'ch32',
@@ -120,6 +119,7 @@ def examples():
     return sorted({rel(p.parent) for p in (ROOT / 'examples').rglob('*.ino')})
 
 
+@functools.lru_cache(maxsize=None)
 def eligible(board, example):
     """ci-arduino build_platform.py test_examples_in_folder, for the board's filter platform."""
     platform = BOARDS[board].get('filters', board)
@@ -143,8 +143,8 @@ def classify(path):
         return 'uncovered', None, 'the cores compile their own sources against their bundled copy of this header'
     if path.startswith('src/arduino/ports/'):
         port = path.split('/')[3]
-        if port in PORT_FAMILY:
-            return 'family', PORT_FAMILY[port], f'port {port}'
+        if port in REPRESENTATIVES:
+            return 'family', port, f'port {port}'
         return 'uncovered', None, f'port {port} is built by no CI platform'
     if path.startswith('src/portable/'):
         for prefix in SHARED_PORTABLE:
@@ -250,16 +250,23 @@ def changed_paths(args):
     return sorted(paths)
 
 
+def rig_roster(path):
+    """{name: entry} of a HIL roster whose every board has a rig profile here; ValueError naming why not."""
+    try:
+        boards = {b['name']: b for b in json.loads(Path(path).read_text())['boards']}
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        raise ValueError(f'roster {path}: {e}')
+    unknown = [n for n in boards if n not in BOARDS or 'span' not in BOARDS[n]]
+    if unknown:
+        raise ValueError(f'roster {path}: boards with no rig profile here: {unknown}')
+    return boards
+
+
 def load_roster(path):
     try:
-        data = json.loads(Path(path).read_text())
-        names = [b['name'] for b in data['boards']]
-    except (OSError, ValueError, KeyError, TypeError) as e:
-        fail(f'roster {path}: {e}')
-    unknown = [n for n in names if n not in BOARDS or 'span' not in BOARDS[n]]
-    if unknown:
-        fail(f'roster {path}: boards with no rig profile here: {unknown}')
-    return names
+        return rig_roster(path)
+    except ValueError as e:
+        fail(str(e))
 
 
 # ---- build
@@ -277,35 +284,42 @@ def tool_version():
 def foreign_headers(build_dir):
     """Headers a build's .d files took from another copy of this library (a core's bundled one, another checkout),
     each with its counterpart path here and whether the bytes match."""
-    found, roots = {}, {}
+    found, roots, seen = {}, {}, set()
     for dfile in Path(build_dir).rglob('*.d'):
         text = dfile.read_text(errors='replace').replace('\\\n', ' ')
         for token in (t.replace('\\ ', ' ') for t in re.split(r'(?<!\\)\s+', text) if t):
-            if token.endswith(':') or not token.startswith('/') or token in found:
+            if token.endswith(':') or not token.startswith('/') or token in seen:
                 continue
+            seen.add(token)
             p = Path(token)
             if ROOT in p.parents:
                 continue
             root = library_root(p, roots)
             if root:
-                counterpart = (ROOT / p.relative_to(root)).as_posix()
-                same = Path(counterpart).exists() and sha256(p) == sha256(counterpart)
-                found[token] = {'path': token, 'counterpart': rel(counterpart) if Path(counterpart).exists() else
-                                p.relative_to(root).as_posix(), 'sha256': sha256(p), 'matches': same}
+                counterpart = ROOT / p.relative_to(root)
+                digest, exists = sha256(p), counterpart.exists()
+                found[token] = {'path': token, 'counterpart': rel(counterpart) if exists else
+                                p.relative_to(root).as_posix(), 'sha256': digest,
+                                'matches': exists and digest == sha256(counterpart)}
     return sorted(found.values(), key=lambda h: h['path'])
 
 
 def library_root(path, cache):
     """The root of the copy of this library that `path` sits in, or None."""
+    walked, root = [], None
     for parent in path.parents:
         if parent in cache:
-            return cache[parent]
+            root = cache[parent]
+            break
+        walked.append(parent)
         props = parent / 'library.properties'
         if props.exists():
             name = re.search(r'^name=(.*)$', props.read_text(errors='replace'), re.M)
-            cache[parent] = parent if name and name.group(1).strip() == LIBRARY_NAME else None
-            return cache[parent]
-    return None
+            root = parent if name and name.group(1).strip() == LIBRARY_NAME else None
+            break
+    for d in walked:   # every dir walked resolves to the same answer, a root or none
+        cache[d] = root
+    return root
 
 
 def compile_sketch(board, example, build_dir, properties):
@@ -451,7 +465,7 @@ def elf_section_spans(path):
 
 def hex_runs(path):
     """[(start, bytes)] contiguous runs of an Intel HEX file."""
-    runs, base = [], 0
+    runs, base = [], 0   # [(start, bytearray)]
     for line in Path(path).read_text().splitlines():
         rec = bytes.fromhex(line.strip()[1:])
         if sum(rec) & 0xff:
@@ -460,16 +474,16 @@ def hex_runs(path):
         if kind == 0:
             start = base + addr
             if runs and runs[-1][0] + len(runs[-1][1]) == start:
-                runs[-1] = (runs[-1][0], runs[-1][1] + payload)
+                runs[-1][1].extend(payload)
             else:
-                runs.append((start, bytes(payload)))
+                runs.append((start, bytearray(payload)))
         elif kind == 2:
             base = int.from_bytes(payload, 'big') << 4
         elif kind == 4:
             base = int.from_bytes(payload, 'big') << 16
         elif kind == 1:
             break
-    return runs
+    return [(start, bytes(data)) for start, data in runs]
 
 
 def merge(spans):
@@ -505,7 +519,7 @@ def make_record(args, board, rows, before, diff, roster_path):
                                                                                           'status')}:
         return None, 'the source changed while building'
     lo, hi = BOARDS[board]['span']
-    flasher = next(b for b in json.loads(Path(roster_path).read_text())['boards'] if b['name'] == board)['flasher']['name']
+    flasher = rig_roster(roster_path)[board]['flasher']['name']
     image = 'elf' if flasher == 'openocd' else 'hex'   # what hil_test.py flashes for this probe
     sketches = {}
     for row in rows:

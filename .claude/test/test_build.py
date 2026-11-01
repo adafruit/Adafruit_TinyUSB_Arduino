@@ -68,7 +68,9 @@ class Tables(unittest.TestCase):
         for family, boards in cb.REPRESENTATIVES.items():
             for b in boards:
                 self.assertEqual(cb.BOARDS[b]['family'], family)
-        self.assertEqual(set(cb.PORT_FAMILY.values()) | set(cb.PORTABLE_FAMILY.values()), set(cb.REPRESENTATIVES))
+        self.assertEqual(set(cb.PORTABLE_FAMILY.values()), set(cb.REPRESENTATIVES))
+        ports = {d.name for d in (ROOT / 'src/arduino/ports').iterdir() if d.is_dir()}
+        self.assertEqual(ports - set(cb.REPRESENTATIVES), {'stm32'})   # no CI platform builds it: uncovered
 
     def test_ci_matrix_is_in_the_table(self):
         wf = (ROOT / '.github/workflows/githubci.yml').read_text()
