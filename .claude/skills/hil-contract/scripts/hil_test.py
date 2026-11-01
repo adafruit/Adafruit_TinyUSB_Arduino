@@ -159,9 +159,12 @@ class Tracker:
     """Every hardware child runs through agentrc's run_tracked; one not proven ended stops the board."""
 
     def __init__(self, run_dir):
+        # run_tracked trusts a state dir only when neither it nor its parent is writable by others
         self.state_dir = Path(run_dir) / 'tracked'
         self.state_dir.mkdir(parents=True, exist_ok=True)
+        os.chmod(run_dir, 0o700)
         os.chmod(self.state_dir, 0o700)
+        A.process.trusted_dir(str(self.state_dir))
         self.receipts, self.log = [], Path(run_dir) / 'hil.log'
 
     def run(self, argv, timeout, **kw):
@@ -384,6 +387,11 @@ def run_board(name, board, tests, record_path, roster_path, run_root, manifest):
            'cleanup': {'pass': True, 'state': 'untouched', 'evidence': '', 'holder': None, 'receipts': []},
            'firmware': None, 'detail': ''}
     try:
+        tracker = Tracker(run_dir)
+    except OSError as e:
+        row['detail'] = f'refused: run dir {run_dir}: {e}'
+        return row
+    try:
         fh = A.lock.take_board_lock(name, 'hil_test.py', protected=True, locks=[name], runDir=str(run_dir))
     except A.lock.RecoveryBlocked as e:
         row.update(locked=True, recoveryBlocker=True, detail=f'recovery blocker: {e}')
@@ -394,7 +402,7 @@ def run_board(name, board, tests, record_path, roster_path, run_root, manifest):
     except A.lock.LockUnavailable as e:
         row.update(detail=f'board lock unavailable: {e}')
         return row
-    tracker, started, unclean = Tracker(run_dir), time.monotonic(), ''
+    started, unclean = time.monotonic(), ''
     try:
         try:
             rec, images = admit(record_path, name, roster_path, run_dir, manifest=manifest)
