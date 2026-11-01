@@ -85,7 +85,7 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
 - **Experimental records** (`--experimental`, with `--record`) are for debug and instrumentation: a dirty tree and
   `--build-property` are allowed, untracked files under `src/`, `examples/` or `test/hil/` are refused (put
   instrumentation in tracked files), the source must not change during the build, and `git diff HEAD` is saved beside
-  the record (`<record>.patch`, hashed in `patch`). A drifted foreign header is allowed and listed. The HIL battery and
+  the record (its path with `.patch` for `.json`, named and hashed in `patch`). A drifted foreign header is allowed and listed. The HIL battery and
   the restore refuse them; a manual flash under a hold accepts them.
 - **Debug builds**: both cores compile with `-g`, so the kept ELF (`build/hil/<board>/<sketch>/<sketch>.ino.elf`)
   carries symbols at the release optimisation (`-Os`). Other flags go through `--build-property` (each core's

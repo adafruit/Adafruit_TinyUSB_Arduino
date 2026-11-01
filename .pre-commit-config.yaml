@@ -27,3 +27,12 @@ repos:
   hooks:
   - id: codespell
     args: [-w]
+
+- repo: local
+  hooks:
+  - id: agent-contract-tests
+    name: agent contract tests
+    entry: sh -c 'python3 .claude/skills/hil-contract/scripts/agentrc_pin.py fetch >/dev/null && python3 -m unittest discover -s .claude/test -p "test_*.py"'
+    language: system
+    pass_filenames: false
+    files: ^(\.claude/|test/hil/)

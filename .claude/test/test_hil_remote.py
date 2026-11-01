@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -33,6 +34,10 @@ class Checkout(unittest.TestCase):
     """A fake library checkout: the staged harness files, the roster and one clean build record at HEAD."""
 
     def setUp(self):
+        # a git hook's GIT_DIR/GIT_INDEX_FILE would point the fixture's git at the outer repo
+        self.stack = contextlib.ExitStack()
+        self.stack.enter_context(mock.patch.dict(os.environ, {k: v for k, v in os.environ.items()
+                                                              if not k.startswith('GIT_')}, clear=True))
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name) / 'lib'
         for f in (*hr.HARNESS, hr.ROSTER):
@@ -49,7 +54,6 @@ class Checkout(unittest.TestCase):
         (self.agentrc / 'skills/hil/scripts').mkdir(parents=True)
         (self.agentrc / 'skills/hil/scripts/hil_lock.py').write_text('lock')
         self.record()
-        self.stack = contextlib.ExitStack()
         closure = ['skills/hil/scripts/hil_lock.py']
         for target, name, value in ((hr, 'ROOT', self.root), (hr, 'RUNS', self.root / '.hil-remote'),
                                     (hr.agentrc_pin, 'checkout', lambda: self.agentrc),
