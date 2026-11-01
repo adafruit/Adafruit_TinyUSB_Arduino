@@ -980,7 +980,9 @@ def main(argv=None):
     if args.cmd in ('flash', 'restore', 'gdb', 'exec'):
         # a session command runs over ssh: a dropped link must not end it between a child's start and its proof
         signal.signal(signal.SIGHUP, signal.SIG_IGN)
-        # SIGTERM unwinds as SIGINT does: run_tracked ends the child and _manual records one it could not prove ended
+    if args.cmd in ('run', 'commission', 'flash', 'restore', 'gdb', 'exec'):
+        # SIGTERM unwinds as SIGINT does: run_tracked ends the child, and run_board, cmd_commission and _manual
+        # record one it could not prove ended
         signal.signal(signal.SIGTERM, signal.default_int_handler)
     try:
         if args.cmd == 'run':

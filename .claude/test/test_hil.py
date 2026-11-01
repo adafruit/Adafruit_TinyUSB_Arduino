@@ -469,6 +469,20 @@ class Manual(Base):
         with mock.patch.object(ht, 'manual', manual), self.assertRaises(KeyboardInterrupt):
             ht.main(['exec', '-b', 'metro_m4_express', '--under-hold', 'r', 'ci.json', '--', 'true'])
 
+    def test_sigterm_unwinds_run_and_commission_as_an_interrupt(self):
+        old = {s: signal.getsignal(s) for s in (signal.SIGHUP, signal.SIGTERM)}
+        self.addCleanup(lambda: [signal.signal(s, h) for s, h in old.items()])
+
+        def command(args):   # SIG_DFL would skip run_board's finally and cmd_commission's hand-over
+            self.assertTrue(callable(signal.getsignal(signal.SIGTERM)))
+            signal.raise_signal(signal.SIGTERM)
+        for cmd, argv in (('cmd_run', ['run', 'ci.json']), ('cmd_commission', ['commission', '-b', 'b', 'ci.json'])):
+            signal.signal(signal.SIGHUP, signal.SIG_DFL)
+            signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            with self.subTest(cmd), mock.patch.object(ht, cmd, command), self.assertRaises(KeyboardInterrupt):
+                ht.main(argv)
+            self.assertEqual(signal.getsignal(signal.SIGHUP), signal.SIG_DFL)
+
     def test_gdb_runs_openocd_on_a_pipe_pinned_to_the_probe(self):
         ht.A.flash.openocd_cmd_base = lambda p: [
             'openocd', '-c', 'gdb_port disabled', '-c', f'adapter serial {p["uid"]}',

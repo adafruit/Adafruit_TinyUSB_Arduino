@@ -140,7 +140,8 @@ The lock helper is `hil_test.py lock (hold|release|status) ...`, agentrc's `hil_
 `/tmp/tinyusb-hil-locks`.
 
 - `hil_test.py run` and `commission` lock each board themselves (protected, reason `hil_test.py`, `hil_test.py
-  commission`): never pre-hold for them.
+  commission`): never pre-hold for them. SIGTERM aborts them as SIGINT does: a board they touched stays held for
+  recovery (exit 4), its children ended or recorded pending in the run's report or the commission's `result.json`.
 - A manual session holds the board under `arduino-hil session <id>`. Every session command checks that hold, and
   refuses while the board's pending-session record (`arduino-hil`) lists a child not proven ended.
 - Cleanup state is `serial_echo` flashed and echoing, every child proven ended, and the hold released.
@@ -186,14 +187,16 @@ The dispatch carries the board, the failed report (or session id), the holder to
 (`ssh ci.lan 'cd ~/hil-remote/adafruit-tinyusb-arduino/<id> && python3 .claude/skills/hil-contract/scripts/hil_test.py
 ...'`), adding `--staged manifest.json` to `restore`. On a dev PC, run them from the checkout.
 
-1. `hil_test.py lock status`, and `hil_test.py report <run dir> -b <board>` for the row's holder token and receipts.
+1. `hil_test.py lock status`, and `hil_test.py report <run dir> -b <board>` for the row's holder token and receipts;
+   for a commission, read them from its `result.json` instead, since it writes no `hil_report.json`.
 2. Take the board for the restore, keeping it blocked throughout:
    - A live cleanup holder (its record's reason is `hil_test.py`): restore under it, reason R = `hil_test.py`.
    - A dead holder or a protected record: `hil_test.py lock hold --take-over <board> --reason recovery-<id>` prints
      token T; R = `recovery-<id>`.
 3. `hil_test.py restore -b <board> --build-record build/hil/<board>.build.json --under-hold R --report
-   <run dir>/hil_report.json <roster>`. It refuses while a child of the failed run is not proven ended: stop and report
-   that receipt, since ending a child is outside this contract.
+   <run dir>/hil_report.json <roster>` (`--report <commission dir>/result.json` for a commission). It refuses while a
+   child of the failed run is not proven ended: stop and report that receipt, since ending a child is outside this
+   contract.
 4. Once the restore passed, `hil_test.py lock release --token <the holder's token, or T>`; that release refuses too
    while a receipt is open. On failure, keep the hold and report.
 
