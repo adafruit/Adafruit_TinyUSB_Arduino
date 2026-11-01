@@ -308,6 +308,17 @@ class Flash(Base):
         self.assertEqual(cmds[2:], ['r', 'go'])
         self.assertEqual(ht.A.flash.run_jlink_commands.call_args[1]['device'], 'ATSAMD51J19')
 
+    def test_detach_only_where_the_family_needs_it(self):
+        ht.A.flash.run_openocd_commands.return_value = mock.Mock(returncode=0, stdout='', stderr='')
+        ht.A.usb.usb_scan.return_value = []
+        pico = {'uid': 'E66', 'flasher': {'name': 'openocd'}}
+        self.assertEqual(ht.detach('raspberry_pi_pico', pico, '239a:cafe', mock.Mock()), 'detached')
+        self.assertEqual(ht.A.flash.run_openocd_commands.call_args[0][1], ['mww 0x5011304c 0x00010000'])
+        ht.A.flash.run_openocd_commands.reset_mock()
+        metro = {'uid': 'ABC', 'flasher': {'name': 'jlink'}}
+        self.assertEqual(ht.detach('metro_m4_express', metro, '239a:8020', mock.Mock()), '')
+        ht.A.flash.run_openocd_commands.assert_not_called()
+
     def test_tracker_marks_unclean(self):
         t = ht.Tracker.__new__(ht.Tracker)
         t.receipts, t.unclean = [], ''

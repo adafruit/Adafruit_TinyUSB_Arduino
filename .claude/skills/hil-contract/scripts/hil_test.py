@@ -41,10 +41,18 @@ MSC_DISK_BYTES = 16 * 512
 MSC_README = b'This is TinyUSB MassStorage device demo for Arduino on RAM disk.'
 HID_REPORT = 64
 
+# Probe commands that take the DUT off the bus before a flash. A probe reset leaves the RP2040/RP2350 USB controller
+# out of reset, and dcd_init resets and reconnects it within microseconds, so without this the host never sees the
+# new image arrive: clear SIE_CTRL.PULLUP_EN (USBCTRL_REGS_BASE 0x50110000 + 0x4c, bit 16) through its atomic clear
+# alias (+0x3000). RP2040 datasheet 2.1.2 and 4.1.4 (SIE_CTRL); RP2350 datasheet 2.1.3 and 12.7.5 (same layout).
+DETACH = {'rp2040': ['mww 0x5011304c 0x00010000']}
+DETACH_WAIT = 5
+
 FLASH_TIMEOUT, VERIFY_TIMEOUT, ENUM_TIMEOUT, TEST_TIMEOUT, SETTLE = 120, 60, 20, 30, 2
 BOARD_BUDGET = 900
 REAP = 10   # agentrc hil_process.REAP_GRACE, per tracked child
-STEP_MAX = FLASH_TIMEOUT + VERIFY_TIMEOUT + ENUM_TIMEOUT + TEST_TIMEOUT + 3 * (REAP + SETTLE)
+STEP_MAX = VERIFY_TIMEOUT + DETACH_WAIT + FLASH_TIMEOUT + VERIFY_TIMEOUT + ENUM_TIMEOUT + TEST_TIMEOUT + \
+    4 * (REAP + SETTLE)
 CLEANUP_RESERVE = STEP_MAX   # the restore is one more such step
 REPORT_SCHEMA = 'adafruit-tinyusb-arduino-hil'
 
@@ -231,6 +239,32 @@ def flash(flasher, image, run_dir, tracker):
     return f'J-Link verify: {why}' if why else ''
 
 
+def detach(name, board, vid_pid, tracker):
+    """Take the DUT off the bus through the probe, where its family needs it (DETACH); evidence text. A failed
+    write is evidence, not a failure: a firmware without USB has nothing to detach, and the enumeration check after
+    the flash decides."""
+    cmds = DETACH.get(check_build.BOARDS[name]['family'])
+    if not cmds or board['flasher']['name'] != 'openocd':
+        return ''
+    op = A.flash.run_openocd_commands(board['flasher'], cmds, timeout=VERIFY_TIMEOUT, run=tracker.run)
+    tracker.check()
+    out = _text(op.stdout) + _text(op.stderr)
+    if op.returncode or 'Error' in out:
+        return f'detach session failed (exit {op.returncode})'
+    deadline = time.monotonic() + DETACH_WAIT
+    while time.monotonic() < deadline:
+        if not scan(vid_pid, board['uid']):
+            return 'detached'
+        time.sleep(0.2)
+    return f'still enumerated {DETACH_WAIT}s after the detach'
+
+
+def flash_fresh(name, board, image, run_dir, tracker):
+    """Detach, then flash: (why it failed or '', detach evidence)."""
+    evidence = detach(name, board, image['vidPid'], tracker)
+    return flash(board['flasher'], image, run_dir, tracker), evidence
+
+
 def reset(flasher, tracker):
     if flasher['name'] == 'openocd':
         op = A.flash.reset_openocd(flasher, timeout=VERIFY_TIMEOUT, run=tracker.run)
@@ -348,14 +382,14 @@ def fat12_file(img, name83):
 TEST_FUNCS = {'cdc_echo': test_cdc, 'hid_inout': test_hid, 'msc_ramdisk': test_msc}
 
 
-def step(board, image, test, run_dir, tracker):
+def step(name, board, image, test, run_dir, tracker):
     """Flash the test's sketch, wait for the DUT to enumerate anew, run the host check. A dict row."""
     started = time.monotonic()
     vid_pid, uid = image['vidPid'], board['uid']
     before = enumeration_of(vid_pid, uid)
-    why = flash(board['flasher'], image, run_dir, tracker)
+    why, detached = flash_fresh(name, board, image, run_dir, tracker)
     if why:
-        return {'test': test, 'pass': False, 'detail': why}
+        return {'test': test, 'pass': False, 'detail': why, 'detach': detached}
     dev = wait_enumerated(vid_pid, uid, before)
     if not dev:
         others = [d['serial'] for d in scan(vid_pid)]
@@ -368,12 +402,12 @@ def step(board, image, test, run_dir, tracker):
         raise
     except Exception as e:   # a host-side failure of the check is the test's
         ok, detail = False, f'{type(e).__name__}: {e}'
-    return {'test': test, 'pass': ok, 'detail': detail, 'device': dev['busport'],
+    return {'test': test, 'pass': ok, 'detail': detail, 'device': dev['busport'], 'detach': detached,
             'seconds': round(time.monotonic() - started, 1)}
 
 
-def restore(board, images, run_dir, tracker):
-    row = step(board, images[RESTORE_SKETCH], 'cdc_echo', run_dir, tracker)
+def restore(name, board, images, run_dir, tracker):
+    row = step(name, board, images[RESTORE_SKETCH], 'cdc_echo', run_dir, tracker)
     return {'pass': row['pass'], 'state': 'serial_echo restored' if row['pass'] else 'unknown',
             'evidence': row['detail']}
 
@@ -417,9 +451,9 @@ def run_board(name, board, tests, record_path, roster_path, run_root, manifest):
                 continue
             row['ran'] = True
             row['cleanup']['state'] = 'unknown'
-            row['tests'].append(step(board, images[TESTS[test]], test, run_dir, tracker))
+            row['tests'].append(step(name, board, images[TESTS[test]], test, run_dir, tracker))
         if row['ran']:
-            row['cleanup'].update(restore(board, images, run_dir, tracker))
+            row['cleanup'].update(restore(name, board, images, run_dir, tracker))
         row['pass'] = row['ran'] and all(t['pass'] for t in row['tests']) and row['cleanup']['pass']
     except Unclean as e:
         unclean = str(e)
@@ -590,10 +624,10 @@ def manual(args, sketch, experimental_ok, cleanup):
     tracker = Tracker(run_dir)
     try:
         if cleanup:
-            row = restore(roster[args.board], images, run_dir, tracker)
+            row = restore(args.board, roster[args.board], images, run_dir, tracker)
             ok = row['pass']
         else:
-            row = flash_only(roster[args.board], images[sketch], run_dir, tracker)
+            row = flash_only(args.board, roster[args.board], images[sketch], run_dir, tracker)
             ok = row['pass']
     except Unclean as e:
         emit({'pass': False, 'board': args.board, 'error': f'a child outlived its operation: {e}',
@@ -604,11 +638,11 @@ def manual(args, sketch, experimental_ok, cleanup):
     return 0 if ok else 1
 
 
-def flash_only(board, image, run_dir, tracker):
+def flash_only(name, board, image, run_dir, tracker):
     before = enumeration_of(image['vidPid'], board['uid'])
-    why = flash(board['flasher'], image, run_dir, tracker)
+    why, detached = flash_fresh(name, board, image, run_dir, tracker)
     if why:
-        return {'pass': False, 'detail': why}
+        return {'pass': False, 'detail': why, 'detach': detached}
     dev = wait_enumerated(image['vidPid'], board['uid'], before)
     return {'pass': True, 'detail': f'flashed {Path(image["elf"]).name}; ' +
             (f'enumerated as {image["vidPid"]} at {dev["busport"]}' if dev else
@@ -636,8 +670,11 @@ def cmd_commission(args):
         observed = []
         for action in ('flash', 'reset'):
             before = {d['serial']: d['ino'] for d in scan(image['vidPid'])}
-            why = flash(board['flasher'], image, run_dir, tracker) if action == 'flash' else \
-                reset(board['flasher'], tracker)
+            if action == 'flash':
+                why = flash_fresh(args.board, board, image, run_dir, tracker)[0]
+            else:
+                detach(args.board, board, image['vidPid'], tracker)
+                why = reset(board['flasher'], tracker)
             if why:
                 raise Refused(f'{action}: {why}')
             time.sleep(ENUM_TIMEOUT / 4)
