@@ -533,6 +533,28 @@ class Commission(Base):
         with self.assertRaisesRegex(ht.Refused, 'not proven ended'):
             ht.op_restore(restore, None, self.dir / 'run', None, None)
 
+    def test_interrupt_after_the_release_is_not_a_held_board(self):
+        args = argparse.Namespace(board='metro_m4_express', roster=str(self.roster), record_dir=str(self.dir))
+        ino = [0]
+
+        def detach(*a):
+            ino[0] += 1
+
+        def release(fh):   # SIGTERM lands just after the lock is gone
+            self.lock.released.append(fh)
+            raise KeyboardInterrupt
+        with mock.patch.object(ht, 'ROOT', self.dir), mock.patch.object(ht, 'load_agentrc'), \
+                mock.patch.object(ht, 'admit', return_value=({}, {'serial_echo': {'vidPid': '239a:8020'}})), \
+                mock.patch.object(ht, 'scan', lambda *a: [{'serial': 'ABC', 'ino': ino[0]}]), \
+                mock.patch.object(ht, 'detach', detach), mock.patch.object(ht, 'flash', return_value=''), \
+                mock.patch.object(ht, 'reset', return_value=''), mock.patch.object(ht.time, 'sleep'), \
+                mock.patch.object(ht, 'test_cdc', return_value=(True, 'echoed')), \
+                mock.patch.object(self.lock, 'release_board_lock', release), \
+                contextlib.redirect_stdout(io.StringIO()), self.assertRaises(KeyboardInterrupt):
+            ht.cmd_commission(args)
+        self.assertEqual((len(self.lock.released), self.lock.handed), (1, []))
+        self.assertFalse(list(self.dir.glob('build/hil-manual/commission-metro_m4_express-*/result.json')))
+
 
 class Flash(Base):
     def test_openocd_transcript_must_show_verify(self):
@@ -570,7 +592,7 @@ class Flash(Base):
         self.assertEqual(ht.detach('metro_m4_express', metro, '239a:8020', mock.Mock()), '')
         ht.A.flash.run_openocd_commands.assert_not_called()
 
-    def cdc_port(self, seen, stall):
+    def cdc_port(self, seen, stall, now):
         import serial
 
         class Port:
@@ -593,38 +615,37 @@ class Flash(Base):
                 if self.write_timeout is None:
                     raise AssertionError('an unbounded write blocks past the deadline')
                 seen.append(self.write_timeout)
+                now[0] += 1.0
                 if stall:
                     raise serial.SerialTimeoutException('Write timeout')
                 self.last = data
                 return len(data)
 
             def read(self, n):
+                now[0] += 0.5
                 got, self.last = self.last[:n].upper(), self.last[n:]
                 return got
         return Port
 
     def run_cdc(self, stall):
         import serial
-        seen = []
-        deadline = ht.time.monotonic() + 5
+        seen, now = [], [0.0]
         with mock.patch.object(ht, 'node', return_value='/dev/ttyACM9'), \
-                mock.patch.object(serial, 'Serial', self.cdc_port(seen, stall)):
-            ok, detail = ht.test_cdc({}, 'ab', deadline, None, self.dir)
-        self.assertTrue(seen)
-        for timeout in seen:   # the remaining time, not a constant floor
-            self.assertTrue(4 < timeout <= 5, timeout)
+                mock.patch.object(ht.time, 'monotonic', lambda: now[0]), \
+                mock.patch.object(serial, 'Serial', self.cdc_port(seen, stall, now)):
+            ok, detail = ht.test_cdc({}, 'ab', now[0] + 5, None, self.dir)
         return ok, detail, seen
 
     def test_cdc_write_is_bounded_by_the_test_deadline(self):
         ok, detail, seen = self.run_cdc(stall=True)
         self.assertFalse(ok)
         self.assertIn('timed out', detail)
-        self.assertEqual(len(seen), 1)
+        self.assertEqual(seen, [5.0])
 
     def test_cdc_bounded_write_that_completes_echoes(self):
         ok, detail, seen = self.run_cdc(stall=False)
         self.assertTrue(ok, detail)
-        self.assertEqual(len(seen), 3)
+        self.assertEqual(seen, [5.0, 3.5, 2.0])   # each write gets the time left, not a fixed bound
 
     def test_tracker_marks_unclean(self):
         t = ht.Tracker.__new__(ht.Tracker)

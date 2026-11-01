@@ -894,7 +894,6 @@ def cmd_commission(args):
         ok, out['cleanup'] = test_cdc(dev, secrets.token_hex(4), time.monotonic() + TEST_TIMEOUT, tracker, run_dir)
         if not ok:
             raise RuntimeError(f'serial_echo left running does not echo: {out["cleanup"]}')
-        A.lock.release_board_lock(fh)
     except Refused:
         A.lock.release_board_lock(fh)
         raise
@@ -911,6 +910,8 @@ def cmd_commission(args):
         (run_dir / 'result.json').write_text(json.dumps(out) + '\n')
         emit(out)
         return 4
+    else:   # outside the handlers: an interrupt during the release must not hand over a released lock
+        A.lock.release_board_lock(fh)
     emit(out)
     return 0 if out.get('matchesRoster') else 1
 
