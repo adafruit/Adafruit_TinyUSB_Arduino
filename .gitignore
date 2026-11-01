@@ -3,3 +3,7 @@
 .idea
 platformio.ini
 .pio/
+__pycache__/
+/build/
+/test/hil/local.json
+/.hil-remote/
