@@ -121,8 +121,9 @@ python3 $H/hil_remote.py session close <id>                         # restore se
 
 - `gdb` runs `gdb-multiarch -batch` over `target extended-remote | openocd ... -c "gdb_port pipe"`, with the roster's
   `debug.openocd` pinned to the board's probe serial. The attach halts the core and the detach resumes it, so the
-  firmware runs on (checked by an echo after a read-only and a breakpoint session on Pico and Fruit Jam). openocd
-  exits when GDB detaches. Breakpoints are hardware ones, and there is no flash `load`: reflash with `flash`.
+  firmware runs on: an echo after the detach checked it for read-only and breakpoint sessions on Pico, read-only on
+  Fruit Jam. openocd exits when GDB detaches. Breakpoints are hardware ones, and there is no flash `load`: reflash
+  with `flash`.
 - A refused `session open` (the board is held) prints the holder and leaves its attempt dir unused. Within the
   lock-wait budget, retry `session open` with a new run id; never wait on a recovery blocker.
 - Each command and child is bounded (`exec`/`gdb` `--timeout` at most 600 s) and runs through agentrc's
