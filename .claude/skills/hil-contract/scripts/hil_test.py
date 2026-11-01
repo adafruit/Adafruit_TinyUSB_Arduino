@@ -3,12 +3,15 @@
 
   hil_test.py run [-b BOARD]... [-t TEST]... [--record-dir DIR] [--run-dir DIR] [--staged MANIFEST] ROSTER
   hil_test.py commission -b BOARD [--record-dir DIR] ROSTER
-  hil_test.py flash -b BOARD --build-record R --sketch S --under-hold REASON ROSTER
-  hil_test.py restore -b BOARD --build-record R --under-hold REASON [--report PATH] ROSTER
+  hil_test.py flash -b BOARD --build-record R --sketch S --under-hold REASON [--staged M] ROSTER
+  hil_test.py restore -b BOARD --build-record R --under-hold REASON [--report PATH] [--staged M] ROSTER
+  hil_test.py gdb -b BOARD --build-record R --sketch S --under-hold REASON [--ex CMD]... [--timeout S] [--staged M]
+                 ROSTER
+  hil_test.py exec -b BOARD --under-hold REASON [--timeout S] [--staged M] ROSTER -- ARGV...
   hil_test.py report RUN_DIR [-b BOARD]...
   hil_test.py lock (hold|release|status) ...        the pinned agentrc hil_lock.py
 
-The last stdout line of run, commission, flash, restore and report is JSON. Exits: 0 pass, 1 a board failed or did not
+The last stdout line of every command but lock and read-block is JSON. Exits: 0 pass, 1 a board failed or did not
 run (cleaned up or untouched), 2 refused before any hardware access, 4 a cleanup did not finish (board held).
 """
 
@@ -19,6 +22,8 @@ import json
 import os
 import secrets
 import select
+import shlex
+import signal
 import socket
 import subprocess
 import sys
@@ -50,6 +55,7 @@ DETACH_WAIT = 5
 
 FLASH_TIMEOUT, VERIFY_TIMEOUT, ENUM_TIMEOUT, TEST_TIMEOUT, SETTLE = 120, 60, 20, 30, 2
 BOARD_BUDGET = 900
+EXEC_MAX = 600   # one session exec or gdb child
 REAP = 10   # agentrc hil_process.REAP_GRACE, per tracked child
 STEP_MAX = VERIFY_TIMEOUT + DETACH_WAIT + FLASH_TIMEOUT + VERIFY_TIMEOUT + ENUM_TIMEOUT + TEST_TIMEOUT + \
     4 * (REAP + SETTLE)
@@ -655,8 +661,11 @@ def held_by(name, reason):
         raise Refused(f'{name} is not held under reason {reason!r} by a live holder (record: {rec})')
 
 
-def manual(args, sketch, experimental_ok, cleanup):
-    load_agentrc(False)
+def manual(args, op):
+    """A session command on a board the caller holds: op(board, run_dir, tracker, manifest) -> row. The JSON goes to
+    stdout and to result.json in the run dir, which outlives a dropped ssh session."""
+    manifest = verify_staged(args.staged) if args.staged else None
+    load_agentrc(manifest is not None)
     roster = load_roster(args.roster)
     if args.board not in roster:
         raise Refused(f'{args.board} is not in {args.roster}')
@@ -664,36 +673,81 @@ def manual(args, sketch, experimental_ok, cleanup):
     why = pending_problem(args.board)
     if why:
         raise Refused(why)
-    run_dir = ROOT / 'build' / 'hil-manual' / f'{args.board}-{time.strftime("%Y%m%d-%H%M%S")}'
+    run_dir = ROOT / 'build' / 'hil-manual' / f'{args.board}-{args.cmd}-{time.strftime("%Y%m%d-%H%M%S")}'
     run_dir.mkdir(parents=True, exist_ok=True)
-    if getattr(args, 'report', None):
-        failed = json.loads(Path(args.report).read_text())
-        open_receipts = [r for row in failed['results'] if row['board'] == args.board
-                         for r in row['cleanup'].get('receipts', [])
-                         if A.process.recheck(r) != 'done']
-        if open_receipts:
-            raise Refused(f'children of the failed run are not proven ended: {open_receipts}')
-    rec, images = admit(args.build_record, args.board, args.roster, run_dir, experimental_ok=experimental_ok)
-    if sketch not in images:
-        raise Refused(f'{args.build_record} has no sketch {sketch}; it has {sorted(images)}')
     tracker = Tracker(run_dir)
     try:
-        if cleanup:
-            row = restore(args.board, roster[args.board], images, run_dir, tracker)
-            ok = row['pass']
-        else:
-            row = flash_only(args.board, roster[args.board], images[sketch], run_dir, tracker)
-            ok = row['pass']
+        row = op(roster[args.board], run_dir, tracker, manifest)
+        out, code = {'pass': row['pass'], 'board': args.board, **row, 'survivors': [], 'log': str(tracker.log)}, \
+            0 if row['pass'] else 1
     except BaseException as e:   # an interrupt or crash can leave a child as unproven as Unclean does
         if not tracker.pending and not isinstance(e, Unclean):
             raise
-        emit({'pass': False, 'board': args.board, 'error': f'a child outlived its operation: {type(e).__name__}: {e}',
-              'survivors': tracker.pending, 'markError': mark_pending(args.board, tracker),
-              'note': 'keep the hold: every later invocation refuses until these end (Recovery)'})
-        return 4
-    emit({'pass': ok, 'board': args.board, 'record': str(args.build_record), 'experimental': rec['experimental'],
-          **row, 'survivors': [], 'log': str(tracker.log)})
-    return 0 if ok else 1
+        out, code = {'pass': False, 'board': args.board,
+                     'error': f'a child outlived its operation: {type(e).__name__}: {e}',
+                     'survivors': tracker.pending, 'markError': mark_pending(args.board, tracker),
+                     'note': 'keep the hold: every later invocation refuses until these end (Recovery)'}, 4
+    (run_dir / 'result.json').write_text(json.dumps(out) + '\n')
+    emit(out)
+    return code
+
+
+def admit_sketch(args, sketch, run_dir, manifest, experimental_ok):
+    rec, images = admit(args.build_record, args.board, args.roster, run_dir, manifest=manifest,
+                        experimental_ok=experimental_ok)
+    if sketch not in images:
+        raise Refused(f'{args.build_record} has no sketch {sketch}; it has {sorted(images)}')
+    return {'record': str(args.build_record), 'experimental': rec['experimental']}, images[sketch], images
+
+
+def op_flash(args):
+    def op(board, run_dir, tracker, manifest):
+        meta, image, _ = admit_sketch(args, args.sketch, run_dir, manifest, True)
+        return {**meta, **flash_only(args.board, board, image, run_dir, tracker)}
+    return op
+
+
+def op_restore(args):
+    def op(board, run_dir, tracker, manifest):
+        if args.report:
+            failed = json.loads(Path(args.report).read_text())
+            open_receipts = [r for row in failed['results'] if row['board'] == args.board
+                             for r in row['cleanup'].get('receipts', []) if A.process.recheck(r) != 'done']
+            if open_receipts:
+                raise Refused(f'children of the failed run are not proven ended: {open_receipts}')
+        meta, _, images = admit_sketch(args, RESTORE_SKETCH, run_dir, manifest, False)
+        return {**meta, **restore(args.board, board, images, run_dir, tracker)}
+    return op
+
+
+def run_child(argv, timeout, tracker):
+    r = tracker.run(argv, timeout=timeout)
+    out = _text(r.stdout) + _text(r.stderr)
+    return {'pass': r.returncode == 0, 'exit': r.returncode, 'output': out[-4000:]}
+
+
+def op_exec(args):
+    return lambda board, run_dir, tracker, manifest: run_child(args.argv, args.timeout, tracker)
+
+
+def gdb_argv(board, elf, commands):
+    """gdb-multiarch in batch mode over an openocd it starts on a pipe, configured by the roster's debug.openocd and
+    pinned to the board's probe serial."""
+    probe = {'name': 'openocd', 'uid': board['flasher']['uid'], 'args': board['debug']['openocd']}
+    if board['flasher']['name'] == 'openocd' and 'vid_pid' in board['flasher']:
+        probe['vid_pid'] = board['flasher']['vid_pid']
+    openocd = A.flash.openocd_cmd_base(probe) + ['-c', 'gdb_port pipe']
+    return ['gdb-multiarch', '-batch', '-nx', '-ex', f'target extended-remote | {shlex.join(openocd)}',
+            *(w for c in commands for w in ('-ex', c)), elf]
+
+
+def op_gdb(args):
+    def op(board, run_dir, tracker, manifest):
+        if not board.get('debug', {}).get('openocd'):
+            raise Refused(f'{args.board} has no debug.openocd in {args.roster}')
+        meta, image, _ = admit_sketch(args, args.sketch, run_dir, manifest, True)
+        return {**meta, **run_child(gdb_argv(board, image['elf'], args.ex), args.timeout, tracker)}
+    return op
 
 
 def flash_only(name, board, image, run_dir, tracker):
@@ -797,16 +851,24 @@ def parse(argv):
     c.add_argument('-b', '--board', required=True)
     c.add_argument('--record-dir', default=str(ROOT / 'build' / 'hil'))
     c.add_argument('roster')
-    for name in ('flash', 'restore'):
+    for name in ('flash', 'restore', 'gdb', 'exec'):
         m = sub.add_parser(name)
         m.add_argument('-b', '--board', required=True)
-        m.add_argument('--build-record', required=True)
         m.add_argument('--under-hold', required=True, metavar='REASON')
-        if name == 'flash':
+        m.add_argument('--staged', help='the manifest of a tree hil_remote.py staged (rig side)')
+        if name != 'exec':
+            m.add_argument('--build-record', required=True)
+        if name in ('flash', 'gdb'):
             m.add_argument('--sketch', required=True)
-        else:
+        if name == 'restore':
             m.add_argument('--report', help="a failed run's report: its children must be proven ended first")
+        if name in ('gdb', 'exec'):
+            m.add_argument('--timeout', type=float, default=60, help=f'seconds, at most {EXEC_MAX}')
+        if name == 'gdb':
+            m.add_argument('--ex', action='append', default=[], help='a gdb command, run in order after the attach')
         m.add_argument('roster')
+        if name == 'exec':
+            m.add_argument('argv', nargs='+')
     rp = sub.add_parser('report')
     rp.add_argument('run_dir')
     rp.add_argument('-b', '--board', action='append')
@@ -821,15 +883,20 @@ def main(argv=None):
     if argv[:1] == ['lock']:
         return cmd_lock(argv[1:])
     args = parse(argv)
+    if args.cmd in ('gdb', 'exec') and not 0 < args.timeout <= EXEC_MAX:
+        emit({'pass': False, 'error': f'--timeout must be in (0, {EXEC_MAX}]'})
+        return 2
+    if args.cmd in ('flash', 'restore', 'gdb', 'exec'):
+        # a session command runs over ssh: a dropped link must not end it between a child's start and its proof
+        signal.signal(signal.SIGHUP, signal.SIG_IGN)
     try:
         if args.cmd == 'run':
             return cmd_run(args)
         if args.cmd == 'commission':
             return cmd_commission(args)
-        if args.cmd == 'flash':
-            return manual(args, args.sketch, experimental_ok=True, cleanup=False)
-        if args.cmd == 'restore':
-            return manual(args, RESTORE_SKETCH, experimental_ok=False, cleanup=True)
+        if args.cmd in ('flash', 'restore', 'gdb', 'exec'):
+            ops = {'flash': op_flash, 'restore': op_restore, 'gdb': op_gdb, 'exec': op_exec}
+            return manual(args, ops[args.cmd](args))
         if args.cmd == 'report':
             return cmd_report(args)
         return cmd_read_block(args)

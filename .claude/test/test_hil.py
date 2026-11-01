@@ -335,8 +335,8 @@ class Manual(Base):
     def check_marks_pending(self, exc):
         rec, root = self.record(experimental=True)
         self.lock.records['metro_m4_express'] = {'reason': 'mine', 'pid': 1}
-        args = argparse.Namespace(board='metro_m4_express', under_hold='mine', build_record=str(rec),
-                                  roster=str(self.roster), report=None)
+        args = argparse.Namespace(cmd='flash', board='metro_m4_express', under_hold='mine', build_record=str(rec),
+                                  roster=str(self.roster), staged=None, sketch='serial_echo')
 
         def unclean(*a):
             t = a[-1]
@@ -347,12 +347,55 @@ class Manual(Base):
                 mock.patch.object(ht, 'flash_only', unclean), contextlib.redirect_stdout(out), \
                 mock.patch.object(ht.Tracker, '__init__', lambda s, d: s.__dict__.update(
                     receipts=[], pending=[], unclean='', log=Path(d) / 'hil.log')):
-            self.assertEqual(ht.manual(args, 'serial_echo', True, False), 4)
+            self.assertEqual(ht.manual(args, ht.op_flash(args)), 4)
             ht.A.process.recheck.return_value = 'pending'
             with self.assertRaisesRegex(ht.Refused, 'pending children'):
-                ht.manual(args, 'serial_echo', True, False)
+                ht.manual(args, ht.op_flash(args))
             ht.A.process.recheck.return_value = 'done'
         self.assertEqual(self.lock.pending[('metro_m4_express', ht.PENDING_KIND)], [{'receipt': {'pid': 7}}])
+
+    def test_staged_flash_admits_against_the_manifest_and_keeps_a_result(self):
+        rec, root = self.record()
+        self.lock.records['metro_m4_express'] = {'reason': 'mine', 'pid': 1}
+        args = argparse.Namespace(cmd='flash', board='metro_m4_express', under_hold='mine', build_record=str(rec),
+                                  roster=str(self.roster), staged='manifest.json', sketch='serial_echo')
+        flashed = mock.Mock(return_value={'pass': True, 'detail': 'flashed'})
+        with mock.patch.object(ht, 'ROOT', root), mock.patch.object(ht, 'load_agentrc') as load, \
+                mock.patch.object(ht, 'verify_staged', return_value={'head': 'abc', 'files': {}}), \
+                mock.patch.object(ht, 'git_identity', side_effect=AssertionError('a staged tree has no git')), \
+                mock.patch.object(ht, 'flash_only', flashed), contextlib.redirect_stdout(io.StringIO()), \
+                mock.patch.object(ht.Tracker, '__init__', lambda s, d: s.__dict__.update(
+                    receipts=[], pending=[], unclean='', log=Path(d) / 'hil.log')):
+            self.assertEqual(ht.manual(args, ht.op_flash(args)), 0)
+        load.assert_called_once_with(True)
+        result = json.loads(next((root / 'build/hil-manual').glob('metro_m4_express-flash-*/result.json')).read_text())
+        self.assertEqual((result['pass'], result['record'], result['experimental']), (True, str(rec), False))
+
+    def test_exec_takes_the_argv_after_the_roster(self):
+        a = ht.parse(['exec', '-b', 'metro_m4_express', '--under-hold', 'r', 'ci.json', '--', 'ls', '-l'])
+        self.assertEqual((a.roster, a.argv, a.timeout, a.staged), ('ci.json', ['ls', '-l'], 60, None))
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(ht.main(['exec', '-b', 'b', '--under-hold', 'r', '--timeout', '601', 'ci.json', 'true']),
+                             2)
+        self.assertIn('--timeout', out.getvalue())
+
+    def test_gdb_runs_openocd_on_a_pipe_pinned_to_the_probe(self):
+        ht.A.flash.openocd_cmd_base = lambda p: [
+            'openocd', '-c', 'gdb_port disabled', '-c', f'adapter serial {p["uid"]}',
+            *(['-c', f'adapter usb vid_pid {p["vid_pid"]}'] if 'vid_pid' in p else []), *ht.shlex.split(p['args'])]
+        board = ht.load_roster(ROOT / 'test/hil/ci.json')['raspberry_pi_pico']
+        argv = ht.gdb_argv(board, 'fw.elf', ['info symbol main', 'bt'])
+        self.assertEqual(argv[:4], ['gdb-multiarch', '-batch', '-nx', '-ex'])
+        self.assertEqual((argv[-5:], argv[-1]), (['-ex', 'info symbol main', '-ex', 'bt', 'fw.elf'], 'fw.elf'))
+        pipe = ht.shlex.split(argv[4].removeprefix('target extended-remote | '))
+        self.assertEqual(pipe[-2:], ['-c', 'gdb_port pipe'])
+        self.assertIn('adapter serial E6614103E72C1D2F', pipe)
+        self.assertIn('adapter usb vid_pid 0x2e8a 0x000c', pipe)
+        self.assertIn('target/rp2040.cfg', pipe)
+        metro = ht.load_roster(ROOT / 'test/hil/ci.json')['metro_m4_express']
+        pipe = ht.shlex.split(ht.gdb_argv(metro, 'fw.elf', [])[4].removeprefix('target extended-remote | '))
+        self.assertIn('interface/jlink.cfg', pipe)
+        self.assertFalse(any('vid_pid' in w for w in pipe))
 
     def test_foreign_or_missing_hold_refused(self):
         with self.assertRaisesRegex(ht.Refused, 'not held'):
