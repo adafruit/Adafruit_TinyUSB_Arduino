@@ -336,7 +336,7 @@ class Manual(Base):
         rec, root = self.record(experimental=True)
         self.lock.records['metro_m4_express'] = {'reason': 'mine', 'pid': 1}
         args = argparse.Namespace(cmd='flash', board='metro_m4_express', under_hold='mine', build_record=str(rec),
-                                  roster=str(self.roster), staged=None, sketch='serial_echo')
+                                  roster=str(self.roster), staged=None, sketch='serial_echo', bundle=None)
 
         def unclean(*a):
             t = a[-1]
@@ -358,7 +358,8 @@ class Manual(Base):
         rec, root = self.record()
         self.lock.records['metro_m4_express'] = {'reason': 'mine', 'pid': 1}
         args = argparse.Namespace(cmd='flash', board='metro_m4_express', under_hold='mine', build_record=str(rec),
-                                  roster=str(self.roster), staged='manifest.json', sketch='serial_echo')
+                                  roster=str(self.roster), staged='manifest.json', sketch='serial_echo',
+                                  bundle=None)
         flashed = mock.Mock(return_value={'pass': True, 'detail': 'flashed'})
         with mock.patch.object(ht, 'ROOT', root), mock.patch.object(ht, 'load_agentrc') as load, \
                 mock.patch.object(ht, 'verify_staged', return_value={'head': 'abc', 'files': {}}), \
@@ -370,6 +371,58 @@ class Manual(Base):
         load.assert_called_once_with(True)
         result = json.loads(next((root / 'build/hil-manual').glob('metro_m4_express-flash-*/result.json')).read_text())
         self.assertEqual((result['pass'], result['record'], result['experimental']), (True, str(rec), False))
+
+    def held(self, root, **kw):
+        self.lock.records['metro_m4_express'] = {'reason': 'mine', 'pid': 1}
+        return argparse.Namespace(**{'board': 'metro_m4_express', 'under_hold': 'mine', 'roster': str(self.roster),
+                                     'staged': None, 'bundle': None, **kw})
+
+    def test_exec_with_a_surviving_child_is_unclean_not_a_pass(self):
+        rec, root = self.record()
+        args = self.held(root, cmd='exec', argv=['sleep', '9'], timeout=5)
+        ht.A.process.run_tracked.return_value = mock.Mock(returncode=0, stdout='', stderr='', cleanup='pending',
+                                                          receipt={'pid': 5})
+        with mock.patch.object(ht, 'ROOT', root), mock.patch.object(ht, 'load_agentrc'), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(ht.manual(args, ht.op_exec(args)), 4)
+        self.assertEqual(json.loads(out.getvalue())['survivors'], [{'receipt': {'pid': 5}}])
+        self.assertEqual(self.lock.pending[('metro_m4_express', ht.PENDING_KIND)], [{'receipt': {'pid': 5}}])
+
+    def test_one_session_command_at_a_time(self):
+        rec, root = self.record()
+        args = self.held(root, cmd='exec', argv=['true'], timeout=5)
+        with mock.patch.object(ht, 'ROOT', root), mock.patch.object(ht, 'load_agentrc'):
+            with ht.one_session_command('metro_m4_express'):
+                with self.assertRaisesRegex(ht.Refused, 'still running'):
+                    ht.manual(args, ht.op_exec(args))
+            with ht.one_session_command('metro_m4_express'):
+                pass
+
+    def test_bundle_holds_the_record_and_its_images(self):
+        rec, root = self.record()
+        bundle = root / 'bundles/1'
+        shutil.copytree(root / 'build', bundle / 'build')
+        (root / 'build/hil/metro_m4_express/serial_echo/serial_echo.ino.elf').write_bytes(b'overwritten')
+        shutil.copy2(rec, bundle / 'rec.json')
+        args = self.held(root, build_record='rec.json', bundle='bundles/1')
+        with mock.patch.object(ht, 'ROOT', root), mock.patch.object(ht, 'git_identity', return_value=('abc', '')):
+            _, image, _ = ht.admit_sketch(args, 'serial_echo', self.dir / 'run', None, False)
+            self.assertEqual(Path(image['elf']).read_bytes(), b'elf')
+            args.bundle = '../root/../..'
+            with self.assertRaisesRegex(ht.Refused, 'not a directory inside'):
+                ht.admit_sketch(args, 'serial_echo', self.dir / 'run', None, False)
+
+    def test_restore_release_passes_only_when_the_hold_ends(self):
+        rec, root = self.record()
+        args = self.held(root, build_record=str(rec), report=None, release=True)
+        restored = {'pass': True, 'state': 'serial_echo restored', 'evidence': 'echo'}
+        for exit_code, ok in ((0, True), (1, False)):
+            with mock.patch.object(ht, 'ROOT', root), mock.patch.object(ht, 'restore', return_value=restored), \
+                    mock.patch.object(ht, 'git_identity', return_value=('abc', '')), \
+                    mock.patch.object(ht, 'release_hold', return_value={'exit': exit_code}) as release:
+                row = ht.op_restore(args)(None, self.dir / 'run', None, None)
+            release.assert_called_once_with('metro_m4_express')
+            self.assertEqual(row['pass'], ok)
 
     def test_exec_takes_the_argv_after_the_roster(self):
         a = ht.parse(['exec', '-b', 'metro_m4_express', '--under-hold', 'r', 'ci.json', '--', 'ls', '-l'])

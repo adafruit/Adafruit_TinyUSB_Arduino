@@ -41,7 +41,8 @@ class Checkout(unittest.TestCase):
         (self.root / '.gitignore').write_text('/build/\n/.hil-remote/\n')
         git(self.root, 'init', '-q')
         git(self.root, 'add', '-A')
-        git(self.root, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'init')
+        git(self.root, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', 'commit', '-qm',
+            'init')
         self.head = subprocess.run(['git', '-C', str(self.root), 'rev-parse', 'HEAD'], capture_output=True,
                                    text=True).stdout.strip()
         self.agentrc = Path(self.tmp.name) / 'agentrc'
@@ -161,26 +162,44 @@ class Session(Checkout):
             with self.subTest(bad=bad), self.assertRaises(SystemExit):
                 hr.main(['session', 'exec', 's1', *bad])
 
-    def test_close_releases_only_after_a_passing_restore(self):
-        self.open()
+    def test_close_is_one_restore_that_releases(self):
+        out = self.open()
         self.rig_exit['restore'] = 1
-        rc, out = self.main('session', 'close', 's1')
-        self.assertEqual((rc, out['closed']), (1, False))
-        self.assertNotIn('release', [c[3:5] for c in self.calls][-1])
+        rc, closed = self.main('session', 'close', 's1')
+        self.assertEqual((rc, closed['closed']), (1, False))
+        self.assertTrue(json.loads((self.root / '.hil-remote/s1.session.json').read_text())['held'])
         self.rig_exit['restore'] = 0
-        rc, out = self.main('session', 'close', 's1')
-        self.assertEqual((rc, out['closed']), (0, True))
-        self.assertEqual(self.calls[-1], ['python3', '-u', hr.HIL, 'lock', 'release', BOARD])
-        self.assertEqual(self.calls[-2][3], 'restore')
+        rc, closed = self.main('session', 'close', 's1')
+        self.assertEqual((rc, closed['closed']), (0, True))
+        self.assertEqual(self.calls[-1], ['python3', '-u', hr.HIL, 'restore', '-b', BOARD, '--under-hold',
+                                          out['reason'], '--staged', hr.MANIFEST, '--bundle', hr.RESTORE_BUNDLE,
+                                          '--build-record', out['restoreRecord'], '--release', hr.ROSTER])
+        self.assertNotIn(['lock', 'release'], [c[3:5] for c in self.calls])
 
-    def test_stage_takes_an_experimental_record_of_the_session_head_and_board(self):
+    def test_stage_puts_each_record_in_a_bundle_of_its_own(self):
         self.open()
+        restore = f'{hr.RESTORE_BUNDLE}/build/hil/{BOARD}/serial_echo/serial_echo.ino.elf'
+        self.assertEqual(self.staged[restore], b'elf')
+        manifest = json.loads(self.staged[hr.MANIFEST])
+        self.assertIn(restore, manifest['files'])
         rec = self.record(experimental=True)
-        Path(f'{rec}.patch').write_text('diff')
+        patch = rec.with_suffix('.patch')
+        patch.write_text('diff')
+        data = json.loads(rec.read_text())
+        data['patch'] = {'path': patch.relative_to(self.root).as_posix(),
+                         'sha256': hashlib.sha256(b'diff').hexdigest()}
+        rec.write_text(json.dumps(data))
         self.staged.clear()
         rc, out = self.main('session', 'stage', 's1', str(rec))
-        self.assertEqual(rc, 0)
-        self.assertIn(f'build/hil/{BOARD}.build.json.patch', self.staged)
+        self.assertEqual((rc, out['bundle']), (0, 'bundles/1'))
+        self.assertEqual(out['use'], [f'--bundle bundles/1 --build-record build/hil/{BOARD}.build.json'])
+        self.assertIn(f'bundles/1/build/hil/{BOARD}.build.patch', self.staged)
+        self.assertFalse([p for p in self.staged if p.startswith(hr.RESTORE_BUNDLE) or p == hr.MANIFEST])
+        rc, out = self.main('session', 'stage', 's1', str(rec))
+        self.assertEqual(out['bundle'], 'bundles/2')
+        patch.write_text('changed')
+        with self.assertRaisesRegex(SystemExit, 'changed since the build record'):
+            self.main('session', 'stage', 's1', str(rec))
         self.record(board='metro_m4_express')
         with self.assertRaisesRegex(SystemExit, 'not raspberry_pi_pico'):
             self.main('session', 'stage', 's1', str(rec))

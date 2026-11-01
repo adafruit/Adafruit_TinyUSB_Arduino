@@ -11,10 +11,10 @@ attempt dir <base>/<run-id> (agentrc hil_remote_core). Local records and collect
   hil_remote.py collect ID                 fetch whatever the attempt has now, whatever its state
   hil_remote.py session open --run-id ID -b BOARD [--host H] [--roster R]
       stage the board's clean record and take a hold on the board under the reason `arduino-hil session ID`
-  hil_remote.py session stage ID RECORD...                 stage more records (experimental ones too)
+  hil_remote.py session stage ID RECORD...    stage records (experimental too) into a new bundle; prints its options
   hil_remote.py session exec ID flash|gdb|restore OPTS...  hil_test.py's command under the session's hold
   hil_remote.py session exec ID exec [--timeout S] -- ARGV...
-  hil_remote.py session close ID           restore serial_echo, check its echo, release the hold
+  hil_remote.py session close ID           restore serial_echo, check its echo, release the hold (one rig command)
 
 Exits: run, session open/stage 0 launched/held/staged, 1 refused or failed (an `error:` line names why), 2 the agentrc
 pin is missing; wait 0 done, 3 running, 4 dead, 5 inconclusive (hil_remote_core); collect 0 complete (a session's:
@@ -42,6 +42,7 @@ HARNESS = (HIL, '.claude/skills/hil-contract/scripts/agentrc_pin.py', '.claude/s
            'test/hil/agentrc.json')
 RUN_DIR = 'hil-run'
 MANIFEST = 'manifest.json'
+RESTORE_BUNDLE = 'bundles/restore'   # the clean record session close restores from, staged at open
 SESSION_CMDS = ('flash', 'gdb', 'restore', 'exec')
 OWN_OPTS = ('-b', '--board', '--under-hold', '--staged')
 
@@ -85,16 +86,16 @@ def record_files(path, head, board=None, clean=True):
     if why:
         core.fail(f'build record {path}: {"; ".join(why)}; rebuild with the build skill\'s --record')
     files = [rel(path), *(f for s in sketches.values() for f in s['sha256'])]
-    patch = Path(f'{path}.patch')
-    if rec.get('experimental') and patch.is_file():
-        files.append(rel(patch))
+    if rec.get('patch'):
+        files.append(rec['patch']['path'])
     return rec, files
 
 
-def snapshot(into, files, with_agentrc):
-    """Copy files (checkout-relative) and, when asked, the agentrc closure the harness loads (under agentrc/) into
-    `into`; {tree-relative path: sha256} of the copies, which is what gets staged."""
-    digests = core.snapshot(ROOT, [ROOT / f for f in files], into)
+def snapshot(into, files, with_agentrc=False, bundle=None):
+    """Copy files (checkout-relative) into `into`, under `bundle` when given, and, when asked, the agentrc closure
+    the harness loads (under agentrc/); {tree-relative path: sha256} of the copies, which is what gets staged."""
+    digests = {f'{bundle}/{k}' if bundle else k: v
+               for k, v in core.snapshot(ROOT, [ROOT / f for f in files], Path(into) / (bundle or '')).items()}
     if with_agentrc:
         ag = agentrc_pin.checkout()
         closure = agentrc_pin.closure(ag, hil_test.SCRIPTS)
@@ -103,8 +104,11 @@ def snapshot(into, files, with_agentrc):
     return digests
 
 
-def check_images(rec, digests):
-    bad = [f for s in rec['sketches'].values() for f, d in s['sha256'].items() if digests.get(f) != d]
+def check_images(rec, digests, bundle=None):
+    pinned = {f: d for s in rec['sketches'].values() for f, d in s['sha256'].items()}
+    if rec.get('patch'):
+        pinned[rec['patch']['path']] = rec['patch']['sha256']
+    bad = [f for f, d in pinned.items() if digests.get(f'{bundle}/{f}' if bundle else f) != d]
     if bad:
         core.fail(f'{rec["board"]}: {", ".join(bad[:3])} changed since the build record; rebuild')
 
@@ -116,15 +120,15 @@ def stage(tree, into, digests):
         core.fail(f'staged files differ on {tree.host}: {", ".join(bad[:5])}')
 
 
-def staged_tree(run_id, host, roster, records, head):
+def staged_tree(run_id, host, roster, records, head, bundle=None):
     """Create attempt run_id on host holding the harness, roster, agentrc closure and records (record_files
-    already checked), the snapshot pinned by manifest.json; its Tree."""
+    already checked; under `bundle` when given), the snapshot pinned by manifest.json; its Tree."""
     with tempfile.TemporaryDirectory(prefix='hil-remote-') as tmp:
         into = Path(tmp)
-        files = [*HARNESS, roster, *(f for _, fs in records for f in fs)]
-        digests = snapshot(into, files, True)
+        digests = snapshot(into, [*HARNESS, roster], True)
+        digests.update(snapshot(into, [f for _, fs in records for f in fs], bundle=bundle))
         for rec, _ in records:
-            check_images(rec, digests)
+            check_images(rec, digests, bundle)
         drift = core.checkout_drift(ROOT, head)
         if drift:
             core.fail(f'the checkout moved while it was copied: {"; ".join(drift)}')
@@ -222,10 +226,10 @@ def cmd_session_open(a):
         core.fail(f'{a.board} is not in {roster}')
     head = head_of_clean_tree()
     record = record_files(ROOT / 'build' / 'hil' / f'{a.board}.build.json', head, a.board)
-    tree = staged_tree(a.run_id, a.host, roster, [record], head)
+    tree = staged_tree(a.run_id, a.host, roster, [record], head, RESTORE_BUNDLE)
     reason = f'arduino-hil session {a.run_id}'
     data = {'runId': a.run_id, 'board': a.board, 'reason': reason, 'roster': roster, 'head': head,
-            'restoreRecord': record[1][0], 'held': False}
+            'restoreRecord': record[1][0], 'bundles': 0, 'held': False}
     core.write_json(session_path(a.run_id), data)
     rc = rig(tree, [HIL, 'lock', 'hold', a.board, '--reason', reason])
     if rc:
@@ -239,15 +243,20 @@ def cmd_session_open(a):
 
 
 def cmd_session_stage(a):
+    """Stage the records into a new bundle dir of their own: records share build/hil/<board>/<sketch>/, so one
+    staged over another would replace the images an earlier record, the restore's included, pins."""
     s = session_record(a.run_id)
     tree = core.load_attempt(ROOT, RUNS, a.run_id)
     records = [record_files(r, s['head'], s['board'], clean=False) for r in a.records]
+    bundle = f'bundles/{s["bundles"] + 1}'
     with tempfile.TemporaryDirectory(prefix='hil-remote-') as tmp:
-        digests = snapshot(Path(tmp), [f for _, fs in records for f in fs], False)
+        digests = snapshot(Path(tmp), [f for _, fs in records for f in fs], bundle=bundle)
         for rec, _ in records:
-            check_images(rec, digests)
+            check_images(rec, digests, bundle)
+        core.write_json(session_path(a.run_id), {**s, 'bundles': s['bundles'] + 1})
         stage(tree, Path(tmp), digests)
-    print(json.dumps({'runId': a.run_id, 'staged': [fs[0] for _, fs in records]}))
+    print(json.dumps({'runId': a.run_id, 'bundle': bundle,
+                      'use': [f'--bundle {bundle} --build-record {fs[0]}' for _, fs in records]}))
     return 0
 
 
@@ -274,14 +283,13 @@ def cmd_session_exec(run_id, rest):
 def cmd_session_close(a):
     s = session_record(a.run_id)
     tree = core.load_attempt(ROOT, RUNS, a.run_id)
-    rc = rig(tree, session_argv(s, 'restore', ['--build-record', s['restoreRecord']], []))
-    if rc:
-        print(json.dumps({'runId': a.run_id, 'board': s['board'], 'closed': False, 'restoreExit': rc,
-                          'note': 'the hold stays: recover the board under it (SKILL.md, Recovery)'}))
-        return rc
-    rc = rig(tree, [HIL, 'lock', 'release', s['board']])
+    rc = rig(tree, session_argv(s, 'restore', ['--bundle', RESTORE_BUNDLE, '--build-record', s['restoreRecord'],
+                                               '--release'], []))
     core.write_json(session_path(a.run_id), {**s, 'held': rc != 0, 'closed': rc == 0})
-    print(json.dumps({'runId': a.run_id, 'board': s['board'], 'closed': rc == 0, 'releaseExit': rc}))
+    out = {'runId': a.run_id, 'board': s['board'], 'closed': rc == 0, 'restoreExit': rc}
+    if rc:
+        out['note'] = 'not released: the restore or the release failed (its JSON above); recover under the hold'
+    print(json.dumps(out))
     return rc
 
 

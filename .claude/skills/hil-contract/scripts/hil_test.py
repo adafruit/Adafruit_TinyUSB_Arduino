@@ -4,18 +4,23 @@
   hil_test.py run [-b BOARD]... [-t TEST]... [--record-dir DIR] [--run-dir DIR] [--staged MANIFEST] ROSTER
   hil_test.py commission -b BOARD [--record-dir DIR] ROSTER
   hil_test.py flash -b BOARD --build-record R --sketch S --under-hold REASON [--staged M] ROSTER
-  hil_test.py restore -b BOARD --build-record R --under-hold REASON [--report PATH] [--staged M] ROSTER
+  hil_test.py restore -b BOARD --build-record R --under-hold REASON [--report PATH] [--release] [--staged M] ROSTER
   hil_test.py gdb -b BOARD --build-record R --sketch S --under-hold REASON [--ex CMD]... [--timeout S] [--staged M]
                  ROSTER
   hil_test.py exec -b BOARD --under-hold REASON [--timeout S] [--staged M] ROSTER -- ARGV...
   hil_test.py report RUN_DIR [-b BOARD]...
   hil_test.py lock (hold|release|status) ...        the pinned agentrc hil_lock.py
 
+flash, restore and gdb take --bundle DIR, a record bundle `hil_remote.py session stage` staged, --build-record then
+inside it. restore --release passes only when the hold was released too.
+
 The last stdout line of every command but lock and read-block is JSON. Exits: 0 pass, 1 a board failed or did not
 run (cleaned up or untouched), 2 refused before any hardware access, 4 a cleanup did not finish (board held).
 """
 
 import argparse
+import contextlib
+import fcntl
 import glob
 import hashlib
 import json
@@ -124,8 +129,9 @@ def git_identity():
     return git('rev-parse', 'HEAD').strip(), git('status', '--porcelain', '--untracked-files=all').strip()
 
 
-def admit(record_path, board, roster_path, run_dir, *, manifest=None, experimental_ok=False):
-    """The record's images copied into the run dir once they hash as recorded, or Refused."""
+def admit(record_path, board, roster_path, run_dir, *, manifest=None, experimental_ok=False, base=None):
+    """The record's images (checkout-relative paths, under `base` for a staged bundle) copied into the run dir once
+    they hash as recorded, or Refused."""
     try:
         rec = json.loads(Path(record_path).read_text())
     except (OSError, ValueError) as e:
@@ -157,7 +163,8 @@ def admit(record_path, board, roster_path, run_dir, *, manifest=None, experiment
         dest = Path(run_dir) / 'images' / name
         dest.mkdir(parents=True, exist_ok=True)
         for rel, digest in s['sha256'].items():
-            data = (ROOT / rel).read_bytes() if (ROOT / rel).is_file() else None
+            src = Path(base or ROOT) / rel
+            data = src.read_bytes() if src.is_file() else None
             if data is None or hashlib.sha256(data).hexdigest() != digest:
                 raise Refused(f'{rel} is missing or changed since the record')
             (dest / Path(rel).name).write_bytes(data)
@@ -661,7 +668,26 @@ def held_by(name, reason):
         raise Refused(f'{name} is not held under reason {reason!r} by a live holder (record: {rec})')
 
 
+@contextlib.contextmanager
+def one_session_command(name):
+    """One session command at a time per tree and board: the hold admits every command under its reason, and a
+    command a dropped ssh left running must finish, its pending children recorded, before the next one starts."""
+    d = ROOT / 'build' / 'hil-manual'
+    d.mkdir(parents=True, exist_ok=True)
+    with open(d / f'.{name}.lock', 'a') as f:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise Refused(f'another session command on {name} is still running in {ROOT}')
+        yield
+
+
 def manual(args, op):
+    with one_session_command(args.board):
+        return _manual(args, op)
+
+
+def _manual(args, op):
     """A session command on a board the caller holds: op(board, run_dir, tracker, manifest) -> row. The JSON goes to
     stdout and to result.json in the run dir, which outlives a dropped ssh session."""
     manifest = verify_staged(args.staged) if args.staged else None
@@ -692,9 +718,20 @@ def manual(args, op):
     return code
 
 
+def bundle_root(bundle):
+    """The tree-relative dir a session staged a record bundle into (hil_remote.py), or the checkout."""
+    if not bundle:
+        return ROOT
+    d = (ROOT / bundle).resolve()
+    if not d.is_relative_to(ROOT.resolve()) or not d.is_dir():
+        raise Refused(f'--bundle {bundle} is not a directory inside {ROOT}')
+    return d
+
+
 def admit_sketch(args, sketch, run_dir, manifest, experimental_ok):
-    rec, images = admit(args.build_record, args.board, args.roster, run_dir, manifest=manifest,
-                        experimental_ok=experimental_ok)
+    base = bundle_root(args.bundle)
+    rec, images = admit(base / args.build_record, args.board, args.roster, run_dir, manifest=manifest,
+                        experimental_ok=experimental_ok, base=base)
     if sketch not in images:
         raise Refused(f'{args.build_record} has no sketch {sketch}; it has {sorted(images)}')
     return {'record': str(args.build_record), 'experimental': rec['experimental']}, images[sketch], images
@@ -716,12 +753,24 @@ def op_restore(args):
             if open_receipts:
                 raise Refused(f'children of the failed run are not proven ended: {open_receipts}')
         meta, _, images = admit_sketch(args, RESTORE_SKETCH, run_dir, manifest, False)
-        return {**meta, **restore(args.board, board, images, run_dir, tracker)}
+        row = {**meta, **restore(args.board, board, images, run_dir, tracker)}
+        if args.release and row['pass']:
+            row['released'] = release_hold(args.board)
+            row['pass'] = row['released']['exit'] == 0
+        return row
     return op
+
+
+def release_hold(name):
+    """End the caller's hold once its board is restored; under the session lock, so no command slips in between."""
+    r = subprocess.run([sys.executable, str(A.root / 'skills/hil/scripts/hil_lock.py'), 'release', name],
+                       capture_output=True, text=True, timeout=30)
+    return {'exit': r.returncode, 'output': (r.stdout + r.stderr).strip()[-1000:]}
 
 
 def run_child(argv, timeout, tracker):
     r = tracker.run(argv, timeout=timeout)
+    tracker.check()
     out = _text(r.stdout) + _text(r.stderr)
     return {'pass': r.returncode == 0, 'exit': r.returncode, 'output': out[-4000:]}
 
@@ -858,10 +907,12 @@ def parse(argv):
         m.add_argument('--staged', help='the manifest of a tree hil_remote.py staged (rig side)')
         if name != 'exec':
             m.add_argument('--build-record', required=True)
+            m.add_argument('--bundle', help='a staged record bundle (tree-relative); --build-record is inside it')
         if name in ('flash', 'gdb'):
             m.add_argument('--sketch', required=True)
         if name == 'restore':
             m.add_argument('--report', help="a failed run's report: its children must be proven ended first")
+            m.add_argument('--release', action='store_true', help='release the hold once serial_echo is restored')
         if name in ('gdb', 'exec'):
             m.add_argument('--timeout', type=float, default=60, help=f'seconds, at most {EXEC_MAX}')
         if name == 'gdb':
