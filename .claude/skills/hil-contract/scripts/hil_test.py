@@ -173,9 +173,10 @@ class Tracker:
         os.chmod(run_dir, 0o700)
         os.chmod(self.state_dir, 0o700)
         A.process.trusted_dir(str(self.state_dir))
-        self.receipts, self.log = [], Path(run_dir) / 'hil.log'
+        self.receipts, self.pending, self.unclean, self.log = [], [], '', Path(run_dir) / 'hil.log'
 
     def run(self, argv, timeout, **kw):
+        self.check()
         try:
             r = A.process.run_tracked(argv, timeout=timeout, settle=SETTLE, state_dir=str(self.state_dir), **kw)
         except BaseException as e:
@@ -191,8 +192,9 @@ class Tracker:
             self.receipts.append(receipt)
         if cleanup != 'done':
             self.unclean = f'{Path(str(argv[0])).name}: cleanup {cleanup}'
-
-    unclean = ''
+            # no receipt (the supervisor died): a session nothing can recheck, cleared only by a reviewed recovery
+            self.pending.append({'receipt': receipt if receipt is not None else
+                                 {'unrecheckable': [str(a) for a in argv], 'at': time.time()}})
 
     def check(self):
         if self.unclean:
@@ -400,7 +402,8 @@ def step(name, board, image, test, run_dir, tracker):
         ok, detail = TEST_FUNCS[test](dev, secrets.token_hex(4), deadline, tracker, run_dir)
     except Unclean:
         raise
-    except Exception as e:   # a host-side failure of the check is the test's
+    except Exception as e:   # a host-side failure of the check is the test's, once its children ended
+        tracker.check()
         ok, detail = False, f'{type(e).__name__}: {e}'
     return {'test': test, 'pass': ok, 'detail': detail, 'device': dev['busport'], 'detach': detached,
             'seconds': round(time.monotonic() - started, 1)}
@@ -413,6 +416,27 @@ def restore(name, board, images, run_dir, tracker):
 
 
 # ---- the battery
+
+PENDING_KIND = 'arduino-hil'
+
+
+def pending_problem(name):
+    """'' when no earlier invocation left a child on the board unproven, else why (agentrc PendingSessions)."""
+    try:
+        A.lock.PendingSessions(name, PENDING_KIND).clear(lambda s: A.process.recheck(s['receipt']) == 'done')
+    except A.lock.PendingRefused as e:
+        return f'pending children of an earlier invocation: {e}'
+    return ''
+
+
+def mark_pending(name, tracker):
+    """Record the unproven children so every later invocation refuses until they end; errors as text."""
+    try:
+        A.lock.PendingSessions(name, PENDING_KIND).add(tracker.pending)
+        return ''
+    except Exception as e:
+        return f'pending record not written: {e}'
+
 
 def probe_present(flasher):
     """'' when exactly one probe with the flasher's serial is on this host's bus, else why not."""
@@ -457,6 +481,10 @@ def run_board(name, board, tests, record_path, roster_path, run_root, manifest):
         return row
     started, unclean = time.monotonic(), ''
     try:
+        why = pending_problem(name)
+        if why:
+            row.update(recoveryBlocker=True, detail=why)
+            return row
         try:
             rec, images = admit(record_path, name, roster_path, run_dir, manifest=manifest)
         except Refused as e:
@@ -482,10 +510,9 @@ def run_board(name, board, tests, record_path, roster_path, run_root, manifest):
         unclean = f'{type(e).__name__}: {e}'
         row['cleanup'].update({'pass': False, 'state': 'unknown', 'evidence': unclean})
         row['detail'] = f'aborted: {unclean}'
-        if not isinstance(e, Exception):
-            raise
+        row['interrupted'] = not isinstance(e, Exception)
     finally:
-        row['cleanup']['receipts'] = [str(r) for r in tracker.receipts]
+        row['cleanup']['receipts'] = list(tracker.receipts)
         if row['cleanup']['pass']:
             A.lock.release_board_lock(fh)
         else:
@@ -580,7 +607,10 @@ def cmd_run(args):
             tests = args.test or roster[b].get('arduino', {}).get('tests', [])
             record = Path(args.record_dir) / f'{b}.build.json'
             rows.append(run_board(b, roster[b], tests, record, Path(args.roster), run_root, staged))
-    except KeyboardInterrupt:
+            if rows[-1].pop('interrupted', False):
+                termination = 'aborted'
+                break
+    except KeyboardInterrupt:   # between boards: none is held
         termination = 'aborted'
     code = exit_code(rows) if termination == 'completed' else 4
     body = {'pass': code == 0, 'caveat': '' if termination == 'completed' else 'aborted by a signal',
@@ -591,7 +621,9 @@ def cmd_run(args):
     try:
         out['reportPath'] = str(A.report.publish(run_root, sch, body, meta)[0])
     except A.report.ReportError as e:
-        out['reportPath'], out['reportError'] = None, str(e)
+        recovery = A.report.recover_publish(run_root, sch, attempt, e)
+        out['reportPath'] = str(run_root / 'hil_report.json') if recovery.outcome == 'repaired' else None
+        out['reportError'] = f'{e}; recovery {recovery.outcome}: {recovery.problems}'
     emit(out)
     return code
 
@@ -603,7 +635,7 @@ def cmd_report(args):
     if reading.outcome != 'valid':
         raise Refused(f'report in {args.run_dir}: {reading.outcome}')
     body, meta = reading.body, reading.meta
-    requested = args.board or [r['board'] for r in body['results']]
+    requested = args.board or list(meta['selection'])
     rows = {r['board']: r for r in body['results']}
     verdicts = [{'board': b, 'verdict': verdict(rows[b]), 'detail': rows[b]['detail'], 'evidence': []}
                 for b in requested if b in rows]
@@ -611,7 +643,8 @@ def cmd_report(args):
     results = [dict(rows.get(v['board'], {'board': v['board'], 'ran': None, 'pass': False}), verdict=v['verdict'],
                     verdictDetail=v['detail']) for v in folded['rows']]
     emit({'pass': folded['verdict'] == 'pass', 'results': results, 'caveat': body['caveat'],
-          'wedged': [r['board'] for r in results if r.get('verdict') == 'blocker'],
+          'wedged': [r['board'] for r in results if r.get('ran') and
+                     r.get('cleanup', {}).get('state') in ('pending', 'unknown')],
           'reportPath': str(Path(args.run_dir) / 'hil_report.json')})
     return 0
 
@@ -628,6 +661,9 @@ def manual(args, sketch, experimental_ok, cleanup):
     if args.board not in roster:
         raise Refused(f'{args.board} is not in {args.roster}')
     held_by(args.board, args.under_hold)
+    why = pending_problem(args.board)
+    if why:
+        raise Refused(why)
     run_dir = ROOT / 'build' / 'hil-manual' / f'{args.board}-{time.strftime("%Y%m%d-%H%M%S")}'
     run_dir.mkdir(parents=True, exist_ok=True)
     if getattr(args, 'report', None):
@@ -650,7 +686,8 @@ def manual(args, sketch, experimental_ok, cleanup):
             ok = row['pass']
     except Unclean as e:
         emit({'pass': False, 'board': args.board, 'error': f'a child outlived its operation: {e}',
-              'survivors': [str(r) for r in tracker.receipts], 'note': 'keep the hold: the board needs recovery'})
+              'survivors': tracker.pending, 'markError': mark_pending(args.board, tracker),
+              'note': 'keep the hold: every later invocation refuses until these end (Recovery)'})
         return 4
     emit({'pass': ok, 'board': args.board, 'record': str(args.build_record), 'experimental': rec['experimental'],
           **row, 'survivors': [], 'log': str(tracker.log)})
@@ -682,20 +719,24 @@ def cmd_commission(args):
         fh = A.lock.take_board_lock(args.board, 'hil_test.py commission', protected=True, locks=[args.board])
     except (A.lock.BoardLocked, A.lock.RecoveryBlocked, A.lock.LockUnavailable) as e:
         raise Refused(f'{args.board}: {e}')
-    tracker, out = Tracker(run_dir), {'board': args.board, 'rosterUid': board['uid']}
+    tracker, out, touched = Tracker(run_dir), {'board': args.board, 'rosterUid': board['uid']}, False
     try:
+        why = pending_problem(args.board)
+        if why:
+            raise Refused(why)
         _, images = admit(Path(args.record_dir) / f'{args.board}.build.json', args.board, args.roster, run_dir)
         image = images[RESTORE_SKETCH]
         observed = []
         for action in ('flash', 'reset'):
             before = {d['serial']: d['ino'] for d in scan(image['vidPid'])}
+            touched = True
             if action == 'flash':
                 why = flash_fresh(args.board, board, image, run_dir, tracker)[0]
             else:
                 detach(args.board, board, image['vidPid'], tracker)
                 why = reset(board['flasher'], tracker)
             if why:
-                raise Refused(f'{action}: {why}')
+                raise RuntimeError(f'{action}: {why}')
             time.sleep(ENUM_TIMEOUT / 4)
             deadline, changed = time.monotonic() + ENUM_TIMEOUT, set()
             while time.monotonic() < deadline and not changed:
@@ -704,21 +745,26 @@ def cmd_commission(args):
             observed.append(sorted(changed))
         out['observed'] = observed
         serials = {s for obs in observed for s in obs}
-        if all(len(o) == 1 for o in observed) and len(serials) == 1:
-            out['serial'] = serials.pop()
-            out['matchesRoster'] = out['serial'].lower() == board['uid'].lower()
-        else:
-            out['serial'], out['matchesRoster'] = None, False
-            out['detail'] = 'ambiguous: not exactly one device re-enumerated with one serial both times'
+        if not (all(len(o) == 1 for o in observed) and len(serials) == 1):
+            raise RuntimeError('ambiguous: not exactly one device re-enumerated with one serial both times')
+        out['serial'] = serials.pop()
+        out['matchesRoster'] = out['serial'].lower() == board['uid'].lower()
+        dev = scan(image['vidPid'], out['serial'])[0]
+        ok, out['cleanup'] = test_cdc(dev, secrets.token_hex(4), time.monotonic() + TEST_TIMEOUT, tracker, run_dir)
+        if not ok:
+            raise RuntimeError(f'serial_echo left running does not echo: {out["cleanup"]}')
         A.lock.release_board_lock(fh)
-    except Unclean as e:
-        out['error'] = str(e)
-        out['holder'] = hand_over(fh, args.board, {'cleanup': {'evidence': str(e)}}, tracker)
-        emit(out)
-        return 4
     except Refused:
         A.lock.release_board_lock(fh)
         raise
+    except BaseException as e:   # after hardware access: the board stays held for recovery
+        if not touched:
+            A.lock.release_board_lock(fh)
+            raise
+        out['error'] = f'{type(e).__name__}: {e}'
+        out['holder'] = hand_over(fh, args.board, {'cleanup': {'evidence': out['error']}}, tracker)
+        emit(out)
+        return 4
     emit(out)
     return 0 if out.get('matchesRoster') else 1
 

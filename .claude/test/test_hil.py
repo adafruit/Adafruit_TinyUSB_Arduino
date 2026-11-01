@@ -32,9 +32,27 @@ class FakeLock:
     class LockUnavailable(Exception):
         pass
 
+    class PendingRefused(Exception):
+        pass
+
     def __init__(self):
         self.taken, self.released, self.handed, self.hand_fails = [], [], [], False
-        self.records = {}
+        self.records, self.pending = {}, {}
+        lock = self
+
+        class PendingSessions:
+            def __init__(self, name, kind):
+                self.key = (name, kind)
+
+            def add(self, sessions):
+                lock.pending.setdefault(self.key, []).extend(sessions)
+
+            def clear(self, ended):
+                left = [s for s in lock.pending.get(self.key, []) if not ended(s)]
+                if left:
+                    raise FakeLock.PendingRefused(f'{left} not ended')
+                lock.pending.pop(self.key, None)
+        self.PendingSessions = PendingSessions
 
     def take_board_lock(self, board, reason, protected=False, **extra):
         self.taken.append((board, reason, protected, extra))
@@ -202,7 +220,8 @@ class Battery(Base):
                                                                     'detail': 'ok'})), \
                 mock.patch.object(ht, 'restore', restore or (lambda *a: {'pass': True, 'state': 'serial_echo restored',
                                                                          'evidence': 'ok'})), \
-                mock.patch.object(ht.Tracker, '__init__', lambda s, d: setattr(s, 'receipts', ['r1']) or None):
+                mock.patch.object(ht.Tracker, '__init__', lambda s, d: s.__dict__.update(
+                    receipts=['r1'], pending=[], unclean='', log=Path(d) / 'hil.log')):
             return ht.run_board('metro_m4_express', board, ['cdc_echo'], rec, self.roster, self.dir / 'run', None)
 
     def test_pass_releases_the_protected_lock(self):
@@ -252,6 +271,22 @@ class Battery(Base):
         row = self.run_board(admit=admit)
         self.assertEqual((ht.verdict(row), row['cleanup']['state'], len(self.lock.released)), ('not-run', 'untouched', 1))
 
+    def test_pending_children_of_an_earlier_run_block_the_board(self):
+        self.lock.pending[('metro_m4_express', ht.PENDING_KIND)] = [{'receipt': {'pid': 9}}]
+        ht.A.process.recheck.return_value = 'pending'
+        row = self.run_board()
+        self.assertEqual((ht.verdict(row), row['recoveryBlocker'], len(self.lock.released)), ('blocker', True, 1))
+        ht.A.process.recheck.return_value = 'done'
+        row = self.run_board()
+        self.assertEqual(ht.verdict(row), 'pass')
+
+    def test_interrupt_keeps_the_row_and_its_holder(self):
+        def step(*a):
+            raise KeyboardInterrupt
+        row = self.run_board(step=step)
+        self.assertTrue(row['interrupted'])
+        self.assertEqual(row['cleanup']['holder'], {'token': 'tok123'})
+
     def test_absent_probe_is_not_run_before_the_lock(self):
         row = self.run_board(probe='probe 1 is not on this host\'s bus')
         self.assertEqual((ht.verdict(row), self.lock.taken), ('not-run', []))
@@ -291,6 +326,27 @@ class Probe(Base):
 
 
 class Manual(Base):
+    def test_unclean_manual_flash_marks_the_board_pending(self):
+        rec, root = self.record(experimental=True)
+        self.lock.records['metro_m4_express'] = {'reason': 'mine', 'pid': 1}
+        args = argparse.Namespace(board='metro_m4_express', under_hold='mine', build_record=str(rec),
+                                  roster=str(self.roster), report=None)
+
+        def unclean(*a):
+            t = a[-1]
+            t.pending.append({'receipt': {'pid': 7}})
+            raise ht.Unclean('JLinkExe: cleanup pending')
+        out = io.StringIO()
+        with mock.patch.object(ht, 'ROOT', root), mock.patch.object(ht, 'load_agentrc'), \
+                mock.patch.object(ht, 'flash_only', unclean), contextlib.redirect_stdout(out), \
+                mock.patch.object(ht.Tracker, '__init__', lambda s, d: s.__dict__.update(
+                    receipts=[], pending=[], unclean='', log=Path(d) / 'hil.log')):
+            self.assertEqual(ht.manual(args, 'serial_echo', True, False), 4)
+            ht.A.process.recheck.return_value = 'pending'
+            with self.assertRaisesRegex(ht.Refused, 'pending children'):
+                ht.manual(args, 'serial_echo', True, False)
+        self.assertEqual(self.lock.pending[('metro_m4_express', ht.PENDING_KIND)], [{'receipt': {'pid': 7}}])
+
     def test_foreign_or_missing_hold_refused(self):
         with self.assertRaisesRegex(ht.Refused, 'not held'):
             ht.held_by('metro_m4_express', 'mine')
@@ -339,11 +395,27 @@ class Flash(Base):
 
     def test_tracker_marks_unclean(self):
         t = ht.Tracker.__new__(ht.Tracker)
-        t.receipts, t.unclean = [], ''
-        t._note('pending', 'rcpt', ['openocd'])
+        t.receipts, t.pending, t.unclean = [], [], ''
+        t._note('pending', {'pid': 1}, ['openocd'])
         with self.assertRaises(ht.Unclean):
             t.check()
-        self.assertEqual(t.receipts, ['rcpt'])
+        with self.assertRaises(ht.Unclean):   # nothing more is launched
+            t.run(['JLinkExe'], timeout=1)
+        ht.A.process.run_tracked.assert_not_called()
+        self.assertEqual((t.receipts, t.pending), ([{'pid': 1}], [{'receipt': {'pid': 1}}]))
+        t._note('unknown', None, ['openocd'])
+        self.assertIn('unrecheckable', t.pending[-1]['receipt'])
+
+    def test_failed_check_with_an_unproven_child_is_unclean(self):
+        tracker = mock.Mock()
+        tracker.check.side_effect = ht.Unclean('read-block: cleanup unknown')
+        board = {'uid': 'ABC', 'flasher': {'name': 'jlink'}}
+        with mock.patch.object(ht, 'enumeration_of', return_value=None), \
+                mock.patch.object(ht, 'flash_fresh', return_value=('', '')), \
+                mock.patch.object(ht, 'wait_enumerated', return_value={'busport': '1-1', 'dir': '/x'}), \
+                mock.patch.dict(ht.TEST_FUNCS, {'msc_ramdisk': mock.Mock(side_effect=OSError('boom'))}):
+            with self.assertRaises(ht.Unclean):
+                ht.step('metro_m4_express', board, {'vidPid': '239a:8020'}, 'msc_ramdisk', self.dir, tracker)
 
 
 class Report(Base):
@@ -354,6 +426,22 @@ class Report(Base):
                'cleanup': {'pass': True, 'state': 'serial_echo restored'}, 'detail': ''}
         md = ht.render({'pass': False, 'caveat': '', 'exitCode': 1, 'results': [row]})
         self.assertIn('b cdc_echo: no echo', md)
+
+
+class ReportCommand(Base):
+    def test_requested_boards_come_from_the_recorded_selection(self):
+        ht.A.report.read_document.return_value = argparse.Namespace(
+            outcome='valid', meta={'selection': ['metro_m4_express', 'raspberry_pi_pico'], 'termination': 'aborted'},
+            body={'caveat': 'aborted by a signal', 'results': []})
+        ht.A.report.apply_run_rules.side_effect = lambda sch, req, rows, term, cav: {
+            'verdict': 'blocker', 'rows': [{'board': b, 'verdict': 'blocker', 'detail': 'missing'} for b in req]}
+        out = io.StringIO()
+        with mock.patch.object(ht, 'load_agentrc'), contextlib.redirect_stdout(out):
+            ht.cmd_report(argparse.Namespace(run_dir=str(self.dir), board=None))
+        got = json.loads(out.getvalue())
+        self.assertEqual(ht.A.report.apply_run_rules.call_args[0][1], ['metro_m4_express', 'raspberry_pi_pico'])
+        self.assertEqual((got['pass'], got['wedged'], [r['verdict'] for r in got['results']]),
+                         (False, [], ['blocker', 'blocker']))
 
 
 class Cli(unittest.TestCase):
