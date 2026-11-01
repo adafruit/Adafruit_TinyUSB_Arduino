@@ -33,6 +33,7 @@ repos:
   - id: agent-contract-tests
     name: agent contract tests
     entry: sh -c 'python3 .claude/skills/hil-contract/scripts/agentrc_pin.py fetch >/dev/null && python3 -m unittest discover -s .claude/test -p "test_*.py"'
-    language: system
+    language: python
+    additional_dependencies: [pyserial==3.5]
     pass_filenames: false
     files: ^(\.claude/|test/hil/)
