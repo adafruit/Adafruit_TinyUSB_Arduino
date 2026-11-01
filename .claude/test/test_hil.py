@@ -86,7 +86,7 @@ class Base(unittest.TestCase):
                'roster': {'sha256': hashlib.sha256(self.roster.read_bytes()).hexdigest()},
                'sketches': {'serial_echo': {'example': 'examples/CDC/serial_echo', 'vidPid': '239a:8020',
                                             'elf': 'build/hil/metro_m4_express/serial_echo/serial_echo.ino.elf',
-                                            'hex': None, 'sha256': {
+                                            'hex': None, 'image': 'hex', 'sha256': {
                                                 'build/hil/metro_m4_express/serial_echo/serial_echo.ino.elf':
                                                     hashlib.sha256(b'elf').hexdigest()}}}}
         rec.update(over)
@@ -156,6 +156,14 @@ class Admission(Base):
             rec, root = self.record(**over)
             with self.assertRaisesRegex(ht.Refused, why):
                 self.admit(rec, root)
+
+    def test_image_must_match_the_flasher(self):
+        rec, root = self.record()
+        data = json.loads(rec.read_text())
+        data['sketches']['serial_echo']['image'] = 'elf'
+        rec.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ht.Refused, 'flashes the hex'):
+            self.admit(rec, root)
 
     def test_dirty_checkout_refused(self):
         rec, root = self.record()

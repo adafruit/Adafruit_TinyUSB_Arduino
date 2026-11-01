@@ -388,18 +388,46 @@ def run_tests(names):
 
 # ---- HIL record
 
-def elf_load_spans(path):
-    """[(start, end)] of the ELF32's PT_LOAD segments with file bytes, by physical (load) address."""
+def _elf32(path):
     data = Path(path).read_bytes()
     if data[:4] != b'\x7fELF' or data[4] != 1 or data[5] != 1:
         raise ValueError(f'{path}: not a little-endian ELF32')
+    return data
+
+
+def _segments(data):
+    """(p_offset, p_paddr, p_filesz) of every PT_LOAD with file bytes."""
     phoff, = struct.unpack_from('<I', data, 28)
     phentsize, phnum = struct.unpack_from('<HH', data, 42)
-    spans = []
+    out = []
     for i in range(phnum):
-        p_type, _, _, p_paddr, p_filesz = struct.unpack_from('<IIIII', data, phoff + i * phentsize)
+        p_type, p_offset, _, p_paddr, p_filesz = struct.unpack_from('<IIIII', data, phoff + i * phentsize)
         if p_type == 1 and p_filesz:
-            spans.append((p_paddr, p_paddr + p_filesz))
+            out.append((p_offset, p_paddr, p_filesz))
+    return out
+
+
+def elf_load_spans(path):
+    """[(start, end)] the ELF's PT_LOAD segments write, by physical (load) address: what an ELF flash writes, ELF
+    headers and padding included when a segment starts below the first section (the SAMD core's does, at 0)."""
+    return merge(sorted((pa, pa + n) for _, pa, n in _segments(_elf32(path))))
+
+
+def elf_section_spans(path):
+    """[(start, end)] of the allocated sections with file bytes, at their load addresses: what objcopy puts in a
+    HEX or BIN."""
+    data = _elf32(path)
+    segments = _segments(data)
+    shoff, = struct.unpack_from('<I', data, 32)
+    shentsize, shnum = struct.unpack_from('<HH', data, 46)
+    spans = []
+    for i in range(shnum):
+        _, sh_type, sh_flags, _, sh_offset, sh_size = struct.unpack_from('<IIIIII', data, shoff + i * shentsize)
+        if sh_flags & 0x2 and sh_type != 8 and sh_size:   # SHF_ALLOC, not SHT_NOBITS
+            for off, pa, n in segments:
+                if off <= sh_offset and sh_offset + sh_size <= off + n:
+                    spans.append((pa + sh_offset - off, pa + sh_offset - off + sh_size))
+                    break
     return merge(sorted(spans))
 
 
@@ -459,19 +487,24 @@ def make_record(args, board, rows, before, diff, roster_path):
                                                                                           'status')}:
         return None, 'the source changed while building'
     lo, hi = BOARDS[board]['span']
+    flasher = next(b for b in json.loads(Path(roster_path).read_text())['boards'] if b['name'] == board)['flasher']['name']
+    image = 'elf' if flasher == 'openocd' else 'hex'   # what hil_test.py flashes for this probe
     sketches = {}
     for row in rows:
         build_dir = ROOT / row['buildDir']
         elf = next(build_dir.glob('*.ino.elf'))
-        spans = elf_load_spans(elf)
-        if not spans or any(s < lo or e > hi for s, e in spans):
-            return None, f'{row["example"]}: ELF loads {[(hex(s), hex(e)) for s, e in spans]} outside the ' \
-                         f'board span [{lo:#x}, {hi:#x})'
         hexfile = next(build_dir.glob('*.ino.hex'), None)
-        if hexfile:
-            runs = [(s, s + len(b)) for s, b in hex_runs(hexfile)]
-            if merge(runs) != spans:
-                return None, f'{row["example"]}: HEX runs {runs} differ from the ELF load spans {spans}'
+        if image == 'elf':
+            spans = elf_load_spans(elf)
+        elif not hexfile:
+            return None, f'{row["example"]}: a {flasher} board flashes the HEX, and this build made none'
+        else:
+            spans = merge([(s, s + len(b)) for s, b in hex_runs(hexfile)])
+            if spans != elf_section_spans(elf):
+                return None, f'{row["example"]}: HEX runs {spans} differ from the ELF sections {elf_section_spans(elf)}'
+        if not spans or any(s < lo or e > hi for s, e in spans):
+            return None, f'{row["example"]}: the {image.upper()} writes {[(hex(s), hex(e)) for s, e in spans]} ' \
+                         f'outside the board span [{lo:#x}, {hi:#x})'
         if not args.experimental:
             bad = [h for h in row['foreignHeaders'] if not h['matches']]
             if bad:
@@ -480,7 +513,7 @@ def make_record(args, board, rows, before, diff, roster_path):
         files = [elf] + ([hexfile] if hexfile else [])
         sketches[Path(row['example']).name] = {
             'example': row['example'], 'buildDir': row['buildDir'], 'elf': rel(elf),
-            'hex': rel(hexfile) if hexfile else None, 'loadSpans': [[s, e] for s, e in spans],
+            'hex': rel(hexfile) if hexfile else None, 'image': image, 'loadSpans': [[s, e] for s, e in spans],
             'vidPid': row['vidPid'], 'foreignHeaders': row['foreignHeaders'],
             'sha256': {rel(f): sha256(f) for f in files},
         }

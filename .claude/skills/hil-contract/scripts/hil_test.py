@@ -133,8 +133,13 @@ def admit(record_path, board, roster_path, run_dir, *, manifest=None, experiment
             raise Refused(f'the checkout has changes since the record: {status.splitlines()[:5]}')
     if check_build.sha256(roster_path) != rec['roster']['sha256']:
         raise Refused(f'{roster_path} changed since the record was built: rebuild it')
+    flasher = load_roster(roster_path)[board]['flasher']['name']
+    want = 'elf' if flasher == 'openocd' else 'hex'
     images = {}
     for name, s in rec['sketches'].items():
+        if s.get('image') != want:
+            raise Refused(f'{record_path}: {name} records a {s.get("image")} image, a {flasher} board flashes the '
+                          f'{want}: rebuild against this roster')
         dest = Path(run_dir) / 'images' / name
         dest.mkdir(parents=True, exist_ok=True)
         for rel, digest in s['sha256'].items():

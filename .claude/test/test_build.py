@@ -30,15 +30,26 @@ def run_main(argv):
     return code, json.loads(out.getvalue().strip().splitlines()[-1])
 
 
-def elf32(segments):
-    """A minimal little-endian ELF32 with program headers (type, paddr, filesz)."""
+def elf32(segments, sections=None):
+    """A minimal little-endian ELF32: PT_LOAD/other segments (type, paddr, filesz), each at file offset
+    0x1000 * (index + 1), and allocated PROGBITS sections (segment index, offset in it, size); by default one
+    section spanning each segment."""
+    if sections is None:
+        sections = [(i, 0, n) for i, (t, _, n) in enumerate(segments) if t == 1 and n]
     phoff, n = 52, len(segments)
+    offsets = [0x1000 * (i + 1) for i in range(n)]
+    shoff = 0x1000 * (n + 1)
     head = bytearray(52)
     head[:6] = b'\x7fELF\x01\x01'
-    struct.pack_into('<I', head, 28, phoff)
-    struct.pack_into('<HH', head, 42, 32, n)
-    ph = b''.join(struct.pack('<IIIIIIII', t, 0, paddr, paddr, filesz, filesz, 5, 4) for t, paddr, filesz in segments)
-    return bytes(head) + ph
+    struct.pack_into('<II', head, 28, phoff, shoff)
+    struct.pack_into('<HHHH', head, 42, 32, n, 40, len(sections))
+    ph = b''.join(struct.pack('<IIIIIIII', t, off, paddr, paddr, filesz, filesz, 5, 4)
+                  for (t, paddr, filesz), off in zip(segments, offsets))
+    body = bytearray(bytes(head) + ph)
+    body += bytes(shoff - len(body))
+    for seg, delta, size in sections:
+        body += struct.pack('<IIIIIIIIII', 0, 1, 0x2, 0, offsets[seg] + delta, size, 0, 0, 4, 0)
+    return bytes(body)
 
 
 def ihex(start, data):
@@ -149,6 +160,8 @@ class Images(unittest.TestCase):
             p = Path(d) / 'a.elf'
             p.write_bytes(elf32([(1, 0x4000, 0x100), (1, 0x4100, 0x10), (1, 0x20000000, 0), (6, 0, 0x40)]))
             self.assertEqual(cb.elf_load_spans(p), [(0x4000, 0x4110)])
+            p.write_bytes(elf32([(1, 0x0, 0x4020)], [(0, 0x4000, 0x20)]))
+            self.assertEqual((cb.elf_load_spans(p), cb.elf_section_spans(p)), ([(0, 0x4020)], [(0x4000, 0x4020)]))
 
     def test_hex_runs(self):
         with tempfile.TemporaryDirectory() as d:
@@ -229,30 +242,36 @@ class Record(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        roster = self.root / 'test/hil/ci.json'
-        roster.parent.mkdir(parents=True)
-        roster.write_text(json.dumps({'boards': [{'name': 'metro_m4_express'}]}))
-        self.roster = roster
+        self.roster = self.root / 'test/hil/ci.json'
+        self.roster.parent.mkdir(parents=True)
+        self.flasher('jlink')
         self.patches = [mock.patch.object(cb, 'ROOT', self.root), mock.patch.object(cb, 'tool_version',
                                                                                     return_value='1.5.1'),
                         mock.patch.object(cb, 'platform_git', return_value=None)]
         for p in self.patches:
             p.start()
 
+    def flasher(self, name):
+        self.roster.write_text(json.dumps({'boards': [{'name': 'metro_m4_express', 'flasher': {'name': name}}]}))
+
     def tearDown(self):
         for p in self.patches:
             p.stop()
         self.tmp.cleanup()
 
-    def row(self, spans, hexdata=None, headers=()):
+    def row(self, segments, hexdata=None, headers=(), sections=None):
         b = self.root / 'build/hil/metro_m4_express/serial_echo'
         b.mkdir(parents=True, exist_ok=True)
-        (b / 'serial_echo.ino.elf').write_bytes(elf32([(1, s, n) for s, n in spans]))
+        (b / 'serial_echo.ino.elf').write_bytes(elf32([(1, s, n) for s, n in segments], sections))
         if hexdata:
             (b / 'serial_echo.ino.hex').write_text(ihex(*hexdata))
         return {'example': 'examples/CDC/serial_echo', 'buildDir': 'build/hil/metro_m4_express/serial_echo',
                 'vidPid': '239a:8020', 'foreignHeaders': list(headers),
                 'platform': {'id': 'adafruit:samd', 'version': '1.7.13', 'install_dir': '/x'}}
+
+    def samd_row(self, **kw):
+        """The SAMD core's layout: one segment from 0 (ELF headers, padding) holding .text at 0x4000."""
+        return self.row([(0x0, 0x4020)], (0x4000, bytes(32)), sections=[(0, 0x4000, 0x20)], **kw)
 
     def record(self, row, experimental=False):
         args = mock.Mock(experimental=experimental, build_property=[], record=str(self.root / 'build/r.json'))
@@ -260,31 +279,37 @@ class Record(unittest.TestCase):
         with mock.patch.object(cb, 'source_identity', return_value=(ident, '')):
             return cb.make_record(args, 'metro_m4_express', [row], ident, '', self.roster)
 
-    def test_good_record(self):
-        rec, err = self.record(self.row([(0x4000, 32)], (0x4000, bytes(32))))
+    def test_jlink_board_records_the_hex(self):
+        rec, err = self.record(self.samd_row())
         self.assertIsNone(err)
         s = rec['sketches']['serial_echo']
-        self.assertEqual((s['loadSpans'], s['hex']), ([[0x4000, 0x4020]], 'build/hil/metro_m4_express/serial_echo/'
-                                                                             'serial_echo.ino.hex'))
+        self.assertEqual((s['image'], s['loadSpans']), ('hex', [[0x4000, 0x4020]]))
         self.assertEqual(rec['roster']['path'], 'test/hil/ci.json')
 
+    def test_elf_flash_over_the_bootloader_refused(self):
+        self.flasher('openocd')
+        _, err = self.record(self.samd_row())
+        self.assertIn('the ELF writes', err)
+        self.assertIn('outside the board span', err)
+
     def test_any_segment_out_of_span_refused(self):
+        self.flasher('openocd')
         _, err = self.record(self.row([(0x4000, 0x80000), (0x5000, 0x20)]))
         self.assertIn('outside the board span', err)
 
-    def test_image_over_the_bootloader_refused(self):
-        _, err = self.record(self.row([(0x0, 32)]))
-        self.assertIn('outside the board span', err)
-
-    def test_hex_disagreeing_with_elf_refused(self):
+    def test_hex_disagreeing_with_elf_sections_refused(self):
         _, err = self.record(self.row([(0x4000, 32)], (0x4000, bytes(16))))
-        self.assertIn('differ from the ELF', err)
+        self.assertIn('differ from the ELF sections', err)
+
+    def test_jlink_board_without_hex_refused(self):
+        _, err = self.record(self.row([(0x4000, 32)]))
+        self.assertIn('flashes the HEX', err)
 
     def test_drifted_core_header_refused_unless_experimental(self):
         hdr = [{'path': '/core/x.h', 'matches': False}]
-        _, err = self.record(self.row([(0x4000, 32)], headers=hdr))
+        _, err = self.record(self.samd_row(headers=hdr))
         self.assertIn('differ from this checkout', err)
-        rec, err = self.record(self.row([(0x4000, 32)], headers=hdr), experimental=True)
+        rec, err = self.record(self.samd_row(headers=hdr), experimental=True)
         self.assertIsNone(err)
         self.assertTrue(rec['experimental'])
         self.assertTrue((self.root / 'build/r.patch').exists())
@@ -293,7 +318,7 @@ class Record(unittest.TestCase):
         args = mock.Mock(experimental=True, build_property=[], record=str(self.root / 'build/new/x.json'))
         ident = {'head': 'abc', 'dirty': True, 'diffSha256': 'd', 'status': ' M a'}
         with mock.patch.object(cb, 'source_identity', return_value=(ident, 'diff')):
-            rec, err = cb.make_record(args, 'metro_m4_express', [self.row([(0x4000, 32)])], ident, 'diff', self.roster)
+            rec, err = cb.make_record(args, 'metro_m4_express', [self.samd_row()], ident, 'diff', self.roster)
         self.assertIsNone(err)
         self.assertEqual((self.root / 'build/new/x.patch').read_text(), 'diff')
 
@@ -302,7 +327,7 @@ class Record(unittest.TestCase):
         before = {'head': 'abc', 'dirty': False, 'diffSha256': 'd', 'status': ''}
         after = dict(before, status=' M src/tusb.c\n', diffSha256='e')
         with mock.patch.object(cb, 'source_identity', return_value=(after, '')):
-            _, err = cb.make_record(args, 'metro_m4_express', [self.row([(0x4000, 32)])], before, '', self.roster)
+            _, err = cb.make_record(args, 'metro_m4_express', [self.samd_row()], before, '', self.roster)
         self.assertIn('changed while building', err)
 
 
