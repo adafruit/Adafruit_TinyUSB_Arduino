@@ -327,6 +327,12 @@ class Probe(Base):
 
 class Manual(Base):
     def test_unclean_manual_flash_marks_the_board_pending(self):
+        for exc in (ht.Unclean('JLinkExe: cleanup pending'), RuntimeError('boom'), KeyboardInterrupt()):
+            with self.subTest(exc=type(exc).__name__):
+                self.lock.pending.clear()
+                self.check_marks_pending(exc)
+
+    def check_marks_pending(self, exc):
         rec, root = self.record(experimental=True)
         self.lock.records['metro_m4_express'] = {'reason': 'mine', 'pid': 1}
         args = argparse.Namespace(board='metro_m4_express', under_hold='mine', build_record=str(rec),
@@ -335,7 +341,7 @@ class Manual(Base):
         def unclean(*a):
             t = a[-1]
             t.pending.append({'receipt': {'pid': 7}})
-            raise ht.Unclean('JLinkExe: cleanup pending')
+            raise exc
         out = io.StringIO()
         with mock.patch.object(ht, 'ROOT', root), mock.patch.object(ht, 'load_agentrc'), \
                 mock.patch.object(ht, 'flash_only', unclean), contextlib.redirect_stdout(out), \
@@ -345,6 +351,7 @@ class Manual(Base):
             ht.A.process.recheck.return_value = 'pending'
             with self.assertRaisesRegex(ht.Refused, 'pending children'):
                 ht.manual(args, 'serial_echo', True, False)
+            ht.A.process.recheck.return_value = 'done'
         self.assertEqual(self.lock.pending[('metro_m4_express', ht.PENDING_KIND)], [{'receipt': {'pid': 7}}])
 
     def test_foreign_or_missing_hold_refused(self):

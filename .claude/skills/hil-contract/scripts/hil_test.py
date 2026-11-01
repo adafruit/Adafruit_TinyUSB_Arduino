@@ -684,8 +684,10 @@ def manual(args, sketch, experimental_ok, cleanup):
         else:
             row = flash_only(args.board, roster[args.board], images[sketch], run_dir, tracker)
             ok = row['pass']
-    except Unclean as e:
-        emit({'pass': False, 'board': args.board, 'error': f'a child outlived its operation: {e}',
+    except BaseException as e:   # an interrupt or crash can leave a child as unproven as Unclean does
+        if not tracker.pending and not isinstance(e, Unclean):
+            raise
+        emit({'pass': False, 'board': args.board, 'error': f'a child outlived its operation: {type(e).__name__}: {e}',
               'survivors': tracker.pending, 'markError': mark_pending(args.board, tracker),
               'note': 'keep the hold: every later invocation refuses until these end (Recovery)'})
         return 4
