@@ -72,7 +72,12 @@ def fetch():
         if p.returncode:
             shutil.rmtree(tmp, ignore_errors=True)
             raise PinError(f'git {" ".join(args)}: {p.stderr.strip()}')
-    tmp.rename(dest)
+    try:
+        tmp.rename(dest)
+    except OSError as e:   # a concurrent first fetch renamed its checkout in first: checked below like ours
+        shutil.rmtree(tmp, ignore_errors=True)
+        if not dest.exists():
+            raise PinError(f'{tmp} -> {dest}: {e}')
     why = problem(dest, commit)
     if why:
         raise PinError(why)

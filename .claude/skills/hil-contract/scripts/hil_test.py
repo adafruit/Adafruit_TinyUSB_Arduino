@@ -361,7 +361,11 @@ def test_cdc(dev, nonce, deadline, tracker, run_dir):
     with serial.Serial(tty, 115200, timeout=0.2) as port:
         port.reset_input_buffer()
         for p in payloads:
-            port.write(p)
+            port.write_timeout = max(0.1, deadline - time.monotonic())   # a stalled OUT must not outlast the test
+            try:
+                port.write(p)
+            except serial.SerialTimeoutException:
+                return False, f'{tty}: write of {p!r} timed out'
             got = b''
             while len(got) < len(p) and time.monotonic() < deadline:
                 got += port.read(len(p) - len(got))
@@ -455,10 +459,15 @@ def restore(name, board, images, run_dir, tracker):
 PENDING_KIND = 'arduino-hil'
 
 
+def proven_ended(receipt):
+    """A run_tracked receipt that rechecks done; an unrecheckable entry (Tracker._note) never is."""
+    return 'unrecheckable' not in receipt and A.process.recheck(receipt) == 'done'
+
+
 def pending_problem(name):
     """'' when no earlier invocation left a child on the board unproven, else why (agentrc PendingSessions)."""
     try:
-        A.lock.PendingSessions(name, PENDING_KIND).clear(lambda s: A.process.recheck(s['receipt']) == 'done')
+        A.lock.PendingSessions(name, PENDING_KIND).clear(lambda s: proven_ended(s['receipt']))
     except A.lock.PendingRefused as e:
         return f'pending children of an earlier invocation: {e}'
     return ''
@@ -547,6 +556,8 @@ def run_board(name, board, tests, record_path, roster_path, run_root, manifest):
         row['interrupted'] = not isinstance(e, Exception)
     finally:
         row['cleanup']['receipts'] = list(tracker.receipts)
+        if tracker.pending:   # unrecheckable ones included: every later invocation refuses until a reviewed clear
+            row['cleanup'].update(pending=list(tracker.pending), markError=mark_pending(name, tracker))
         if row['cleanup']['pass']:
             A.lock.release_board_lock(fh)
         else:
@@ -766,8 +777,10 @@ def op_flash(args, board, run_dir, tracker, manifest):
 def op_restore(args, board, run_dir, tracker, manifest):
     if args.report:
         failed = json.loads(Path(args.report).read_text())
-        open_receipts = [r for row in failed['results'] if row['board'] == args.board
-                         for r in row['cleanup'].get('receipts', []) if A.process.recheck(r) != 'done']
+        cleanups = [row['cleanup'] for row in failed['results'] if row['board'] == args.board]
+        receipts = [r for c in cleanups for r in c.get('receipts', [])]
+        receipts += [p['receipt'] for c in cleanups for p in c.get('pending', []) if p['receipt'] not in receipts]
+        open_receipts = [r for r in receipts if not proven_ended(r)]
         if open_receipts:
             raise Refused(f'children of the failed run are not proven ended: {open_receipts}')
     meta, _, images = admit_sketch(args, RESTORE_SKETCH, run_dir, manifest, False)

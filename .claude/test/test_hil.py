@@ -248,6 +248,20 @@ class Battery(Base):
         self.assertEqual(self.lock.released, [])
         self.assertEqual(ht.exit_code([row]), 4)
 
+    def test_unrecheckable_child_is_recorded_pending_and_reported(self):
+        lost = {'receipt': {'unrecheckable': ['JLinkExe'], 'at': 1.0}}
+
+        def step(*a):
+            a[-1].pending.append(lost)
+            raise ht.Unclean('JLinkExe: cleanup unknown')
+        row = self.run_board(step=step)
+        self.assertEqual(self.lock.pending[('metro_m4_express', ht.PENDING_KIND)], [lost])
+        self.assertEqual((row['cleanup']['pending'], row['cleanup']['markError']), ([lost], ''))
+        self.assertEqual((ht.verdict(row), row['cleanup']['holder']), ('blocker', {'token': 'tok123'}))
+        row = self.run_board()   # a later run refuses until a reviewed clear
+        self.assertEqual((ht.verdict(row), row['recoveryBlocker'], row['ran']), ('blocker', True, False))
+        ht.A.process.recheck.assert_not_called()
+
     def test_failed_restore_keeps_the_board(self):
         row = self.run_board(restore=lambda *a: {'pass': False, 'state': 'unknown', 'evidence': 'no echo'})
         self.assertEqual((ht.verdict(row), row['cleanup']['holder']), ('blocker', {'token': 'tok123'}))
@@ -412,6 +426,18 @@ class Manual(Base):
             with self.assertRaisesRegex(ht.Refused, 'not a directory inside'):
                 ht.admit_sketch(args, 'serial_echo', self.dir / 'run', None, False)
 
+    def test_restore_refuses_an_unrecheckable_child_of_the_report(self):
+        rec, root = self.record()
+        report = self.dir / 'hil_report.json'
+        report.write_text(json.dumps({'results': [{'board': 'metro_m4_express', 'cleanup': {
+            'receipts': [], 'pending': [{'receipt': {'unrecheckable': ['JLinkExe'], 'at': 1.0}}]}}]}))
+        args = self.held(root, build_record=str(rec), report=str(report), release=False)
+        with mock.patch.object(ht, 'ROOT', root), mock.patch.object(ht, 'git_identity', return_value=('abc', '')), \
+                mock.patch.object(ht, 'restore', return_value={'pass': True}) as restore:
+            with self.assertRaisesRegex(ht.Refused, 'unrecheckable'):
+                ht.op_restore(args, None, self.dir / 'run', None, None)
+        restore.assert_not_called()
+
     def test_restore_release_passes_only_when_the_hold_ends(self):
         rec, root = self.record()
         args = self.held(root, build_record=str(rec), report=None, release=True)
@@ -496,6 +522,37 @@ class Flash(Base):
         metro = {'uid': 'ABC', 'flasher': {'name': 'jlink'}}
         self.assertEqual(ht.detach('metro_m4_express', metro, '239a:8020', mock.Mock()), '')
         ht.A.flash.run_openocd_commands.assert_not_called()
+
+    def test_cdc_write_is_bounded_by_the_test_deadline(self):
+        import serial
+        seen = []
+
+        class Port:
+            write_timeout = None
+
+            def __init__(self, *a, **k):
+                self.write_timeout = k.get('write_timeout')
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def reset_input_buffer(self):
+                pass
+
+            def write(self, data):
+                if self.write_timeout is None:
+                    raise AssertionError('an unbounded write blocks past the deadline')
+                seen.append(self.write_timeout)
+                raise serial.SerialTimeoutException('Write timeout')
+        deadline = ht.time.monotonic() + 5
+        with mock.patch.object(ht, 'node', return_value='/dev/ttyACM9'), mock.patch.object(serial, 'Serial', Port):
+            ok, detail = ht.test_cdc({}, 'ab', deadline, None, self.dir)
+        self.assertFalse(ok)
+        self.assertIn('timed out', detail)
+        self.assertTrue(0 < seen[0] <= 5)
 
     def test_tracker_marks_unclean(self):
         t = ht.Tracker.__new__(ht.Tracker)

@@ -195,6 +195,8 @@ def select(paths, roster=None, only_examples=None):
             if roster:
                 hil_boards.update(b for b in roster if BOARDS[b]['family'] in families)
         elif effect == 'example':
+            if not any(eligible(b, detail) for b in BOARDS):
+                uncovered.append({'path': path, 'reason': 'sketch eligible on no board this contract builds'})
             for b in BOARDS:
                 add(b, [detail])
             if roster and detail in HIL_SKETCHES:
@@ -235,10 +237,12 @@ def changed_paths(args):
         out = []
         for s in args.scope:
             p = (ROOT / s).resolve()
+            if p != ROOT and ROOT not in p.parents:
+                fail(f'--scope {s} is outside this checkout')
             if p.is_dir():
                 out += [rel(f) for f in p.rglob('*') if f.is_file() and '.git' not in f.parts]
             else:
-                out.append(Path(s).as_posix())
+                out.append(rel(p))
         return sorted(set(out))
     if args.diff_file:
         return sorted({line.strip() for line in Path(args.diff_file).read_text().splitlines() if line.strip()})

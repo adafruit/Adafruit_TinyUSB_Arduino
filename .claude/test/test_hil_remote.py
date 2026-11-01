@@ -211,5 +211,58 @@ class Session(Checkout):
             self.main('session', 'stage', 's1', str(rec))
 
 
+
+class PinFetch(unittest.TestCase):
+    """agentrc_pin.fetch against a local repository standing in for the pinned agentrc."""
+
+    def setUp(self):
+        self.stack = contextlib.ExitStack()
+        self.tmp = Path(self.stack.enter_context(tempfile.TemporaryDirectory()))
+        self.stack.enter_context(mock.patch.dict(os.environ, {
+            **{k: v for k, v in os.environ.items() if not k.startswith('GIT_')}, 'XDG_CACHE_HOME': str(self.tmp)},
+            clear=True))
+        repo = self.tmp / 'upstream'
+        repo.mkdir()
+        git(repo, 'init', '-q')
+        (repo / 'f').write_text('x')
+        git(repo, 'add', '-A')
+        git(repo, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'pin')
+        self.commit = subprocess.run(['git', '-C', str(repo), 'rev-parse', 'HEAD'], capture_output=True,
+                                     text=True).stdout.strip()
+        pin = hr.agentrc_pin
+        self.stack.enter_context(mock.patch.object(pin, 'pin', lambda: (str(repo), self.commit)))
+        self.dest = pin.cache_dir(self.commit)
+
+    def tearDown(self):
+        self.stack.close()
+
+    def race(self, winner):
+        """fetch() with `winner` put at the cache dir by a concurrent fetch while this one checks out."""
+        pin, real = hr.agentrc_pin, hr.agentrc_pin._git
+
+        def git_then_win(root, *args):
+            p = real(root, *args)
+            if args[0] == 'checkout':
+                winner()
+            return p
+        with mock.patch.object(pin, '_git', git_then_win):
+            return pin.fetch()
+
+    def test_a_concurrent_first_fetch_reuses_the_winner(self):
+        pin = hr.agentrc_pin
+        won = self.tmp / 'won'
+        shutil.copytree(pin.fetch(), won, symlinks=True)
+        shutil.rmtree(self.dest)
+        self.assertEqual(self.race(lambda: shutil.copytree(won, self.dest, symlinks=True)), self.dest)
+        self.assertEqual(pin.problem(self.dest, self.commit), '')
+        self.assertEqual([p.name for p in self.dest.parent.iterdir()], [self.dest.name])
+
+    def test_a_bad_winner_is_refused(self):
+        def bad():
+            self.dest.mkdir(parents=True)
+            (self.dest / 'junk').write_text('x')
+        with self.assertRaisesRegex(hr.agentrc_pin.PinError, 'not a git checkout'):
+            self.race(bad)
+
 if __name__ == '__main__':
     unittest.main()

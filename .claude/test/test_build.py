@@ -135,6 +135,23 @@ class Selection(unittest.TestCase):
         sel = cb.select(['examples/MassStorage/msc_internal_flash_samd/msc_internal_flash_samd.ino'])
         self.assertEqual(set(sel['builds']), {'metro_m0_tinyusb'})    # .metro_m0_tinyusb.test.only
 
+    def test_example_eligible_on_no_board_is_uncovered(self):
+        sketch = 'examples/MassStorage/msc_esp32_file_browser'    # .funhouse/.magtag/.metroesp32s2.test.only
+        self.assertFalse(any(cb.eligible(b, sketch) for b in cb.BOARDS))
+        path = f'{sketch}/msc_esp32_file_browser.ino'
+        sel = cb.select([path])
+        self.assertEqual(sel['builds'], {})
+        self.assertEqual([u['path'] for u in sel['uncovered']], [path])
+
+    def test_scope_file_is_checkout_relative(self):
+        def scope(s):
+            return cb.changed_paths(cb.parse(['--select-only', '--scope', s]))
+        self.assertEqual(scope(str(ROOT / 'src/tusb.c')), ['src/tusb.c'])
+        self.assertEqual(scope('./src/tusb.c'), ['src/tusb.c'])
+        code, out = run_main(['--select-only', '--scope', '/'])
+        self.assertEqual(code, 2)
+        self.assertIn('outside this checkout', out['error'])
+
     def test_skip_txt_lines(self):
         self.assertFalse(cb.eligible('CH32V20x_EVT', 'examples/WebUSB/webusb_rgb'))
         self.assertTrue(cb.eligible('metro_m4_express', 'examples/WebUSB/webusb_rgb'))
