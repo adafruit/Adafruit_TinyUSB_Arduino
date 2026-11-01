@@ -128,7 +128,8 @@ python3 $H/hil_remote.py session close <id>                         # restore se
   lock-wait budget, retry `session open` with a new run id; never wait on a recovery blocker.
 - Each command and child is bounded (`exec`/`gdb` `--timeout` at most 600 s) and runs through agentrc's
   `run_tracked`.
-- One session command runs at a time per tree and board.
+- One session command runs at a time per tree and board. It ignores SIGHUP; SIGTERM ends it as SIGINT does, its
+  child ended or recorded pending.
 - Each command's JSON is the last stdout line and `result.json` in its `build/hil-manual/<board>-<cmd>-<time>/`.
 - On a dev PC the same commands are `hil_test.py flash|gdb|exec|restore -b B --under-hold <reason> ... ROSTER`, under
   `hil_test.py lock hold B --reason <reason>`.

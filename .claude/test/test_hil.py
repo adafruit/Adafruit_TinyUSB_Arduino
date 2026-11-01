@@ -9,6 +9,7 @@ import io
 import json
 import re
 import shutil
+import signal
 import sys
 import tempfile
 import unittest
@@ -457,6 +458,16 @@ class Manual(Base):
             self.assertEqual(ht.main(['exec', '-b', 'b', '--under-hold', 'r', '--timeout', '601', 'ci.json', 'true']),
                              2)
         self.assertIn('--timeout', out.getvalue())
+
+    def test_sigterm_unwinds_a_session_command_as_an_interrupt(self):
+        old = {s: signal.getsignal(s) for s in (signal.SIGHUP, signal.SIGTERM)}
+        self.addCleanup(lambda: [signal.signal(s, h) for s, h in old.items()])
+
+        def manual(args):   # SIG_DFL would end the harness past _manual's pending bookkeeping
+            self.assertTrue(callable(signal.getsignal(signal.SIGTERM)))
+            signal.raise_signal(signal.SIGTERM)
+        with mock.patch.object(ht, 'manual', manual), self.assertRaises(KeyboardInterrupt):
+            ht.main(['exec', '-b', 'metro_m4_express', '--under-hold', 'r', 'ci.json', '--', 'true'])
 
     def test_gdb_runs_openocd_on_a_pipe_pinned_to_the_probe(self):
         ht.A.flash.openocd_cmd_base = lambda p: [
