@@ -240,7 +240,13 @@ def changed_paths(args):
             if p != ROOT and ROOT not in p.parents:
                 fail(f'--scope {s} is outside this checkout')
             if p.is_dir():
-                out += [rel(f) for f in p.rglob('*') if f.is_file() and '.git' not in f.parts]
+                for f in p.rglob('*'):
+                    if not f.is_file() or '.git' in f.parts:
+                        continue
+                    target = f.resolve()
+                    if ROOT not in target.parents:
+                        fail(f'--scope {s}: {f.relative_to(ROOT)} resolves to {target}, outside this checkout')
+                    out.append(rel(target))
             else:
                 out.append(rel(p))
         return sorted(set(out))

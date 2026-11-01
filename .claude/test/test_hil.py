@@ -556,12 +556,12 @@ class Flash(Base):
         self.assertEqual(ht.detach('metro_m4_express', metro, '239a:8020', mock.Mock()), '')
         ht.A.flash.run_openocd_commands.assert_not_called()
 
-    def test_cdc_write_is_bounded_by_the_test_deadline(self):
+    def cdc_port(self, seen, stall):
         import serial
-        seen = []
 
         class Port:
             write_timeout = None
+            last = b''
 
             def __init__(self, *a, **k):
                 self.write_timeout = k.get('write_timeout')
@@ -579,13 +579,38 @@ class Flash(Base):
                 if self.write_timeout is None:
                     raise AssertionError('an unbounded write blocks past the deadline')
                 seen.append(self.write_timeout)
-                raise serial.SerialTimeoutException('Write timeout')
+                if stall:
+                    raise serial.SerialTimeoutException('Write timeout')
+                self.last = data
+                return len(data)
+
+            def read(self, n):
+                got, self.last = self.last[:n].upper(), self.last[n:]
+                return got
+        return Port
+
+    def run_cdc(self, stall):
+        import serial
+        seen = []
         deadline = ht.time.monotonic() + 5
-        with mock.patch.object(ht, 'node', return_value='/dev/ttyACM9'), mock.patch.object(serial, 'Serial', Port):
+        with mock.patch.object(ht, 'node', return_value='/dev/ttyACM9'), \
+                mock.patch.object(serial, 'Serial', self.cdc_port(seen, stall)):
             ok, detail = ht.test_cdc({}, 'ab', deadline, None, self.dir)
+        self.assertTrue(seen)
+        for timeout in seen:   # the remaining time, not a constant floor
+            self.assertTrue(4 < timeout <= 5, timeout)
+        return ok, detail, seen
+
+    def test_cdc_write_is_bounded_by_the_test_deadline(self):
+        ok, detail, seen = self.run_cdc(stall=True)
         self.assertFalse(ok)
         self.assertIn('timed out', detail)
-        self.assertTrue(0 < seen[0] <= 5)
+        self.assertEqual(len(seen), 1)
+
+    def test_cdc_bounded_write_that_completes_echoes(self):
+        ok, detail, seen = self.run_cdc(stall=False)
+        self.assertTrue(ok, detail)
+        self.assertEqual(len(seen), 3)
 
     def test_tracker_marks_unclean(self):
         t = ht.Tracker.__new__(ht.Tracker)

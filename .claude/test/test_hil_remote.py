@@ -137,6 +137,13 @@ class Run(Checkout):
         with self.assertRaisesRegex(SystemExit, 'changed since the build record'):
             self.main('run', '--run-id', 'r3', '-b', BOARD)
 
+    def test_staged_tree_differing_on_the_rig_is_refused(self):
+        rec = f'build/hil/{BOARD}.build.json'
+        with mock.patch.object(hr.core, 'verify_remote', lambda t, d, base='.': [rec]), \
+                self.assertRaisesRegex(SystemExit, f'differ on ci.lan: {rec}'):
+            self.main('run', '--run-id', 'r5', '-b', BOARD)
+        self.assertEqual(self.calls, [])
+
     def test_unknown_board_refused(self):
         with self.assertRaisesRegex(SystemExit, 'not in'):
             self.main('run', '--run-id', 'r4', '-b', 'nope')

@@ -152,6 +152,17 @@ class Selection(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn('outside this checkout', out['error'])
 
+    def test_scope_dir_refuses_symlink_out_of_checkout(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as o, \
+                mock.patch.object(cb, 'ROOT', Path(d).resolve()):
+            (cb.ROOT / 'docs').mkdir()
+            (Path(o) / 'x.txt').write_text('x')
+            (cb.ROOT / 'docs' / 'link.txt').symlink_to(Path(o) / 'x.txt')
+            code, out = run_main(['--select-only', '--scope', 'docs'])
+        self.assertEqual(code, 2)
+        self.assertIn('docs/link.txt', out['error'])
+        self.assertIn('outside this checkout', out['error'])
+
     def test_skip_txt_lines(self):
         self.assertFalse(cb.eligible('CH32V20x_EVT', 'examples/WebUSB/webusb_rgb'))
         self.assertTrue(cb.eligible('metro_m4_express', 'examples/WebUSB/webusb_rgb'))
