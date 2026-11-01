@@ -191,12 +191,13 @@ class Session(Checkout):
         rec.write_text(json.dumps(data))
         self.staged.clear()
         rc, out = self.main('session', 'stage', 's1', str(rec))
-        self.assertEqual((rc, out['bundle']), (0, 'bundles/1'))
-        self.assertEqual(out['use'], [f'--bundle bundles/1 --build-record build/hil/{BOARD}.build.json'])
-        self.assertIn(f'bundles/1/build/hil/{BOARD}.build.patch', self.staged)
+        bundle = out['bundle']
+        self.assertEqual(rc, 0)
+        self.assertEqual(out['use'], [f'--bundle {bundle} --build-record build/hil/{BOARD}.build.json'])
+        self.assertIn(f'{bundle}/build/hil/{BOARD}.build.patch', self.staged)
         self.assertFalse([p for p in self.staged if p.startswith(hr.RESTORE_BUNDLE) or p == hr.MANIFEST])
         rc, out = self.main('session', 'stage', 's1', str(rec))
-        self.assertEqual(out['bundle'], 'bundles/2')
+        self.assertNotEqual(out['bundle'], bundle)
         patch.write_text('changed')
         with self.assertRaisesRegex(SystemExit, 'changed since the build record'):
             self.main('session', 'stage', 's1', str(rec))

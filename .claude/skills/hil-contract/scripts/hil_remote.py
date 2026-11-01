@@ -23,9 +23,10 @@ fetched); session exec/close pass the rig command's exit through.
 
 import argparse
 import json
-import subprocess
+import secrets
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -229,7 +230,7 @@ def cmd_session_open(a):
     tree = staged_tree(a.run_id, a.host, roster, [record], head, RESTORE_BUNDLE)
     reason = f'arduino-hil session {a.run_id}'
     data = {'runId': a.run_id, 'board': a.board, 'reason': reason, 'roster': roster, 'head': head,
-            'restoreRecord': record[1][0], 'bundles': 0, 'held': False}
+            'restoreRecord': record[1][0], 'held': False}
     core.write_json(session_path(a.run_id), data)
     rc = rig(tree, [HIL, 'lock', 'hold', a.board, '--reason', reason])
     if rc:
@@ -248,12 +249,11 @@ def cmd_session_stage(a):
     s = session_record(a.run_id)
     tree = core.load_attempt(ROOT, RUNS, a.run_id)
     records = [record_files(r, s['head'], s['board'], clean=False) for r in a.records]
-    bundle = f'bundles/{s["bundles"] + 1}'
+    bundle = f'bundles/{time.strftime("%Y%m%d-%H%M%S")}-{secrets.token_hex(4)}'   # unique: stages may run at once
     with tempfile.TemporaryDirectory(prefix='hil-remote-') as tmp:
         digests = snapshot(Path(tmp), [f for _, fs in records for f in fs], bundle=bundle)
         for rec, _ in records:
             check_images(rec, digests, bundle)
-        core.write_json(session_path(a.run_id), {**s, 'bundles': s['bundles'] + 1})
         stage(tree, Path(tmp), digests)
     print(json.dumps({'runId': a.run_id, 'bundle': bundle,
                       'use': [f'--bundle {bundle} --build-record {fs[0]}' for _, fs in records]}))
