@@ -348,19 +348,37 @@ def compile_sketch(board, example, build_dir, properties):
         row.update(status='failed', firstError=f'{LIBRARY_NAME} came from '
                    f'{used[0]["install_dir"] if used else "nowhere"}, not this checkout')
         return row
-    props = dict(kv.split('=', 1) for kv in result.get('build_properties', []) if '=' in kv)
     row.update(status='ok', platform=result.get('board_platform'), buildPlatform=result.get('build_platform'),
-               vidPid=vid_pid(props), foreignHeaders=foreign_headers(build_dir),
+               vidPid=vid_pid(build_dir), foreignHeaders=foreign_headers(build_dir),
                artifacts=sorted(rel(f) for f in build_dir.glob('*.ino.*') if f.suffix in ('.elf', '.hex', '.bin',
                                                                                             '.uf2', '.map')))
     return row
 
 
-def vid_pid(props):
-    """VID:PID the sketch enumerates with: samd sets build.vid/pid, rp2040 passes -DUSBD_VID/-DUSBD_PID flags."""
-    vid = props.get('build.vid') or re.sub(r'.*=', '', props.get('build.usbvid', ''))
-    pid = props.get('build.pid') or re.sub(r'.*=', '', props.get('build.usbpid', ''))
-    return f'{int(vid, 16):04x}:{int(pid, 16):04x}' if vid and pid else None
+def vid_pid(build_dir):
+    """VID:PID the sketch enumerates with: Adafruit_USBD_Device.cpp's USB_VID/USB_PID as its compile command defines
+    them (compile_commands.json), else its BOARD_VENDORID/BOARD_PRODUCTID, else its own fallback. The rp2040 core
+    passes USBD_VID/USBD_PID, which this library ignores. A core header defining USB_VID is not seen."""
+    try:
+        commands = json.loads((Path(build_dir) / 'compile_commands.json').read_text())
+    except (OSError, ValueError):
+        return None
+    for entry in commands:
+        if entry.get('file', '').endswith('Adafruit_USBD_Device.cpp'):
+            flags = ' '.join(entry.get('arguments') or [entry.get('command', '')])
+            break
+    else:
+        return None
+    source = (ROOT / 'src/arduino/Adafruit_USBD_Device.cpp').read_text()
+    ids = []
+    for name, board_name in (('USB_VID', 'BOARD_VENDORID'), ('USB_PID', 'BOARD_PRODUCTID')):
+        defined = re.findall(rf'-D{name}=(\S+)', flags) or re.findall(rf'-D{board_name}=(\S+)', flags)
+        fallback = re.search(rf'#define {name} (0x[0-9a-fA-F]+)', source)
+        value = defined[-1] if defined else fallback.group(1) if fallback else None
+        if value is None:
+            return None
+        ids.append(int(value, 0))
+    return f'{ids[0]:04x}:{ids[1]:04x}'
 
 
 def build_all(jobs, plan, root, properties):
@@ -492,6 +510,8 @@ def make_record(args, board, rows, before, diff, roster_path):
     sketches = {}
     for row in rows:
         build_dir = ROOT / row['buildDir']
+        if not row['vidPid']:
+            return None, f'{row["example"]}: its VID:PID could not be read from compile_commands.json'
         elf = next(build_dir.glob('*.ino.elf'))
         hexfile = next(build_dir.glob('*.ino.hex'), None)
         if image == 'elf':

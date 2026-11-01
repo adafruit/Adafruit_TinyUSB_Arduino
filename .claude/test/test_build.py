@@ -172,11 +172,18 @@ class Images(unittest.TestCase):
             with self.assertRaises(ValueError):
                 cb.hex_runs(p)
 
-    def test_vid_pid_from_either_core(self):
-        self.assertEqual(cb.vid_pid({'build.vid': '0x239A', 'build.pid': '0x8020'}), '239a:8020')
-        self.assertEqual(cb.vid_pid({'build.usbvid': '-DUSBD_VID=0x2e8a', 'build.usbpid': '-DUSBD_PID=0x000a'}),
-                         '2e8a:000a')
-        self.assertIsNone(cb.vid_pid({}))
+    def test_vid_pid_from_the_library_compile_command(self):
+        def ids(*flags):
+            with tempfile.TemporaryDirectory() as d:
+                (Path(d) / 'compile_commands.json').write_text(json.dumps([
+                    {'file': '/x/core.cpp', 'arguments': ['-DUSB_VID=0x1111']},
+                    {'file': '/lib/src/arduino/Adafruit_USBD_Device.cpp', 'arguments': ['g++', *flags]}]))
+                return cb.vid_pid(d)
+        self.assertEqual(ids('-DUSB_VID=0x239A', '-DUSB_PID=0x8020'), '239a:8020')      # samd
+        self.assertEqual(ids('-DUSBD_VID=0x2e8a', '-DUSBD_PID=0x000a'), '239a:cafe')    # rp2040: library fallback
+        self.assertEqual(ids('-DBOARD_VENDORID=0x2341', '-DBOARD_PRODUCTID=0x005e'), '2341:005e')
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIsNone(cb.vid_pid(d))
 
 
 class Provenance(unittest.TestCase):
@@ -208,7 +215,7 @@ class Provenance(unittest.TestCase):
         out = {'success': success, 'compiler_err': err, 'builder_result': {
             'used_libraries': [{'name': cb.LIBRARY_NAME, 'install_dir': str(install_dir)}],
             'board_platform': {'id': 'adafruit:samd', 'version': '1.7.13', 'install_dir': '/x'},
-            'build_properties': ['build.vid=0x239A', 'build.pid=0x8020']}}
+            'build_properties': []}}
         return mock.Mock(returncode=0 if success else 1, stdout=json.dumps(out), stderr='')
 
     def test_library_from_another_checkout_fails(self):
@@ -226,6 +233,7 @@ class Provenance(unittest.TestCase):
 
     def test_ok_build_row(self):
         with tempfile.TemporaryDirectory() as d, mock.patch.object(cb, 'ROOT', Path(d)), \
+                mock.patch.object(cb, 'vid_pid', return_value='239a:8020'), \
                 mock.patch.object(cb.subprocess, 'run', return_value=self.fake_compile(d)):
             row = cb.compile_sketch('metro_m4_express', 'examples/CDC/serial_echo', Path(d) / 'b', [])
         self.assertEqual((row['status'], row['vidPid'], row['foreignHeaders']), ('ok', '239a:8020', []))
