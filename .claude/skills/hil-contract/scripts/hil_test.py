@@ -799,11 +799,13 @@ def gdb_argv(board, elf, commands):
     """gdb-multiarch in batch mode over an openocd it starts on a pipe, configured by the roster's debug.openocd and
     pinned to the board's probe serial. With a memory map openocd probes every flash bank on gdb's connect
     (gdb_server.c gdb_new_connection), and the RP2040's probe leaves the QSPI flash out of XIP mode, so the firmware
-    stops once gdb detaches: no map, no probe."""
+    stops once gdb detaches: no map, no probe. Without a map gdb takes flash for RAM and would patch a software
+    breakpoint into it, so every breakpoint is made a hardware one (openocd.texi, gdb_breakpoint_override)."""
     probe = {'name': 'openocd', 'uid': board['flasher']['uid'], 'args': board['debug']['openocd']}
     if board['flasher']['name'] == 'openocd' and 'vid_pid' in board['flasher']:
         probe['vid_pid'] = board['flasher']['vid_pid']
-    openocd = A.flash.openocd_cmd_base(probe) + ['-c', 'gdb_port pipe', '-c', 'gdb_memory_map disable']
+    openocd = A.flash.openocd_cmd_base(probe) + ['-c', 'gdb_port pipe', '-c', 'gdb_memory_map disable',
+                                                 '-c', 'gdb_breakpoint_override hard']
     return ['gdb-multiarch', '-batch', '-nx', '-ex', f'target extended-remote | {shlex.join(openocd)}',
             *(w for c in commands for w in ('-ex', c)), elf]
 
