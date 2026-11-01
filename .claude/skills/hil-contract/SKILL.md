@@ -178,15 +178,22 @@ The dispatch carries the board, the failed report (or session id), the holder to
 (`ssh ci.lan 'cd ~/hil-remote/adafruit-tinyusb-arduino/<id> && python3 .claude/skills/hil-contract/scripts/hil_test.py
 ...'`), adding `--staged manifest.json` to `restore`. On a dev PC, run them from the checkout.
 
-1. `hil_test.py lock status`, and `hil_test.py report <run dir> -b <board>` for the row's receipts.
-2. A live cleanup holder: `hil_test.py lock release --token <token>`. It refuses while a receipt is not proven ended;
-   then stop and report the receipt (ending a child is outside this contract). Once it is released, take
-   `hil_test.py lock hold <board> --reason recovery-<id>` and continue at step 4 with `--release`.
-3. A dead holder or protected record: `hil_test.py lock hold --take-over <board> --reason recovery-<id>` prints token
-   T.
-4. `hil_test.py restore -b <board> --build-record build/hil/<board>.build.json --under-hold recovery-<id> --report
-   <run dir>/hil_report.json <roster>`. The restore refuses while a child of the failed run is open.
-5. After a takeover, `hil_test.py lock release --token T` once the restore passed. On failure, keep the hold and report.
+1. `hil_test.py lock status`, and `hil_test.py report <run dir> -b <board>` for the row's holder token and receipts.
+2. Take the board for the restore, keeping it blocked throughout:
+   - A live cleanup holder (its record's reason is `hil_test.py`): restore under it, reason R = `hil_test.py`.
+   - A dead holder or a protected record: `hil_test.py lock hold --take-over <board> --reason recovery-<id>` prints
+     token T; R = `recovery-<id>`.
+3. `hil_test.py restore -b <board> --build-record build/hil/<board>.build.json --under-hold R --report
+   <run dir>/hil_report.json <roster>`. It refuses while a child of the failed run is not proven ended: stop and report
+   that receipt, since ending a child is outside this contract.
+4. Once the restore passed, `hil_test.py lock release --token <the holder's token, or T>`; that release refuses too
+   while a receipt is open. On failure, keep the hold and report.
+
+A failed `session close`: the session keeps its hold (`arduino-hil session <id>`). Once the session's pending
+children are proven ended (the next session command clears the record by itself), run `hil_remote.py session close
+<id>` again. It restores from the session's own `bundles/restore/` record, and its JSON is the last stdout line and
+`build/hil-manual/<board>-restore-<time>/result.json` in the attempt dir. If that close fails too, keep the hold and
+report.
 
 A pending-session record clears itself on the next session command once every receipt rechecks done. One holding an
 unrecheckable session (its supervisor died) needs a reviewed clear this contract does not give: a blocker for the

@@ -75,18 +75,20 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
 - **A HIL record** (`--board B --shared --record FILE --hil-config ROSTER`, `FILE` inside the checkout, by convention
   `build/hil/<board>.build.json`) builds the HIL sketches (`HIL_SKETCHES`: `serial_echo`, `hid_generic_inout`,
   `msc_ramdisk`) for one roster board and is the HIL contract's build receipt. It requires a clean tree before and the
-  same source identity after the build, and checks each image: the ELF's load segments (physical addresses of
-  `PT_LOAD` with file bytes) inside the board's `span` (metro_m4_express [0x4000, 0x80000), above the UF2 bootloader;
-  raspberry_pi_pico [0x10000000, 0x10200000); adafruit_fruit_jam [0x10000000, 0x11000000)), the HEX's runs equal to
-  those spans where the core makes one, and no foreign header that differs. It records HEAD, the FQBN, the platform
+  same source identity after the build, and checks the image the roster's flasher writes against the board's `span`
+  (metro_m4_express [0x4000, 0x80000), above the UF2 bootloader; raspberry_pi_pico [0x10000000, 0x10200000);
+  adafruit_fruit_jam [0x10000000, 0x11000000)). For an openocd board that image is the ELF, its load segments
+  (physical addresses of `PT_LOAD` with file bytes) inside the span. For a J-Link board it is the HEX, its runs equal
+  to the ELF's allocated sections and inside the span; the ELF's own segments are not checked, since the SAMD ELF's
+  first starts at 0x0. It also refuses a foreign header that differs. It records HEAD, the FQBN, the platform
   (id, version, install dir, and commit and dirty state when the core is a git checkout), the arduino-cli version, the
   roster's and harness's sha256, and per sketch its ELF and HEX with sha256, load spans, VID:PID and foreign headers;
   paths are checkout-relative so the record stages to a rig unchanged.
 - **Experimental records** (`--experimental`, with `--record`) are for debug and instrumentation: a dirty tree and
   `--build-property` are allowed, untracked files under `src/`, `examples/` or `test/hil/` are refused (put
   instrumentation in tracked files), the source must not change during the build, and `git diff HEAD` is saved beside
-  the record (its path with `.patch` for `.json`, named and hashed in `patch`). A drifted foreign header is allowed and listed. The HIL battery and
-  the restore refuse them; a manual flash under a hold accepts them.
+  the record (its path with `.patch` for `.json`, named and hashed in `patch`). A drifted foreign header is allowed
+  and listed. The HIL battery and the restore refuse them; a manual flash or GDB session under a hold accepts them.
 - **Debug builds**: both cores compile with `-g`, so the kept ELF (`build/hil/<board>/<sketch>/<sketch>.ino.elf`)
   carries symbols at the release optimisation (`-Os`). Other flags go through `--build-property` (each core's
   `platform.txt` names its extra-flag properties) into an experimental record.
