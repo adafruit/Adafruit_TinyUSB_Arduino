@@ -441,8 +441,8 @@ class Manual(Base):
         self.assertEqual(argv[:4], ['gdb-multiarch', '-batch', '-nx', '-ex'])
         self.assertEqual((argv[-5:], argv[-1]), (['-ex', 'info symbol main', '-ex', 'bt', 'fw.elf'], 'fw.elf'))
         pipe = ht.shlex.split(argv[4].removeprefix('target extended-remote | '))
-        self.assertEqual(pipe[-6:], ['-c', 'gdb_port pipe', '-c', 'gdb_memory_map disable',
-                                     '-c', 'gdb_breakpoint_override hard'])
+        self.assertEqual(pipe[-8:], ['-c', 'gdb_port pipe', '-c', 'gdb_memory_map disable',
+                                     '-c', 'gdb_breakpoint_override hard', '-c', ht.GDB_DETACH_RESUME])
         self.assertIn('adapter serial E6614103E72C1D2F', pipe)
         self.assertIn('adapter usb vid_pid 0x2e8a 0x000c', pipe)
         self.assertIn('target/rp2040.cfg', pipe)
