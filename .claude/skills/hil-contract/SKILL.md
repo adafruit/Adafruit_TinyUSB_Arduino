@@ -120,7 +120,11 @@ python3 $H/hil_remote.py session close <id>                         # restore se
 ```
 
 - `gdb` runs `gdb-multiarch -batch` over `target extended-remote | openocd ... -c "gdb_port pipe"`, with the roster's
-  `debug.openocd` pinned to the board's probe serial. openocd exits when GDB detaches.
+  `debug.openocd` pinned to the board's probe serial. The attach halts the core and the detach resumes it, so the
+  firmware runs on (checked by an echo after a read-only and a breakpoint session on Pico and Fruit Jam). openocd
+  exits when GDB detaches. Breakpoints are hardware ones, and there is no flash `load`: reflash with `flash`.
+- A refused `session open` (the board is held) prints the holder and leaves its attempt dir unused. Within the
+  lock-wait budget, retry `session open` with a new run id; never wait on a recovery blocker.
 - Each command and child is bounded (`exec`/`gdb` `--timeout` at most 600 s) and runs through agentrc's
   `run_tracked`.
 - One session command runs at a time per tree and board.
@@ -217,6 +221,8 @@ human.
 - **Known faults:**
   - The Fruit Jam's openocd reset-init intermittently times out (`rcp_init`, core0 halted in the bootrom NMI
     handler), failing one flash. A retry passes.
+  - On the RP2040 a GDB `continue` prints openocd SMP resume errors (core1 sits in the bootrom). The breakpoint is
+    still reached.
   - metro_m4_express's J-Link dropped off ci.lan's bus on 2026-11-01. It needs a human re-plug, and its runs are
     not-run until then.
 - **Missing documentation:** the Fruit Jam and Metro M4 board documentation is not in the reference library. The
