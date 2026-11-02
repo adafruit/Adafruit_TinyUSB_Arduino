@@ -149,6 +149,8 @@ def load_roster(path):
             # Arduino on ESP32 enumerates without an iSerial: the DUT is the device at its port
             raise Refused(f'roster {path}: {name}: an esptool board needs usb_port')
         dbg = b.get('debug', {})
+        if not isinstance(dbg, dict):
+            raise Refused(f'roster {path}: {name}: debug must be an object, or absent for no GDB route')
         tool = dbg.get('tool', 'openocd')
         if tool not in ('openocd', 'openocd-esp32') or (tool == 'openocd-esp32') != ('uid' in dbg):
             raise Refused(f'roster {path}: {name}: debug.tool is openocd, or openocd-esp32 with the debug '
@@ -219,8 +221,10 @@ def admit(record_path, board, roster_path, run_dir, *, manifest=None, experiment
     head, status, where = None, '', 'checkout'
     if manifest is not None:
         head, where = manifest['head'], 'staged tree'
-    elif not rec.get('experimental'):
+    else:
         head, status = git_identity()
+        if rec.get('experimental'):   # same HEAD, a dirty tree allowed: its diff is saved beside the record
+            status = ''
     why = record_problems(rec, board, head, experimental_ok, where)
     if why:
         raise Refused(f'{record_path}: {"; ".join(why)}')
@@ -1127,9 +1131,14 @@ def op_console(args, board, run_dir, tracker, manifest):
                 read_console(port, time.monotonic() + args.seconds, buf, times, t0)
     except (serial.SerialException, OSError) as e:   # pyserial's line setters raise a bare OSError
         why = f'{tty}: {e}'   # the capture so far is kept; the hold stays with the caller
-    log = run_dir / 'console.log'
-    log.write_bytes(buf)
-    (run_dir / 'console.times').write_text(''.join(json.dumps(t) + '\n' for t in times))
+    except KeyboardInterrupt:   # SIGTERM too (main): stopping a capture keeps it
+        if tracker.pending:
+            raise   # _manual records the detach's or reset's unproven child
+        why = f'{tty}: interrupted'
+    finally:
+        log = run_dir / 'console.log'
+        log.write_bytes(buf)
+        (run_dir / 'console.times').write_text(''.join(json.dumps(t) + '\n' for t in times))
     return {'pass': not why, 'detail': why or f'{tty}: {len(buf)} bytes in {args.seconds:g} s', 'console': str(log),
             'tail': buf.decode(errors='replace')[-2000:]}
 
@@ -1333,6 +1342,9 @@ def main(argv=None):
         return 2
     if args.cmd == 'console' and not 0 < args.seconds <= CONSOLE_MAX:
         emit({'pass': False, 'error': f'--seconds must be in (0, {CONSOLE_MAX}]'})
+        return 2
+    if args.cmd == 'console' and args.baud <= 0:
+        emit({'pass': False, 'error': '--baud must be positive'})
         return 2
     if args.cmd in OPS:
         # a session command runs over ssh: a dropped link must not end it between a child's start and its proof

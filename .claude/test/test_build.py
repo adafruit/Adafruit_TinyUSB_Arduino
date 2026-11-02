@@ -245,6 +245,15 @@ class Images(unittest.TestCase):
             (variant / 'pins_arduino.h').write_text('#define USB_VID 0x303a\n#define USB_PID 0x1001\n')
             self.assertEqual(ids('-DARDUINO_ARCH_ESP32', f'-I{variant}'), '303a:1001')
             self.assertEqual(ids(f'-I{variant}'), '239a:cafe')   # only ESP32 builds take the variant's
+            spaced = Path(v) / 'my core/variants/esp32s3'
+            spaced.mkdir(parents=True)
+            (spaced / 'pins_arduino.h').write_text((variant / 'pins_arduino.h').read_text())
+            self.assertEqual(ids('-DARDUINO_ARCH_ESP32', f'-I{spaced}'), '303a:1001')
+            with tempfile.TemporaryDirectory() as d:
+                (Path(d) / 'compile_commands.json').write_text(json.dumps([
+                    {'file': '/lib/src/arduino/Adafruit_USBD_Device.cpp',
+                     'command': f'g++ -DARDUINO_ARCH_ESP32 "-I{spaced}" -c x.cpp'}]))
+                self.assertEqual(cb.vid_pid(d), '303a:1001')
             (variant / 'pins_arduino.h').write_text('#define LED_BUILTIN 2\n')
             self.assertEqual(ids('-DARDUINO_ARCH_ESP32', f'-I{variant}'), '239a:cafe')   # esp32p4: fallback
 
@@ -371,6 +380,11 @@ class Record(unittest.TestCase):
     def test_hex_disagreeing_with_elf_sections_refused(self):
         _, err = self.record(self.row([(0x4000, 32)], (0x4000, bytes(16))))
         self.assertIn('differ from the ELF sections', err)
+
+    def test_flasher_without_an_image_kind_refused(self):
+        self.flasher('stlink')
+        _, err = self.record(self.samd_row())
+        self.assertIn("flasher 'stlink' has no image kind", err)
 
     def test_jlink_board_without_hex_refused(self):
         _, err = self.record(self.row([(0x4000, 32)]))

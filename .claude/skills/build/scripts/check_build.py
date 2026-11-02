@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import struct
 import subprocess
@@ -449,14 +450,18 @@ def vid_pid(build_dir):
         return None
     for entry in commands:
         if entry.get('file', '').endswith('Adafruit_USBD_Device.cpp'):
-            flags = ' '.join(entry.get('arguments') or [entry.get('command', '')])
+            try:
+                argv = entry.get('arguments') or shlex.split(entry.get('command', ''))
+            except ValueError:
+                return None
+            flags = ' '.join(argv)
             break
     else:
         return None
     source = (ROOT / 'src/arduino/Adafruit_USBD_Device.cpp').read_text()
     variant = ''
     if '-DARDUINO_ARCH_ESP32' in flags:
-        for inc in re.findall(r'-I(\S+/variants/[^/\s]+)', flags):
+        for inc in [m.group(1) for m in (re.match(r'-I(.*/variants/[^/]+)', a) for a in argv) if m]:
             header = Path(inc) / 'pins_arduino.h'
             variant += header.read_text(errors='replace') if header.is_file() else ''
     ids = []
@@ -626,7 +631,9 @@ def make_record(args, board, rows, before, diff, roster_path):
                                                                                           'status')}:
         return None, 'the source changed while building'
     lo, hi = BOARDS[board]['span']
-    flasher = rig_roster(roster_path)[board]['flasher']['name']
+    flasher = rig_roster(roster_path)[board].get('flasher', {}).get('name')
+    if flasher not in IMAGE_KIND:
+        return None, f'{board}: flasher {flasher!r} has no image kind; must be one of {sorted(IMAGE_KIND)}'
     image = IMAGE_KIND[flasher]   # what hil_test.py flashes for this probe
     host = role(board) == 'host'
     sketches = {}

@@ -157,6 +157,7 @@ class Tables(unittest.TestCase):
                                                          'tool': 'openocd-esp32'}}, 'debug.usb_port'),
                  ('espressif_p4_function_ev', {'debug': {'openocd': '-f board/esp32s3-builtin.cfg', 'uid': 'M',
                                                          'tool': 'openocd-esp32'}}, 'no vid_pid'),
+                 ('raspberry_pi_pico', {'debug': None}, 'debug must be an object'),
                  ('raspberry_pi_pico', {'flasher': {'name': 'pyocd'}}, 'flasher must be'))
         for name, over, why in cases:
             data = json.loads(json.dumps(good))
@@ -415,7 +416,7 @@ class Esp(Base):
 
 
 class Console(Base):
-    def capture(self, board_name, reset, fail=False):
+    def capture(self, board_name, reset, fail=False, pending=()):
         board = ht.load_roster(ROOT / 'test/hil/ci.json')[board_name]
         calls, reads = [], []
 
@@ -450,7 +451,7 @@ class Console(Base):
         with mock.patch.object(ht, 'console_tty', return_value='/dev/ttyX'), \
                 mock.patch.object(ht, 'reset', lambda *a: calls.append('reset') or ''), \
                 mock.patch.object(serial, 'Serial', Port), mock.patch.object(ht.time, 'monotonic', tick):
-            row = ht.op_console(args, board, self.dir, None, None)
+            row = ht.op_console(args, board, self.dir, mock.Mock(pending=list(pending)), None)
         return row, calls
 
     def test_probe_reset_happens_with_the_console_open(self):
@@ -497,6 +498,15 @@ class Console(Base):
             self.assertIn('device disconnected', row['detail'])
             self.assertIn('boot', (self.dir / 'console.log').read_text())
 
+    def test_interrupt_keeps_the_capture(self):
+        row, _ = self.capture('raspberry_pi_pico_w', False, fail=KeyboardInterrupt())
+        self.assertEqual((row['pass'], row['detail']), (False, '/dev/ttyX: interrupted'))
+        self.assertEqual((self.dir / 'console.log').read_text(), 'boot\n')
+        (self.dir / 'console.log').unlink()
+        with self.assertRaises(KeyboardInterrupt):   # a pending child: _manual records it
+            self.capture('raspberry_pi_pico_w', False, fail=KeyboardInterrupt(), pending=[{'receipt': 'r'}])
+        self.assertEqual((self.dir / 'console.log').read_text(), 'boot\n')
+
     def test_check_is_a_session_command(self):
         with mock.patch.object(ht, 'manual', return_value=0) as manual, mock.patch.object(ht.signal, 'signal'):
             ht.main(['check', '-b', 'raspberry_pi_pico', '--under-hold', 'x', '--build-record', 'r.json', 'ci.json'])
@@ -507,6 +517,11 @@ class Console(Base):
             code = ht.main(['console', '-b', 'raspberry_pi_pico_w', '--under-hold', 'x', '--seconds', '500', 'r.json'])
         self.assertEqual(code, 2)
         self.assertIn('--seconds', out.getvalue())
+
+    def test_baud_positive(self):
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            code = ht.main(['console', '-b', 'raspberry_pi_pico_w', '--under-hold', 'x', '--baud', '-1', 'r.json'])
+        self.assertEqual((code, json.loads(out.getvalue())['error']), (2, '--baud must be positive'))
 
 
 class RolesInRun(Base):
@@ -585,6 +600,7 @@ class RolesInRun(Base):
                 contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(ht.cmd_run(args), 0)
         self.assertEqual(seen, {'raspberry_pi_pico': ['cdc_echo']})   # the host board is not run, nor reported
+        self.assertEqual(ht.A.report.make_meta.call_args.kwargs['selection'], ['raspberry_pi_pico'])
 
 
 class Fat12(unittest.TestCase):
@@ -640,8 +656,13 @@ class Admission(Base):
                 ht.admit(rec, 'metro_m4_express', self.roster, self.dir / 'run')
 
     def test_experimental_allowed_for_flash(self):
+        rec, root = self.record(experimental=True)
+        with mock.patch.object(ht, 'ROOT', root), \
+                mock.patch.object(ht, 'git_identity', return_value=('abc', ' M src/tusb.c')):
+            ht.admit(rec, 'metro_m4_express', self.roster, self.dir / 'run', experimental_ok=True)   # dirty tree
         rec, root = self.record(experimental=True, source={'head': 'other'})
-        self.admit(rec, root, experimental_ok=True)
+        with self.assertRaisesRegex(ht.Refused, 'rebuild'):
+            self.admit(rec, root, experimental_ok=True)
 
     def test_staged_head_must_match_manifest(self):
         rec, root = self.record()
@@ -807,6 +828,7 @@ class Manual(Base):
             raise exc
         out = io.StringIO()
         with mock.patch.object(ht, 'ROOT', root), mock.patch.object(ht, 'load_agentrc'), \
+                mock.patch.object(ht, 'git_identity', return_value=('abc', '')), \
                 mock.patch.object(ht, 'flash_only', unclean), contextlib.redirect_stdout(out), \
                 mock.patch.object(ht.Tracker, '__init__', lambda s, d: s.__dict__.update(
                     receipts=[], pending=[], unclean='', log=Path(d) / 'hil.log')):
