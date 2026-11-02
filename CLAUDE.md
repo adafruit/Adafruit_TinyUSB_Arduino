@@ -67,4 +67,4 @@
   that skill directs. Merging needs the human's own words asking to merge that PR. `pr-babysit` args:
   `{"pr": <num>, "protected": "^test/hil/[^/]+\\.json$"}`; reviewers are agentrc's default (`protected` keeps the HIL
   rosters and the agentrc pin out of automated fixes).
-- The repository has no follow-up label: file follow-ups as issues linking the originating PR.
+- The follow-up label is `follow-up`.
