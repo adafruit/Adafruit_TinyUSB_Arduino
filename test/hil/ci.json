@@ -124,8 +124,7 @@
       "debug": {
         "openocd": "-f board/esp32p4-builtin.cfg",
         "tool": "openocd-esp32",
-        "uid": "60:55:F9:F9:87:15",
-        "vid_pid": "0x303a 0x1001"
+        "uid": "60:55:F9:F9:87:15"
       },
       "arduino": {
         "tests": ["cdc_echo", "hid_inout", "msc_ramdisk"]

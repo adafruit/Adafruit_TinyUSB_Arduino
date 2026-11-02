@@ -149,6 +149,11 @@ class Tables(unittest.TestCase):
                  ('espressif_s3_devkitm', {'usb_port': None}, 'needs usb_port'),
                  ('espressif_s3_devkitm', {'usb_port': '/dev/x'}, 'bus port'),
                  ('espressif_p4_function_ev', {'debug': {'openocd': '-f x', 'tool': 'openocd-esp32'}}, 'debug.uid'),
+                 ('espressif_p4_function_ev', {'debug': {'openocd': '-f board/esp32p4-builtin.cfg', 'uid': 'M',
+                                                         'tool': 'openocd-esp32', 'vid_pid': '0x303a 0x1001'}},
+                  'no vid_pid'),
+                 ('espressif_p4_function_ev', {'debug': {'openocd': '-f board/esp32s3-builtin.cfg', 'uid': 'M',
+                                                         'tool': 'openocd-esp32'}}, 'no vid_pid'),
                  ('raspberry_pi_pico', {'flasher': {'name': 'pyocd'}}, 'flasher must be'))
         for name, over, why in cases:
             data = json.loads(json.dumps(good))
@@ -301,15 +306,29 @@ class Esp(Base):
         self.assertEqual(ht.A.flash.reset_esptool.call_args[1]['port'], '/dev/ttyUSB1')
 
     def test_gdb_runs_espressif_openocd_on_the_usb_serial_jtag(self):
-        ht.A.flash.openocd_cmd_base = lambda p: [
-            'openocd', '-c', f'adapter serial {p["uid"]}',
-            *(['-c', f'adapter usb vid_pid {p["vid_pid"]}'] if 'vid_pid' in p else []), *ht.shlex.split(p['args'])]
+        esp = mock.Mock()
+        esp.admit.return_value = ('esp32p4', ['board/esp32p4-builtin.cfg'])
+        esp.find_openocd.return_value = {'exe': '/o/bin/openocd', 'scripts': '/o/scripts'}
+        esp.usj_location.return_value = '11-1.2'
+        ht.A.esp = lambda: esp
         p4 = ht.load_roster(ROOT / 'test/hil/ci.json')['espressif_p4_function_ev']
-        pipe = ht.shlex.split(ht.gdb_argv(p4, 'fw.elf', [])[4].removeprefix('target extended-remote | '))
-        self.assertEqual(pipe[0], 'openocd-esp32')
-        self.assertIn('adapter serial 60:55:F9:F9:87:15', pipe)
-        self.assertIn('adapter usb vid_pid 0x303a 0x1001', pipe)
-        self.assertIn('board/esp32p4-builtin.cfg', pipe)
+        pipe = ht.shlex.split(ht.gdb_argv('espressif_p4_function_ev', p4, 'fw.elf', [])[4]
+                              .removeprefix('target extended-remote | '))
+        self.assertEqual(esp.admit.call_args[0][0], {'name': 'openocd_esp', 'uid': '60:55:F9:F9:87:15',
+                                                     'args': '-f board/esp32p4-builtin.cfg'})
+        self.assertEqual(esp.find_openocd.call_args[0][0], 'openocd-esp32')
+        esp.check_cfgs.assert_called_once_with('esp32p4', ['board/esp32p4-builtin.cfg'], '/o/scripts')
+        flash_size, board_cfg = pipe.index('set ESP_FLASH_SIZE 0'), pipe.index('/o/scripts/board/esp32p4-builtin.cfg')
+        self.assertEqual(pipe[:3], ['/o/bin/openocd', '-s', '/o/scripts'])
+        self.assertLess(flash_size, board_cfg)   # read when the target cfg is sourced (esp_common.cfg:37-39)
+        self.assertEqual(pipe[board_cfg + 1:board_cfg + 5], ['-c', 'adapter usb location 11-1.2',
+                                                             '-c', 'adapter serial 60:55:F9:F9:87:15'])
+        self.assertFalse(any('vid_pid' in w for w in pipe))
+        self.assertIn('tcl port disabled', pipe)
+        self.assertIn('foreach t [target names] { $t configure -event gdb-detach { resume } }', pipe)
+        esp.admit.return_value = ('esp32s3', ['board/esp32s3-builtin.cfg'])
+        with self.assertRaisesRegex(ValueError, 'names esp32s3'):
+            ht.gdb_argv('espressif_p4_function_ev', p4, 'fw.elf', [])
 
     def test_admit_carries_the_flash_inputs_and_checks_the_role(self):
         self.roster.write_text(json.dumps({'boards': [
@@ -800,18 +819,28 @@ class Manual(Base):
             'openocd', '-c', 'gdb_port disabled', '-c', f'adapter serial {p["uid"]}',
             *(['-c', f'adapter usb vid_pid {p["vid_pid"]}'] if 'vid_pid' in p else []), *ht.shlex.split(p['args'])]
         board = ht.load_roster(ROOT / 'test/hil/ci.json')['raspberry_pi_pico']
-        argv = ht.gdb_argv(board, 'fw.elf', ['info symbol main', 'bt'])
+        argv = ht.gdb_argv('raspberry_pi_pico', board, 'fw.elf', ['info symbol main', 'bt'])
         self.assertEqual(argv[:4], ['gdb-multiarch', '-batch', '-nx', '-ex'])
         self.assertEqual((argv[-5:], argv[-1]), (['-ex', 'info symbol main', '-ex', 'bt', 'fw.elf'], 'fw.elf'))
         pipe = ht.shlex.split(argv[4].removeprefix('target extended-remote | '))
-        self.assertEqual(pipe[-8:], ['-c', 'gdb_port pipe', '-c', 'gdb_memory_map disable',
-                                     '-c', 'gdb_breakpoint_override hard', '-c', ht.GDB_DETACH_RESUME])
+        self.assertEqual(pipe[-8:], ['-c', 'gdb port pipe', '-c', 'gdb memory_map disable',
+                                     '-c', 'gdb breakpoint_override hard', '-c',
+                                     'foreach t [target names] { $t configure -event gdb-detach '
+                                     '{ foreach u [target names] { $u arp_poll }; resume } }'])
         self.assertIn('adapter serial E6614103E72C1D2F', pipe)
         self.assertIn('adapter usb vid_pid 0x2e8a 0x000c', pipe)
         self.assertIn('target/rp2040.cfg', pipe)
         metro = ht.load_roster(ROOT / 'test/hil/ci.json')['metro_m4_express']
-        pipe = ht.shlex.split(ht.gdb_argv(metro, 'fw.elf', [])[4].removeprefix('target extended-remote | '))
+        pipe = ht.shlex.split(ht.gdb_argv('metro_m4_express', metro, 'fw.elf', [])[4]
+                              .removeprefix('target extended-remote | '))
         self.assertIn('interface/jlink.cfg', pipe)
+        self.assertEqual(pipe[-1], 'foreach t [target names] { $t configure -event gdb-detach { resume } }')
+        for rp2350 in ('raspberry_pi_pico2', 'adafruit_fruit_jam'):   # rp2040 build family, other silicon
+            argv = ht.gdb_argv(rp2350, ht.load_roster(ROOT / 'test/hil/ci.json')[rp2350], 'fw.elf', [])
+            self.assertNotIn('arp_poll', argv[4])
+        argv = ht.gdb_argv('raspberry_pi_pico_w', ht.load_roster(ROOT / 'test/hil/ci.json')['raspberry_pi_pico_w'],
+                           'fw.elf', [])
+        self.assertIn('arp_poll', argv[4])
         self.assertFalse(any('vid_pid' in w for w in pipe))
 
     def test_foreign_or_missing_hold_refused(self):

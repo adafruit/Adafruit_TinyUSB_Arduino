@@ -47,7 +47,8 @@ import check_build  # noqa: E402
 
 LOCK_SCRIPT = 'skills/hil/scripts/hil_lock.py'
 SCRIPTS = (LOCK_SCRIPT, 'skills/hil/scripts/hil_flash.py', 'skills/hil/scripts/hil_process.py',
-           'skills/hil/scripts/hil_report_core.py', 'skills/hil/scripts/usb_observe.py')
+           'skills/hil/scripts/hil_report_core.py', 'skills/hil/scripts/usb_observe.py',
+           'skills/hil/scripts/hil_openocd_esp.py')
 TESTS = {'cdc_echo': 'serial_echo', 'hid_inout': 'hid_generic_inout', 'msc_ramdisk': 'msc_ramdisk',
          'host_device_info': 'host_device_info'}
 ROLE_TESTS = {'device': ('cdc_echo', 'hid_inout', 'msc_ramdisk'), 'host': ('host_device_info',)}
@@ -68,7 +69,9 @@ FLASH_TIMEOUT, VERIFY_TIMEOUT, ENUM_TIMEOUT, TEST_TIMEOUT, SETTLE = 120, 60, 20,
 CONSOLE_MAX = 120   # one console capture, seconds
 BOARD_BUDGET = 900
 EXEC_MAX = 600   # one session exec or gdb child
-GDB_DETACH_RESUME = 'foreach t [target names] { $t configure -event gdb-detach { resume } }'
+GDB_SERVER = ['-c', 'gdb port pipe', '-c', 'gdb memory_map disable', '-c', 'gdb breakpoint_override hard']
+# An RP2040 SMP resume restores core1 only after each core is polled (target-debug gdb.md, verified on the Pico)
+GDB_DETACH_RESUME = {'target/rp2040.cfg': '{ foreach u [target names] { $u arp_poll }; resume }'}   # by debug cfg
 REAP = 10   # agentrc hil_process.REAP_GRACE, per tracked child
 STEP_MAX = VERIFY_TIMEOUT + DETACH_WAIT + FLASH_TIMEOUT + VERIFY_TIMEOUT + ENUM_TIMEOUT + TEST_TIMEOUT + \
     4 * (REAP + SETTLE)
@@ -103,7 +106,7 @@ def load_agentrc(staged):
     hl = agentrc_pin.loader(root)
     A = argparse.Namespace(lock=hl.load_file(SCRIPTS[0]), flash=hl.load_file(SCRIPTS[1]),
                            process=hl.load_file(SCRIPTS[2]), report=hl.load_file(SCRIPTS[3]),
-                           usb=hl.load_file(SCRIPTS[4]), root=root)
+                           usb=hl.load_file(SCRIPTS[4]), esp=lambda: hl.load_file(SCRIPTS[5]), root=root)
     return A
 
 
@@ -145,10 +148,16 @@ def load_roster(path):
         if flasher == 'esptool' and 'usb_port' not in b:
             # Arduino on ESP32 enumerates without an iSerial: the DUT is the device at its port
             raise Refused(f'roster {path}: {name}: an esptool board needs usb_port')
-        tool = b.get('debug', {}).get('tool', 'openocd')
-        if tool not in ('openocd', 'openocd-esp32') or (tool == 'openocd-esp32') != ('uid' in b.get('debug', {})):
+        dbg = b.get('debug', {})
+        tool = dbg.get('tool', 'openocd')
+        if tool not in ('openocd', 'openocd-esp32') or (tool == 'openocd-esp32') != ('uid' in dbg):
             raise Refused(f'roster {path}: {name}: debug.tool is openocd, or openocd-esp32 with the debug '
                           f'probe\'s debug.uid')
+        chip = check_build.BOARDS[name].get('chip')
+        if tool == 'openocd-esp32' and ('vid_pid' in dbg or dbg.get('openocd') != f'-f board/{chip}-builtin.cfg'):
+            # the USB-Serial/JTAG is pinned by its bus-port (agentrc hil_openocd_esp), never by vid_pid
+            raise Refused(f'roster {path}: {name}: an openocd-esp32 debug route is "-f board/{chip}-builtin.cfg" '
+                          f'and debug.uid, with no vid_pid')
     return boards
 
 
@@ -960,25 +969,44 @@ def op_exec(args, board, run_dir, tracker, manifest):
     return run_child(args.argv, args.timeout, tracker)
 
 
-def gdb_argv(board, elf, commands):
+def esp_openocd(dbg, chip):
+    """openocd-esp32 on the board's USB-Serial/JTAG through agentrc's hil_openocd_esp checks: the verified build and its
+    own scripts, the USJ pinned by bus-port before its serial (a serial alone opens every 303a:1001 on the host first),
+    and ESP_FLASH_SIZE 0 before the target cfg, so gdb-attach skips its `reset halt` for memory protection
+    (esp_common.cfg:321). ValueError or RuntimeError when the route cannot be built."""
+    esp = A.esp()
+    found, cfgs = esp.admit({'name': 'openocd_esp', 'uid': dbg['uid'], 'args': dbg['openocd']})
+    if found != chip:
+        raise ValueError(f'debug.openocd names {found}, the board is an {chip}')
+    tool = esp.find_openocd(dbg['tool'])
+    esp.check_cfgs(found, cfgs, tool['scripts'])
+    files = [os.path.join(tool['scripts'], c) for c in cfgs]
+    return [tool['exe'], '-s', tool['scripts'], '-c', 'tcl port disabled', '-c', 'telnet port disabled',
+            '-c', 'set ESP_FLASH_SIZE 0', '-f', files[0], '-c', f'adapter usb location {esp.usj_location(dbg["uid"])}',
+            '-c', f'adapter serial {dbg["uid"]}', *(w for f in files[1:] for w in ('-f', f))]
+
+
+def gdb_argv(name, board, elf, commands):
     """gdb-multiarch in batch mode over an openocd it starts on a pipe, configured by the roster's debug.openocd and
-    pinned to the board's probe serial. The firmware must run on once gdb ends:
-    - openocd halts the target on gdb's connect and has no default gdb-detach handler, so one resumes it;
+    pinned to the board's probe. The firmware must run on once gdb ends:
+    - openocd halts the target on gdb's connect and has no default gdb-detach handler, so one resumes it; it runs when
+      the connection closes (gdb_server.c gdb_connection_closed), i.e. when gdb exits, not at `detach`;
     - with a memory map openocd probes every flash bank on connect (gdb_server.c gdb_new_connection), and the
       RP2040's probe leaves the QSPI flash out of XIP mode: no map, no probe;
     - without a map gdb takes flash for RAM and would patch a software breakpoint into it, so every breakpoint is
       made a hardware one (openocd.texi, gdb_breakpoint_override).
-    debug.tool openocd-esp32 runs Espressif's openocd on its own probe (debug.uid, e.g. the ESP32-P4's
-    USB-Serial/JTAG, pinned by debug.vid_pid)."""
+    debug.tool openocd-esp32 runs Espressif's openocd on the chip's USB-Serial/JTAG (debug.uid, esp_openocd)."""
     dbg = board['debug']
-    probe = {'name': 'openocd', 'uid': dbg.get('uid', board['flasher']['uid']), 'args': dbg['openocd']}
-    if 'uid' in dbg:
-        probe.update({'vid_pid': dbg['vid_pid']} if 'vid_pid' in dbg else {})
-    elif board['flasher']['name'] == 'openocd' and 'vid_pid' in board['flasher']:
-        probe['vid_pid'] = board['flasher']['vid_pid']
-    base = A.flash.openocd_cmd_base(probe)
-    openocd = [dbg.get('tool', 'openocd')] + base[1:] + ['-c', 'gdb_port pipe', '-c', 'gdb_memory_map disable',
-                                                         '-c', 'gdb_breakpoint_override hard', '-c', GDB_DETACH_RESUME]
+    if dbg.get('tool') == 'openocd-esp32':
+        openocd = esp_openocd(dbg, check_build.BOARDS[name]['chip'])
+    else:
+        probe = {'name': 'openocd', 'uid': board['flasher']['uid'], 'args': dbg['openocd']}
+        if board['flasher']['name'] == 'openocd' and 'vid_pid' in board['flasher']:
+            probe['vid_pid'] = board['flasher']['vid_pid']
+        openocd = A.flash.openocd_cmd_base(probe)
+    cfgs = shlex.split(dbg['openocd'])   # the silicon: the RP2350 boards share the rp2040 build family
+    handler = next((h for cfg, h in GDB_DETACH_RESUME.items() if cfg in cfgs), '{ resume }')
+    openocd += [*GDB_SERVER, '-c', f'foreach t [target names] {{ $t configure -event gdb-detach {handler} }}']
     return ['gdb-multiarch', '-batch', '-nx', '-ex', f'target extended-remote | {shlex.join(openocd)}',
             *(w for c in commands for w in ('-ex', c)), elf]
 
@@ -987,7 +1015,11 @@ def op_gdb(args, board, run_dir, tracker, manifest):
     if not board.get('debug', {}).get('openocd'):
         raise Refused(f'{args.board} has no debug.openocd in {args.roster}')
     meta, image, _ = admit_sketch(args, args.sketch, run_dir, manifest, True)
-    return {**meta, **run_child(gdb_argv(board, image['elf'], args.ex), args.timeout, tracker)}
+    try:
+        argv = gdb_argv(args.board, board, image['elf'], args.ex)
+    except (ValueError, RuntimeError) as e:
+        return {**meta, 'pass': False, 'detail': f'debug route: {e}'}
+    return {**meta, **run_child(argv, args.timeout, tracker)}
 
 
 def op_console(args, board, run_dir, tracker, manifest):

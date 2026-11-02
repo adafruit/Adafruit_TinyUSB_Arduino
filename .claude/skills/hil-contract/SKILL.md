@@ -40,8 +40,9 @@ A roster entry:
   Limits); the harness then tells the DUT by port, not serial. Required for esptool boards.
 - `flasher`: `name` `openocd`, `jlink` or `esptool`, `uid` the probe serial (esptool: its USB-UART bridge's), `args`,
   for openocd `vid_pid` and `verify`.
-- `debug.openocd`: the openocd config the GDB session uses; with `debug.tool` `openocd-esp32`, Espressif's openocd on
-  its own probe `debug.uid` (pinned by `debug.vid_pid`). No `debug`: no GDB route.
+- `debug.openocd`: the openocd config the GDB session uses; with `debug.tool` `openocd-esp32`, exactly
+  `-f board/<chip>-builtin.cfg` and `debug.uid` the chip's USB-Serial/JTAG serial, no `vid_pid` (agentrc's
+  `hil_openocd_esp` pins it by bus-port). No `debug`: no GDB route.
 - `arduino.tests`: the tests the battery runs, all of the board's role (device or host, the build contract's board
   table); a host board's `arduino.dev_attached` lists the devices on its USB port, each a `vid_pid` `vvvv:pppp` and
   its `serial`.
@@ -138,12 +139,13 @@ python3 $H/hil_remote.py session exec <id> exec [--timeout S] -- <argv>   # a co
 python3 $H/hil_remote.py session close <id>                         # restore the board's sketch, then release
 ```
 
-- `gdb` runs `gdb-multiarch -batch` over `target extended-remote | openocd ... -c "gdb_port pipe"`, with the roster's
-  `debug.openocd` pinned to the board's probe serial. The attach halts the core and the detach resumes it, so the
-  firmware runs on: an echo after the detach checked it for read-only and breakpoint sessions on Pico, read-only on
-  Fruit Jam. openocd exits when GDB detaches. Breakpoints are hardware ones, and there is no flash `load`: reflash
-  with `flash`. The ESP32-P4 goes through `openocd-esp32` on its USB-Serial/JTAG (`board/esp32p4-builtin.cfg`); the
-  ESP32-S3 has no GDB route (Limits).
+- `gdb` runs `gdb-multiarch -batch` over `target extended-remote | openocd ... -c "gdb port pipe"`, with the roster's
+  `debug.openocd` pinned to the board's probe. The attach halts the target; it resumes when the gdb connection closes,
+  at gdb's exit, not at `detach` (in extended-remote gdb stays connected), so an `--ex` after `detach` still sees it
+  halted: check the firmware after the session. The session's end runs `resume` (on the RP2040 after polling both
+  cores, or core1 stays halted). Breakpoints are hardware ones, and there is no flash `load`: reflash with `flash`. The
+  ESP32-P4 goes through `openocd-esp32` on its USB-Serial/JTAG, built by agentrc's `hil_openocd_esp` checks, with
+  `ESP_FLASH_SIZE 0` so the attach does not reset a memory-protected app; the ESP32-S3 has no GDB route (Limits).
 - `console` captures the board's console for `--seconds` into `console.log` (its tail in the JSON): the CMSIS-DAP
   probe's VCOM (the target's UART0), or an esptool board's USB-UART bridge (UART0: the ESP boot log). `--reset` resets
   through the probe with the console open; on an esptool board the reset takes the bridge first, so the boot's first
@@ -260,8 +262,8 @@ human.
 - **Known faults:**
   - The Fruit Jam's openocd reset-init intermittently times out (`rcp_init`, core0 halted in the bootrom NMI
     handler), failing one flash. A retry passes.
-  - On the RP2040 a GDB `continue` prints openocd SMP resume errors (core1 sits in the bootrom). The breakpoint is
-    still reached.
+  - On the RP2040, and on the RP2350 (Fruit Jam, 1 of 3), a GDB `continue` prints openocd SMP resume errors (core1
+    sits in the bootrom). The breakpoint is still reached.
 - **Missing documentation:** the Fruit Jam, Metro M4 and the farm's USB mux fixture are not in the reference library.
   The rig facts above rest on the RP2040, RP2350 and SAMD51 datasheets, the TS3USB30 datasheet (S high selects D2),
   tinyusb's ESP32 board files (GPIO47) and observed behaviour.
