@@ -461,9 +461,11 @@ def vid_pid(build_dir):
     source = (ROOT / 'src/arduino/Adafruit_USBD_Device.cpp').read_text()
     variant = ''
     if '-DARDUINO_ARCH_ESP32' in flags:
-        for inc in [m.group(1) for m in (re.match(r'-I(.*/variants/[^/]+)', a) for a in argv) if m]:
-            header = Path(inc) / 'pins_arduino.h'
-            variant += header.read_text(errors='replace') if header.is_file() else ''
+        for arg in argv:
+            m = re.match(r'-I(.*/variants/[^/]+)', arg)
+            if m:
+                header = Path(m.group(1)) / 'pins_arduino.h'
+                variant += header.read_text(errors='replace') if header.is_file() else ''
     ids = []
     for name, board_name in (('USB_VID', 'BOARD_VENDORID'), ('USB_PID', 'BOARD_PRODUCTID')):
         defined = re.findall(rf'-D{name}=(\S+)', flags) or \
