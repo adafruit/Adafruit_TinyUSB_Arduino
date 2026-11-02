@@ -484,15 +484,12 @@ class EspRecord(unittest.TestCase):
         b = self.root / 'build/hil/raspberry_pi_pico_w/host_device_info'
         b.mkdir(parents=True)
         (b / 'host_device_info.ino.elf').write_bytes(elf32([(1, 0x10000000, 64)]))
-        row = {'example': 'examples/Host/Simple/host_device_info', 'buildDir': rel_to(b, self.root), 'vidPid': None,
-               'foreignHeaders': [], 'platform': {'id': 'rp2040:rp2040', 'version': '5.4.3', 'install_dir': '/x'}}
+        row = {'example': 'examples/Host/Simple/host_device_info', 'buildDir': b.relative_to(self.root).as_posix(),
+               'vidPid': None, 'foreignHeaders': [],
+               'platform': {'id': 'rp2040:rp2040', 'version': '5.4.3', 'install_dir': '/x'}}
         rec, err = self.record(row, 'raspberry_pi_pico_w')
         self.assertIsNone(err)
         self.assertEqual(rec['role'], 'host')
-
-
-def rel_to(path, root):
-    return Path(path).relative_to(root).as_posix()
 
 
 class Fixture(unittest.TestCase):
