@@ -386,6 +386,11 @@ class Record(unittest.TestCase):
         _, err = self.record(self.samd_row())
         self.assertIn("flasher 'stlink' has no image kind", err)
 
+    def test_null_flasher_refused(self):
+        self.roster.write_text(json.dumps({'boards': [{'name': 'metro_m4_express', 'flasher': None}]}))
+        _, err = self.record(self.samd_row())
+        self.assertIn('flasher None has no image kind', err)
+
     def test_jlink_board_without_hex_refused(self):
         _, err = self.record(self.row([(0x4000, 32)]))
         self.assertIn('flashes the HEX', err)
@@ -504,6 +509,7 @@ class EspRecord(unittest.TestCase):
         rec, err = self.record(row, 'raspberry_pi_pico_w')
         self.assertIsNone(err)
         self.assertEqual(rec['role'], 'host')
+        self.assertIn('host_device_info', rec['sketches'])
 
 
 class Fixture(unittest.TestCase):

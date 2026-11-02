@@ -181,8 +181,16 @@ void print_device_descriptor(tuh_xfer_t *xfer) {
 static size_t _convert_utf16le_to_utf8(const uint16_t *utf16, size_t utf16_len, uint8_t *utf8, size_t utf8_len) {
   size_t count = 0;
   for (size_t i = 0; i < utf16_len; i++) {
-    uint16_t chr = utf16[i];
-    size_t chr_bytes = (chr < 0x80) ? 1 : (chr < 0x800) ? 2 : 3;
+    uint32_t chr = utf16[i];
+    if (chr >= 0xD800 && chr <= 0xDFFF) {
+      // A high/low surrogate pair is one code point above U+FFFF; a lone surrogate becomes U+FFFD
+      if (chr <= 0xDBFF && i + 1 < utf16_len && utf16[i + 1] >= 0xDC00 && utf16[i + 1] <= 0xDFFF) {
+        chr = 0x10000 + ((chr - 0xD800) << 10) + (utf16[++i] - 0xDC00);
+      } else {
+        chr = 0xFFFD;
+      }
+    }
+    size_t chr_bytes = (chr < 0x80) ? 1 : (chr < 0x800) ? 2 : (chr < 0x10000) ? 3 : 4;
     if (count + chr_bytes >= utf8_len) {
       break;
     }
@@ -191,13 +199,16 @@ static size_t _convert_utf16le_to_utf8(const uint16_t *utf16, size_t utf16_len, 
     } else if (chr < 0x800) {
       utf8[count++] = (uint8_t) (0xC0 | (chr >> 6 & 0x1F));
       utf8[count++] = (uint8_t) (0x80 | (chr >> 0 & 0x3F));
-    } else {
-      // TODO: Verify surrogate.
+    } else if (chr < 0x10000) {
       utf8[count++] = (uint8_t) (0xE0 | (chr >> 12 & 0x0F));
       utf8[count++] = (uint8_t) (0x80 | (chr >> 6 & 0x3F));
       utf8[count++] = (uint8_t) (0x80 | (chr >> 0 & 0x3F));
+    } else {
+      utf8[count++] = (uint8_t) (0xF0 | (chr >> 18 & 0x07));
+      utf8[count++] = (uint8_t) (0x80 | (chr >> 12 & 0x3F));
+      utf8[count++] = (uint8_t) (0x80 | (chr >> 6 & 0x3F));
+      utf8[count++] = (uint8_t) (0x80 | (chr >> 0 & 0x3F));
     }
-    // TODO: Handle UTF-16 code points that take two entries.
   }
   return count;
 }

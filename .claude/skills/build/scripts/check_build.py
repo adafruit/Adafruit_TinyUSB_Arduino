@@ -633,7 +633,8 @@ def make_record(args, board, rows, before, diff, roster_path):
                                                                                           'status')}:
         return None, 'the source changed while building'
     lo, hi = BOARDS[board]['span']
-    flasher = rig_roster(roster_path)[board].get('flasher', {}).get('name')
+    entry = rig_roster(roster_path)[board].get('flasher')
+    flasher = entry.get('name') if isinstance(entry, dict) else None
     if flasher not in IMAGE_KIND:
         return None, f'{board}: flasher {flasher!r} has no image kind; must be one of {sorted(IMAGE_KIND)}'
     image = IMAGE_KIND[flasher]   # what hil_test.py flashes for this probe
