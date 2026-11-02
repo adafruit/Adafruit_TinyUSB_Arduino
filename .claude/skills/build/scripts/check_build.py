@@ -109,8 +109,12 @@ LIBRARY_NAME = 'Adafruit TinyUSB Library'
 BOOT_APP0 = 'tools/partitions/boot_app0.bin'   # the ESP core's otadata image its flash_args name, under the platform
 
 
+def role(board):
+    return BOARDS[board].get('role', 'device')
+
+
 def hil_sketches(board):
-    return HIL_SKETCHES[BOARDS[board].get('role', 'device')]
+    return HIL_SKETCHES[role(board)]
 
 
 def fail(msg, **extra):
@@ -558,7 +562,7 @@ def hex_runs(path):
     return [(start, bytes(data)) for start, data in runs]
 
 
-def esp_segments(build_dir, lo, hi):
+def esp_segments(build_dir, lo):
     """([(offset, file)], '') of the build's flash_args (the ESP core writes it: a line of options, then one
     "<offset> <file>" per line), or (None, why): no image on the options line, every file present in the build dir,
     offsets ascending and not overlapping."""
@@ -624,7 +628,7 @@ def make_record(args, board, rows, before, diff, roster_path):
     lo, hi = BOARDS[board]['span']
     flasher = rig_roster(roster_path)[board]['flasher']['name']
     image = IMAGE_KIND[flasher]   # what hil_test.py flashes for this probe
-    host = BOARDS[board].get('role') == 'host'
+    host = role(board) == 'host'
     sketches = {}
     for row in rows:
         build_dir = ROOT / row['buildDir']
@@ -636,7 +640,7 @@ def make_record(args, board, rows, before, diff, roster_path):
         if image == 'elf':
             spans = elf_load_spans(elf)
         elif image == 'esptool':
-            segments, why = esp_segments(build_dir, lo, hi)
+            segments, why = esp_segments(build_dir, lo)
             if why:
                 return None, f'{row["example"]}: {why}'
             spans = [[off, off + (build_dir / name).stat().st_size] for off, name in segments]
@@ -660,8 +664,7 @@ def make_record(args, board, rows, before, diff, roster_path):
             'hex': rel(hexfile) if hexfile else None, 'image': image, 'loadSpans': [[s, e] for s, e in spans],
             'vidPid': row['vidPid'], 'foreignHeaders': row['foreignHeaders'],
             'sha256': {rel(f): sha256(f) for f in files},
-            **({'flashArgs': rel(build_dir / 'flash_args'), 'segments': [[o, n] for o, n in segments]}
-               if segments else {}),
+            **({'segments': [[o, n] for o, n in segments]} if segments else {}),
         }
     platform = rows[0]['platform']
     record = {
@@ -673,7 +676,7 @@ def make_record(args, board, rows, before, diff, roster_path):
         'harness': {p: sha256(ROOT / p) for p in ('.claude/skills/build/scripts/check_build.py',
                                                   '.claude/skills/hil-contract/scripts/hil_test.py')
                     if (ROOT / p).exists()},
-        'span': [lo, hi], 'role': 'host' if host else 'device', 'sketches': sketches,
+        'span': [lo, hi], 'role': role(board), 'sketches': sketches,
         **({'chip': BOARDS[board]['chip']} if 'chip' in BOARDS[board] else {}),
         **({'fixture': {'path': BOARDS[board]['fixture'], 'sha256': sha256(ROOT / BOARDS[board]['fixture'])}}
            if 'fixture' in BOARDS[board] else {}),

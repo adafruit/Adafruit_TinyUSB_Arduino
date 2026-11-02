@@ -85,7 +85,7 @@ class Tables(unittest.TestCase):
                      'raspberry_pi_pico2', 'espressif_s3_devkitm', 'espressif_p4_function_ev'):
             self.assertIn('span', cb.BOARDS[name])
             self.assertIn(cb.BOARDS[name]['filters'], cb.BOARDS)
-            self.assertIn(cb.BOARDS[name].get('role', 'device'), cb.HIL_SKETCHES)
+            self.assertIn(cb.role(name), cb.HIL_SKETCHES)
             fixture = cb.BOARDS[name].get('fixture')
             self.assertTrue(fixture is None or (ROOT / fixture).is_file())
 

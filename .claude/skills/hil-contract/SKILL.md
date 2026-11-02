@@ -135,6 +135,7 @@ python3 $H/hil_remote.py session stage <id> <record>...             # prints the
 python3 $H/hil_remote.py session exec <id> flash --bundle B --build-record R --sketch S
 python3 $H/hil_remote.py session exec <id> gdb --bundle B --build-record R --sketch S --ex 'bt' [--ex ...]
 python3 $H/hil_remote.py session exec <id> console [--seconds S] [--reset]   # the board's console to a log
+python3 $H/hil_remote.py session exec <id> check --bundle B --build-record R [--test T]   # a device test, no flash
 python3 $H/hil_remote.py session exec <id> exec [--timeout S] -- <argv>   # a command on the rig, in the tree
 python3 $H/hil_remote.py session close <id>                         # restore the board's sketch, then release
 ```
@@ -146,10 +147,16 @@ python3 $H/hil_remote.py session close <id>                         # restore th
   cores, or core1 stays halted). Breakpoints are hardware ones, and there is no flash `load`: reflash with `flash`. The
   ESP32-P4 goes through `openocd-esp32` on its USB-Serial/JTAG, built by agentrc's `hil_openocd_esp` checks, with
   `ESP_FLASH_SIZE 0` so the attach does not reset a memory-protected app; the ESP32-S3 has no GDB route (Limits).
-- `console` captures the board's console for `--seconds` into `console.log` (its tail in the JSON): the CMSIS-DAP
-  probe's VCOM (the target's UART0), or an esptool board's USB-UART bridge (UART0: the ESP boot log). `--reset` resets
-  through the probe with the console open; on an esptool board the reset takes the bridge first, so the boot's first
-  lines may be lost. Never run it while a flash holds the bridge: one session command at a time sees to that.
+- `console` captures the board's console for `--seconds` into `console.log` (its tail in the JSON), with
+  `console.times` holding one JSON line per chunk (`t`, its capture time after the open, not the wire time) and the
+  reset's mark: the CMSIS-DAP probe's VCOM (the target's UART0), or an esptool board's USB-UART bridge (UART0: the ESP
+  boot log). `--reset` resets with the console open: through the probe, or on an esptool board esptool's hard reset
+  on the open bridge's RTS/DTR lines (EN low 100 ms), so the ROM banner is kept. A serial error ends the capture
+  with what was read and fails the command. Never run it while a flash holds the bridge: one session command at a time
+  sees to that.
+- `check` runs a device test (`--test`, default `cdc_echo`) against the firmware as it runs, without flashing: the one
+  DUT enumerated with the record's VID:PID for that test's sketch. Use it after a GDB session or a reset; it shows the
+  function works, not which image is flashed. Host boards refuse it: read their console.
 - A refused `session open` (the board is held) prints the holder and leaves its attempt dir unused. Within the
   lock-wait budget, retry `session open` with a new run id; never wait on a recovery blocker.
 - Each command and child is bounded (`exec`/`gdb` `--timeout` at most 600 s) and runs through agentrc's
@@ -157,7 +164,8 @@ python3 $H/hil_remote.py session close <id>                         # restore th
 - One session command runs at a time per tree and board. It ignores SIGHUP; SIGTERM ends it as SIGINT does, its
   child ended or recorded pending.
 - Each command's JSON is the last stdout line and `result.json` in its `build/hil-manual/<board>-<cmd>-<time>/`.
-- On a dev PC the same commands are `hil_test.py flash|gdb|console|exec|restore -b B --under-hold <reason> ... ROSTER`,
+- On a dev PC the same commands are `hil_test.py flash|gdb|console|check|exec|restore -b B --under-hold <reason> ...
+  ROSTER`,
   under
   `hil_test.py lock hold B --reason <reason>`.
 
@@ -228,6 +236,11 @@ The dispatch carries the board, the failed report (or session id), the holder to
 4. Once the restore passed, `hil_test.py lock release --token <the holder's token, or T>`; that release refuses too
    while a receipt is open. On failure, keep the hold and report.
 
+A host board whose restore flashed and verified yet misses a `dev_attached` device keeps its hold like any failed
+restore. The Pico 2's Kingston stick once stopped answering the data stage of its first GET_DESCRIPTOR across MCU
+resets and reflashes (2026-11-02); nothing in this contract power-cycles a device on a host board's port, so report
+that as the blocker for the human rather than retrying.
+
 A failed `session close`: the session keeps its hold (`arduino-hil session <id>`). Once the session's pending
 children are proven ended (the next session command clears the record by itself), run `hil_remote.py session close
 <id>` again. It restores from the session's own `bundles/restore/` record, and its JSON is the last stdout line and
@@ -242,14 +255,20 @@ human.
 
 - **Coverage:** the battery checks three device sketches from this host's side and one host sketch's descriptor
   report on the selected boards. It covers no other example, class, core or MCU family, no host-mode transfer, and no
-  ESP32 host mode (the Arduino ESP32 config's host is MAX3421).
+  ESP32 host mode (the Arduino ESP32 config's host is MAX3421). A host board's check covers only its `dev_attached`
+  devices, which need a serial: the CH340 (1a86:7523, no iSerial) behind the Pico 2's hub is not checked.
+- **Host latency:** under concurrent sessions ci.lan has taken 0.4-16 s to open a DUT's CDC tty, before any request
+  reached the device (usbmon, 2026-11-02). The open is not bounded by the test deadline; allow for it in any host-side
+  timing claim.
 - **Commissioning.** `hil_test.py commission -b <board> ROSTER` finds the DUT's serial under Arduino firmware
   (exactly one device re-enumerating across a flash and a probe reset), or for a `usb_port` board its port. It runs
   from a checkout on the board's host and is not staged by `hil_remote.py`; host boards have nothing to commission.
   The ci.lan boards' uids come from tinyusb's roster; the battery confirmed the Pico's and the Fruit Jam's.
 - **ESP32 identity:** under Arduino the ESP32-S3 and ESP32-P4 enumerate with no iSerial (the library's ESP32
   `TinyUSB_Port_GetSerialNumber` returns none), so the roster pins each by `usb_port` (S3 11-1.3, P4 11-1.1 on
-  ci.lan). The S3 enumerates as `303a:1001`, its core variant's `USB_VID`/`USB_PID`; the P4 as `239a:cafe`.
+  ci.lan): the DUT is the device there whose device descriptor names no serial string, since while esptool runs
+  the S3's ROM USB-Serial/JTAG appears at the same port as `303a:1001` with its MAC as serial. The S3 enumerates as
+  `303a:1001`, its core variant's `USB_VID`/`USB_PID`; the P4 as `239a:cafe`.
 - **ESP32-S3 GDB:** its OTG controller takes the PHY its USB-Serial/JTAG uses, and the farm wires no pad JTAG: no GDB
   under Arduino. The P4's USB-Serial/JTAG has its own port (60:55:F9:F9:87:15 at 11-1.2), so its GDB works.
 - **RP2040/RP2350:** a probe reset leaves the USB controller running. The harness clears `SIE_CTRL.PULLUP_EN` through

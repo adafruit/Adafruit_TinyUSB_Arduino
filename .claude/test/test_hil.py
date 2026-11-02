@@ -86,6 +86,7 @@ class Base(unittest.TestCase):
         self.lock = FakeLock()
         ht.A = argparse.Namespace(lock=self.lock, flash=mock.Mock(), process=mock.Mock(), report=mock.Mock(),
                                   usb=mock.Mock())
+        ht.esptool_exe.cache_clear()
         self.roster = self.dir / 'ci.json'
         self.roster.write_text(json.dumps({'boards': [
             {'name': 'metro_m4_express', 'uid': 'ABC', 'flasher': {'name': 'jlink', 'uid': '1', 'args': '-device X'},
@@ -205,6 +206,9 @@ class HostTest(Base):
             def __init__(self, tty, baud, timeout):
                 calls.append(('open', tty, baud))
 
+            def __setattr__(self, name, value):
+                calls.append((name, value))
+
             def __enter__(self):
                 return self
 
@@ -287,13 +291,24 @@ class Esp(Base):
         f.esptool_input_problem.return_value, f.esptool_port.side_effect = '', RuntimeError('want one link')
         self.assertIn('want one link', ht.flash(flasher, self.image(), self.dir, tracker))
 
+    def device(self, busport, ino, iserial):
+        d = self.dir / f'dev{ino}'
+        d.mkdir()
+        (d / 'descriptors').write_bytes(bytes([18, 1] + [0] * 14 + [iserial, 1]) + b'config')
+        return {'busport': busport, 'ino': ino, 'dir': str(d)}
+
     def test_dut_is_the_device_at_its_port(self):
         s3 = ht.load_roster(ROOT / 'test/hil/ci.json')['espressif_s3_devkitm']
-        ht.A.usb.usb_devices.return_value = [{'busport': '11-1.3', 'ino': 5}, {'busport': '11-1.1', 'ino': 6}]
-        self.assertEqual(ht.dut_devices('303a:1001', s3), [{'busport': '11-1.3', 'ino': 5}])
+        app, rom = self.device('11-1.3', 5, 0), self.device('11-1.3', 7, 3)   # the ROM USB-Serial/JTAG has a serial
+        unreadable = {'busport': '11-1.3', 'ino': 8, 'dir': str(self.dir / 'gone')}
+        ht.A.usb.usb_devices.return_value = [app, rom, unreadable, self.device('11-1.1', 6, 0)]
+        ht.A.usb.enumeration_id = lambda d: int(Path(d).name.removeprefix('dev'))   # the record's own enumeration
+        self.assertEqual(ht.dut_devices('303a:1001', s3), [app])
         self.assertEqual(ht.A.usb.usb_devices.call_args[1], {'vid_pid': ('303a', '1001')})
         ht.A.usb.usb_scan.assert_not_called()
         self.assertEqual(ht.enumeration_of('303a:1001', s3), 5)
+        ht.A.usb.enumeration_id = lambda d: 99   # re-enumerated since the record was taken
+        self.assertEqual(ht.dut_devices('303a:1001', s3), [])
 
     def test_probe_presence_and_reset_through_the_bridge(self):
         flasher = {'name': 'esptool', 'uid': '3ea6'}
@@ -304,6 +319,9 @@ class Esp(Base):
         ht.A.flash.esptool_runtime.return_value, ht.A.flash.esptool_problem.return_value = {'exe': 'e'}, ''
         self.assertEqual(ht.reset(flasher, mock.Mock()), '')
         self.assertEqual(ht.A.flash.reset_esptool.call_args[1]['port'], '/dev/ttyUSB1')
+        ht.reset(flasher, mock.Mock())
+        self.assertEqual(ht.A.flash.esptool_runtime.call_count, 1)   # identity once per invocation
+        self.assertEqual(ht.A.flash.esptool_port.call_count, 4)      # the tty afresh each time
 
     def test_gdb_runs_espressif_openocd_on_the_usb_serial_jtag(self):
         esp = mock.Mock()
@@ -361,13 +379,16 @@ class Esp(Base):
 
 
 class Console(Base):
-    def capture(self, board_name, reset):
+    def capture(self, board_name, reset, fail=False):
         board = ht.load_roster(ROOT / 'test/hil/ci.json')[board_name]
-        calls = []
+        calls, reads = [], []
 
         class Port:
             def __init__(self, tty, baud, timeout):
                 calls.append(('open', tty, baud))
+
+            def __setattr__(self, name, value):
+                calls.append((name, value))
 
             def __enter__(self):
                 return self
@@ -379,6 +400,9 @@ class Console(Base):
                 pass
 
             def read(self, n):
+                reads.append(n)
+                if fail and len(reads) > 1:
+                    raise fail
                 return b'boot\n' if len(calls) < 6 else b''
         import serial
         now = [0.0]
@@ -386,7 +410,7 @@ class Console(Base):
         def tick():
             now[0] += 1
             return now[0]
-        args = argparse.Namespace(reset=reset, baud=115200, seconds=3)
+        args = argparse.Namespace(reset=reset, baud=115200, seconds=10)
         with mock.patch.object(ht, 'console_tty', return_value='/dev/ttyX'), \
                 mock.patch.object(ht, 'reset', lambda *a: calls.append('reset') or ''), \
                 mock.patch.object(serial, 'Serial', Port), mock.patch.object(ht.time, 'monotonic', tick):
@@ -399,11 +423,28 @@ class Console(Base):
         self.assertTrue(row['pass'])
         self.assertIn('boot', (self.dir / 'console.log').read_text())
 
-    def test_esptool_reset_takes_the_bridge_first(self):
-        _, calls = self.capture('espressif_s3_devkitm', True)
-        self.assertEqual(calls[:2], ['reset', ('open', '/dev/ttyX', 115200)])
-        _, calls = self.capture('espressif_s3_devkitm', False)
+    def test_esptool_reset_pulses_en_with_the_bridge_open(self):
+        row, calls = self.capture('espressif_s3_devkitm', True)
+        self.assertEqual(calls[:4], [('open', '/dev/ttyX', 115200), ('dtr', False), ('rts', True), ('rts', False)])
         self.assertNotIn('reset', calls)
+        times = [json.loads(x) for x in (self.dir / 'console.times').read_text().splitlines()]
+        self.assertTrue(times[0]['reset'])
+        self.assertEqual([t['len'] for t in times[1:]], [5] * (len(times) - 1))
+        _, calls = self.capture('espressif_s3_devkitm', False)
+        self.assertFalse([c for c in calls if c[0] in ('dtr', 'rts')])
+
+    def test_serial_error_keeps_the_capture_and_fails(self):
+        import serial
+        for error in (serial.SerialException('device disconnected'), OSError(5, 'device disconnected')):
+            row, _ = self.capture('raspberry_pi_pico_w', False, fail=error)
+            self.assertFalse(row['pass'])
+            self.assertIn('device disconnected', row['detail'])
+            self.assertIn('boot', (self.dir / 'console.log').read_text())
+
+    def test_check_is_a_session_command(self):
+        with mock.patch.object(ht, 'manual', return_value=0) as manual, mock.patch.object(ht.signal, 'signal'):
+            ht.main(['check', '-b', 'raspberry_pi_pico', '--under-hold', 'x', '--build-record', 'r.json', 'ci.json'])
+        self.assertEqual((manual.call_args[0][0].cmd, manual.call_args[0][0].test), ('check', None))
 
     def test_seconds_bounded(self):
         with contextlib.redirect_stdout(io.StringIO()) as out:
@@ -435,11 +476,31 @@ class RolesInRun(Base):
                 mock.patch.object(ht, 'detach'), mock.patch.object(ht, 'flash', bump), \
                 mock.patch.object(ht, 'reset', bump), mock.patch.object(ht.time, 'sleep'), \
                 mock.patch.object(ht, 'test_cdc', return_value=(True, 'echoed')), \
+                mock.patch.object(ht, 'no_iserial', return_value=True), \
                 contextlib.redirect_stdout(io.StringIO()) as out:
             self.assertEqual(ht.cmd_commission(args), 0)
         result = json.loads(out.getvalue().splitlines()[-1])
         self.assertEqual((result['port'], result['matchesRoster'], result['observed']),
                          ('11-1.3', True, [['11-1.3'], ['11-1.3']]))
+
+    def test_check_runs_a_device_test_without_flashing(self):
+        board = ht.load_roster(ROOT / 'test/hil/ci.json')['raspberry_pi_pico']
+        args = argparse.Namespace(board='raspberry_pi_pico', test=None)
+        image = {'vidPid': '239a:cafe'}
+        with mock.patch.object(ht, 'admit_sketch', return_value=({'record': 'r'}, image, {})) as admitted, \
+                mock.patch.object(ht, 'dut_devices', return_value=[{'busport': '21-1.3'}]), \
+                mock.patch.object(ht, 'flash') as flashed, \
+                mock.patch.dict(ht.TEST_FUNCS, {'cdc_echo': lambda *a: (True, 'echoed')}):
+            row = ht.op_check(args, board, self.dir, mock.Mock(), None)
+        self.assertEqual((row['pass'], row['test'], row['device']), (True, 'cdc_echo', '21-1.3'))
+        self.assertEqual(admitted.call_args[0][1], 'serial_echo')
+        flashed.assert_not_called()
+        with mock.patch.object(ht, 'admit_sketch', return_value=({}, image, {})), \
+                mock.patch.object(ht, 'dut_devices', return_value=[]):
+            self.assertIn('found 0', ht.op_check(args, board, self.dir, mock.Mock(), None)['detail'])
+        args.board = 'raspberry_pi_pico_w'
+        with self.assertRaisesRegex(ht.Refused, 'host board'):
+            ht.op_check(args, board, self.dir, mock.Mock(), None)
 
     def test_selection_drops_boards_without_a_requested_test(self):
         roster = ht.load_roster(ROOT / 'test/hil/ci.json')

@@ -12,7 +12,7 @@ attempt dir <base>/<run-id> (agentrc hil_remote_core). Local records and collect
   hil_remote.py session open --run-id ID -b BOARD [--host H] [--roster R]
       stage the board's clean record and take a hold on the board under the reason `arduino-hil session ID`
   hil_remote.py session stage ID RECORD...    stage records (experimental too) into a new bundle; prints its options
-  hil_remote.py session exec ID flash|gdb|restore|console OPTS...  hil_test.py's command under the session's hold
+  hil_remote.py session exec ID flash|gdb|restore|console|check OPTS...  hil_test.py's command under the hold
   hil_remote.py session exec ID exec [--timeout S] -- ARGV...
   hil_remote.py session close ID           restore the board's restoration sketch, check it, release the hold (one
                                            rig command)
@@ -45,7 +45,7 @@ HARNESS = (HIL, '.claude/skills/hil-contract/scripts/agentrc_pin.py', '.claude/s
 RUN_DIR = 'hil-run'
 MANIFEST = 'manifest.json'
 RESTORE_BUNDLE = 'bundles/restore'   # the clean record session close restores from, staged at open
-SESSION_CMDS = ('flash', 'gdb', 'restore', 'exec', 'console')
+SESSION_CMDS = ('flash', 'gdb', 'restore', 'exec', 'console', 'check')
 OWN_OPTS = ('-b', '--board', '--under-hold', '--staged')
 
 core = None
@@ -312,7 +312,8 @@ def parse(argv):
     st = s.add_parser('stage')
     st.add_argument('run_id')
     st.add_argument('records', nargs='+')
-    s.add_parser('exec', help='session exec ID flash|gdb|restore|exec|console ... (parsed by hil_test.py on the rig)')
+    s.add_parser('exec', help='session exec ID flash|gdb|restore|exec|console|check ... (hil_test.py parses it on '
+                              'the rig)')
     cl = s.add_parser('close')
     cl.add_argument('run_id')
     return ap.parse_args(argv)

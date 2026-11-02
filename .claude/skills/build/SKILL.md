@@ -93,8 +93,8 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
   else the library's fallback. It also refuses a foreign header that differs. It records HEAD, the FQBN, the platform
   (id, version, install dir, and commit and dirty state when the core is a git checkout), the arduino-cli version, the
   roster's and harness's sha256, the board's role, ESP `chip` and `fixture` (path and sha256), and per sketch its
-  images with sha256, load spans, VID:PID, foreign headers and, for esptool, `flashArgs` and `segments`; paths are
-  checkout-relative so the record stages to a rig unchanged.
+  images with sha256, load spans, VID:PID, foreign headers and, for esptool, `segments` (the build's `flash_args`
+  hashed beside them); paths are checkout-relative so the record stages to a rig unchanged.
 - **Experimental records** (`--experimental`, with `--record`) are for debug and instrumentation: a dirty tree and
   `--build-property` are allowed, untracked files under `src/`, `examples/` or `test/hil/` are refused (put
   instrumentation in tracked files), the source must not change during the build, and `git diff HEAD` is saved beside
