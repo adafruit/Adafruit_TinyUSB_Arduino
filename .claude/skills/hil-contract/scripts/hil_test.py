@@ -423,26 +423,19 @@ def devices(vid_pid):
     return A.usb.usb_devices(vid_pid=tuple(vid_pid.split(':')))
 
 
-def no_iserial(dev):
-    """The device descriptor (sysfs `descriptors`) names no serial string: iSerialNumber, byte 16 (USB 2.0 Table 9-8),
-    is 0. Unreadable or malformed is not known, so never the DUT."""
-    try:
-        with open(Path(dev['dir']) / 'descriptors', 'rb') as f:
-            desc = f.read(18)
-    except OSError:
-        return False
-    # the same enumeration before and after the read, as usb_scan checks its serial
-    if A.usb.enumeration_id(dev['dir']) != dev['ino']:
-        return False
-    return len(desc) == 18 and desc[0] == 18 and desc[1] == 1 and desc[16] == 0
+def no_serial(dev):
+    """No cached sysfs `serial` within one enumeration: Arduino on ESP32 points iSerialNumber at an empty string. A
+    failed serial read leaves none too, so this picks the candidate; the test run on it is the evidence."""
+    gone = not (Path(dev['dir']) / 'serial').exists()
+    return gone and A.usb.enumeration_id(dev['dir']) == dev['ino']
 
 
 def dut_devices(vid_pid, board):
-    """The DUT's enumerations with this VID:PID: where the firmware reports no iSerial (ESP32 under Arduino), the
+    """The DUT's enumerations with this VID:PID: where the firmware reports no serial (ESP32 under Arduino), the
     device at the roster's usb_port without one (an ESP32-S3's ROM USB-Serial/JTAG, 303a:1001 with its MAC as serial,
     shows at the same port while esptool runs), else the one whose serial is the roster uid."""
     if 'usb_port' in board:
-        return [d for d in devices(vid_pid) if d['busport'] == board['usb_port'] and no_iserial(d)]
+        return [d for d in devices(vid_pid) if d['busport'] == board['usb_port'] and no_serial(d)]
     return scan(vid_pid, board['uid'])
 
 
@@ -1160,7 +1153,7 @@ def cmd_commission(args):
 
     def enumerated(vid_pid):   # {identity: enumeration id}
         if by_port:
-            return {d['busport']: d['ino'] for d in devices(vid_pid) if no_iserial(d)}
+            return {d['busport']: d['ino'] for d in devices(vid_pid) if no_serial(d)}
         return {d['serial']: d['ino'] for d in scan(vid_pid)}
     run_dir = ROOT / 'build' / 'hil-manual' / f'commission-{args.board}-{time.strftime("%Y%m%d-%H%M%S")}'
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -1201,7 +1194,7 @@ def cmd_commission(args):
         if by_port:
             out['port'] = found.pop()
             out['matchesRoster'] = out['port'] == board['usb_port']
-            dev = next(d for d in devices(image['vidPid']) if d['busport'] == out['port'] and no_iserial(d))
+            dev = next(d for d in devices(image['vidPid']) if d['busport'] == out['port'] and no_serial(d))
         else:
             out['serial'] = found.pop()
             out['matchesRoster'] = out['serial'].lower() == board['uid'].lower()

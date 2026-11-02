@@ -291,18 +291,19 @@ class Esp(Base):
         f.esptool_input_problem.return_value, f.esptool_port.side_effect = '', RuntimeError('want one link')
         self.assertIn('want one link', ht.flash(flasher, self.image(), self.dir, tracker))
 
-    def device(self, busport, ino, iserial):
+    def device(self, busport, ino, serial):
         d = self.dir / f'dev{ino}'
         d.mkdir()
-        (d / 'descriptors').write_bytes(bytes([18, 1] + [0] * 14 + [iserial, 1]) + b'config')
+        if serial:   # the app's iSerialNumber names an empty string: the kernel then makes no `serial`
+            (d / 'serial').write_text(serial + '\n')
         return {'busport': busport, 'ino': ino, 'dir': str(d)}
 
     def test_dut_is_the_device_at_its_port(self):
         s3 = ht.load_roster(ROOT / 'test/hil/ci.json')['espressif_s3_devkitm']
-        app, rom = self.device('11-1.3', 5, 0), self.device('11-1.3', 7, 3)   # the ROM USB-Serial/JTAG has a serial
-        unreadable = {'busport': '11-1.3', 'ino': 8, 'dir': str(self.dir / 'gone')}
-        ht.A.usb.usb_devices.return_value = [app, rom, unreadable, self.device('11-1.1', 6, 0)]
-        ht.A.usb.enumeration_id = lambda d: int(Path(d).name.removeprefix('dev'))   # the record's own enumeration
+        app, rom = self.device('11-1.3', 5, ''), self.device('11-1.3', 7, '84:F7:03:C0:84:E4')   # the ROM USJ's MAC
+        gone = {'busport': '11-1.3', 'ino': 8, 'dir': str(self.dir / 'gone')}
+        ht.A.usb.usb_devices.return_value = [app, rom, gone, self.device('11-1.1', 6, '')]
+        ht.A.usb.enumeration_id = lambda d: int(Path(d).name[3:]) if Path(d).exists() else None   # as recorded
         self.assertEqual(ht.dut_devices('303a:1001', s3), [app])
         self.assertEqual(ht.A.usb.usb_devices.call_args[1], {'vid_pid': ('303a', '1001')})
         ht.A.usb.usb_scan.assert_not_called()
@@ -476,7 +477,7 @@ class RolesInRun(Base):
                 mock.patch.object(ht, 'detach'), mock.patch.object(ht, 'flash', bump), \
                 mock.patch.object(ht, 'reset', bump), mock.patch.object(ht.time, 'sleep'), \
                 mock.patch.object(ht, 'test_cdc', return_value=(True, 'echoed')), \
-                mock.patch.object(ht, 'no_iserial', return_value=True), \
+                mock.patch.object(ht, 'no_serial', return_value=True), \
                 contextlib.redirect_stdout(io.StringIO()) as out:
             self.assertEqual(ht.cmd_commission(args), 0)
         result = json.loads(out.getvalue().splitlines()[-1])

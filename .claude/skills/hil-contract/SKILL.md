@@ -36,8 +36,8 @@ A roster entry:
   so this harness and tinyusb's exclude each other on a shared board.
 - `uid`: the DUT's USB serial under Arduino firmware (Limits, commissioning); for a host board or a `usb_port`
   board, the board's tinyusb farm id, unused here.
-- `usb_port`: the sysfs bus port the DUT enumerates at, for firmware without an iSerial (ESP32 under Arduino,
-  Limits); the harness then tells the DUT by port, not serial. Required for esptool boards.
+- `usb_port`: the sysfs bus port the DUT enumerates at, for firmware with an empty serial string (ESP32 under
+  Arduino, Limits); the harness then tells the DUT by port, not serial. Required for esptool boards.
 - `flasher`: `name` `openocd`, `jlink` or `esptool`, `uid` the probe serial (esptool: its USB-UART bridge's), `args`,
   for openocd `vid_pid` and `verify`.
 - `debug.openocd`: the openocd config the GDB session uses; with `debug.tool` `openocd-esp32`, exactly
@@ -223,6 +223,10 @@ The dispatch carries the board, the failed report (or session id), the holder to
 (`ssh ci.lan 'cd ~/hil-remote/adafruit-tinyusb-arduino/<id> && python3 .claude/skills/hil-contract/scripts/hil_test.py
 ...'`), adding `--staged manifest.json` to `restore`. On a dev PC, run them from the checkout.
 
+When the failed tree's own harness is the defect, run the restore from a newly staged tree of the fixed commit (a
+`hil_remote.py run` of the held boards stages one and reports them locked), with `--report` naming the failed run's
+report by absolute path; the hold, its token and the receipts stay the failed run's.
+
 1. `hil_test.py lock status`, and `hil_test.py report <run dir> -b <board>` for the row's holder token and receipts;
    for a commission, read them from its `result.json` instead, since it writes no `hil_report.json`.
 2. Take the board for the restore, keeping it blocked throughout:
@@ -264,11 +268,12 @@ human.
   (exactly one device re-enumerating across a flash and a probe reset), or for a `usb_port` board its port. It runs
   from a checkout on the board's host and is not staged by `hil_remote.py`; host boards have nothing to commission.
   The ci.lan boards' uids come from tinyusb's roster; the battery confirmed the Pico's and the Fruit Jam's.
-- **ESP32 identity:** under Arduino the ESP32-S3 and ESP32-P4 enumerate with no iSerial (the library's ESP32
-  `TinyUSB_Port_GetSerialNumber` returns none), so the roster pins each by `usb_port` (S3 11-1.3, P4 11-1.1 on
-  ci.lan): the DUT is the device there whose device descriptor names no serial string, since while esptool runs
-  the S3's ROM USB-Serial/JTAG appears at the same port as `303a:1001` with its MAC as serial. The S3 enumerates as
-  `303a:1001`, its core variant's `USB_VID`/`USB_PID`; the P4 as `239a:cafe`.
+- **ESP32 identity:** under Arduino the ESP32-S3 and ESP32-P4 enumerate with an empty serial string (the library's ESP32
+  `TinyUSB_Port_GetSerialNumber` returns none), so the roster pins each by `usb_port` (S3 11-1.3, P4 11-1.1 on ci.lan):
+  the DUT candidate is the device there with no cached sysfs `serial`, since while esptool runs the S3's ROM
+  USB-Serial/JTAG appears at the same port as `303a:1001` with its MAC as serial; a failed serial read would also leave
+  none, so the test run on the candidate is the evidence. The S3 enumerates as `303a:1001`, its core variant's
+  `USB_VID`/`USB_PID`; the P4 as `239a:cafe`.
 - **ESP32-S3 GDB:** its OTG controller takes the PHY its USB-Serial/JTAG uses, and the farm wires no pad JTAG: no GDB
   under Arduino. The P4's USB-Serial/JTAG has its own port (60:55:F9:F9:87:15 at 11-1.2), so its GDB works.
 - **RP2040/RP2350:** a probe reset leaves the USB controller running. The harness clears `SIE_CTRL.PULLUP_EN` through
