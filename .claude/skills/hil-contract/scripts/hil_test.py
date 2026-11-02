@@ -154,10 +154,12 @@ def load_roster(path):
             raise Refused(f'roster {path}: {name}: debug.tool is openocd, or openocd-esp32 with the debug '
                           f'probe\'s debug.uid')
         chip = check_build.BOARDS[name].get('chip')
-        if tool == 'openocd-esp32' and ('vid_pid' in dbg or dbg.get('openocd') != f'-f board/{chip}-builtin.cfg'):
-            # the USB-Serial/JTAG is pinned by its bus-port (agentrc hil_openocd_esp), never by vid_pid
-            raise Refused(f'roster {path}: {name}: an openocd-esp32 debug route is "-f board/{chip}-builtin.cfg" '
-                          f'and debug.uid, with no vid_pid')
+        if tool == 'openocd-esp32' and ('vid_pid' in dbg or dbg.get('openocd') != f'-f board/{chip}-builtin.cfg' or
+                                        not re.fullmatch(r'\d+-\d+(\.\d+)*', dbg.get('usb_port', ''))
+                                        or len(dbg['usb_port']) > 16):   # openocd truncates a longer location
+            # the USB-Serial/JTAG is pinned by its bus-port, never by vid_pid
+            raise Refused(f'roster {path}: {name}: an openocd-esp32 debug route is "-f board/{chip}-builtin.cfg", '
+                          f'debug.uid and debug.usb_port (its bus-port), with no vid_pid')
     return boards
 
 
@@ -392,7 +394,11 @@ def flash_and_enumerate(name, board, image, run_dir, tracker):
     why = flash(board['flasher'], image, run_dir, tracker)
     if why:
         return why, detached, None
-    return '', detached, wait_enumerated(image['vidPid'], board, before)
+    flashed = time.monotonic()
+    dev = wait_enumerated(image['vidPid'], board, before)
+    if dev:   # seconds from the flash's end, the 1 s stability hold included
+        dev = {**dev, 'after': round(time.monotonic() - flashed, 1)}
+    return '', detached, dev
 
 
 def reset(flasher, tracker):
@@ -1022,6 +1028,22 @@ def op_exec(args, board, run_dir, tracker, manifest):
     return run_child(args.argv, args.timeout, tracker)
 
 
+def usj_at(dbg):
+    """The roster's USB-Serial/JTAG bus-port (debug.usb_port), once the device there is 303a:1001 with serial debug.uid
+    within one enumeration. agentrc's usj_location walks the whole bus and refuses while any 303a:1001 has no readable
+    serial, which the S3's Arduino DUT never has."""
+    d = str(Path(A.usb.SYS_USB_DEVICES) / dbg['usb_port'])
+    ino = A.usb.enumeration_id(d)
+    try:
+        ids = tuple((Path(d) / a).read_text().strip() for a in ('idVendor', 'idProduct'))
+    except OSError:
+        ids = None
+    serial = A.usb.read_sysfs(str(Path(d) / 'serial'))
+    if ino is None or ids != ('303a', '1001') or serial != dbg['uid'] or A.usb.enumeration_id(d) != ino:
+        raise RuntimeError(f'no USB-Serial/JTAG {dbg["uid"]} at {dbg["usb_port"]} (found {ids}, serial {serial!r})')
+    return dbg['usb_port']
+
+
 def esp_openocd(dbg, chip):
     """openocd-esp32 on the board's USB-Serial/JTAG through agentrc's hil_openocd_esp checks: the verified build and its
     own scripts, the USJ pinned by bus-port before its serial (a serial alone opens every 303a:1001 on the host first),
@@ -1035,7 +1057,7 @@ def esp_openocd(dbg, chip):
     esp.check_cfgs(found, cfgs, tool['scripts'])
     files = [os.path.join(tool['scripts'], c) for c in cfgs]
     return [tool['exe'], '-s', tool['scripts'], '-c', 'tcl port disabled', '-c', 'telnet port disabled',
-            '-c', 'set ESP_FLASH_SIZE 0', '-f', files[0], '-c', f'adapter usb location {esp.usj_location(dbg["uid"])}',
+            '-c', 'set ESP_FLASH_SIZE 0', '-f', files[0], '-c', f'adapter usb location {usj_at(dbg)}',
             '-c', f'adapter serial {dbg["uid"]}', *(w for f in files[1:] for w in ('-f', f))]
 
 
@@ -1120,23 +1142,34 @@ def op_check(args, board, run_dir, tracker, manifest):
         return {**meta, 'test': test, 'pass': False,
                 'detail': f'want one {image["vidPid"]} {dut_name(board)} enumerated, found {len(devs)}'}
     ok, detail = run_test(test, devs[0], tracker, run_dir)
-    return {**meta, 'test': test, 'pass': ok, 'detail': detail, 'device': devs[0]['busport']}
+    return {**meta, 'test': test, 'pass': ok, 'detail': detail,
+            'device': {'busport': devs[0]['busport'], 'devnum': devs[0].get('devnum')}}
 
 
 OPS = {'flash': op_flash, 'restore': op_restore, 'gdb': op_gdb, 'exec': op_exec, 'console': op_console,
        'check': op_check}
 
 
+def written(flasher, image):
+    """What the flasher wrote: the ELF for openocd, the HEX for J-Link, the flash_args images for esptool."""
+    if flasher['name'] == 'esptool':
+        return f'{len(image["segments"])} flash_args images'
+    return Path(image['hex'] if flasher['name'] == 'jlink' else image['elf']).name
+
+
 def flash_only(name, board, image, run_dir, tracker):
+    what = written(board['flasher'], image)
     if role(name) == 'host':   # no DUT on this host's bus: the console shows what runs
         why = flash(board['flasher'], image, run_dir, tracker)
-        return {'pass': not why, 'detail': why or f'flashed {Path(image["elf"]).name} (a host board: read its console)'}
+        return {'pass': not why, 'detail': why or f'flashed {what} (a host board: read its console)'}
     why, detached, dev = flash_and_enumerate(name, board, image, run_dir, tracker)
     if why:
         return {'pass': False, 'detail': why, 'detach': detached}
-    return {'pass': True, 'detail': f'flashed {Path(image["elf"]).name}; ' +
-            (f'enumerated as {image["vidPid"]} at {dev["busport"]}' if dev else
-             f'no {image["vidPid"]} {dut_name(board)} enumerated (the image may not run USB)')}
+    if not dev:
+        return {'pass': True, 'detail': f'flashed {what}; no {image["vidPid"]} {dut_name(board)} enumerated (the '
+                                        f'image may not run USB)'}
+    return {'pass': True, 'detail': f'flashed {what}; enumerated as {image["vidPid"]} at {dev["busport"]}',
+            'device': {'busport': dev['busport'], 'devnum': dev.get('devnum'), 'after': dev['after']}}
 
 
 def cmd_commission(args):

@@ -41,8 +41,10 @@ A roster entry:
 - `flasher`: `name` `openocd`, `jlink` or `esptool`, `uid` the probe serial (esptool: its USB-UART bridge's), `args`,
   for openocd `vid_pid` and `verify`.
 - `debug.openocd`: the openocd config the GDB session uses; with `debug.tool` `openocd-esp32`, exactly
-  `-f board/<chip>-builtin.cfg` and `debug.uid` the chip's USB-Serial/JTAG serial, no `vid_pid` (agentrc's
-  `hil_openocd_esp` pins it by bus-port). No `debug`: no GDB route.
+  `-f board/<chip>-builtin.cfg`, `debug.uid` the chip's USB-Serial/JTAG serial and `debug.usb_port` its bus-port, no
+  `vid_pid`. The harness checks that serial at that port and passes the port as openocd's `adapter usb location`;
+  agentrc's whole-bus lookup refuses while a serial-less 303a:1001 (the S3's Arduino DUT) is on the host. No `debug`:
+  no GDB route.
 - `arduino.tests`: the tests the battery runs, all of the board's role (device or host, the build contract's board
   table); a host board's `arduino.dev_attached` lists the devices on its USB port, each a `vid_pid` `vvvv:pppp` and
   its `serial`.
@@ -156,7 +158,10 @@ python3 $H/hil_remote.py session close <id>                         # restore th
   sees to that.
 - `check` runs a device test (`--test`, default `cdc_echo`) against the firmware as it runs, without flashing: the one
   DUT enumerated with the record's VID:PID for that test's sketch. Use it after a GDB session or a reset; it shows the
-  function works, not which image is flashed. Host boards refuse it: read their console.
+  function works, not which image is flashed nor every core's state (a halted RP2040 core1 leaves Arduino's
+  single-core firmware echoing). Host boards refuse it: read their console.
+- `flash` and `check` name the DUT they chose by bus-port and devnum; `flash` adds `after`, the seconds from the flash's
+  end to a stable enumeration (the 1 s hold included).
 - A refused `session open` (the board is held) prints the holder and leaves its attempt dir unused. Within the
   lock-wait budget, retry `session open` with a new run id; never wait on a recovery blocker.
 - Each command and child is bounded (`exec`/`gdb` `--timeout` at most 600 s) and runs through agentrc's
@@ -286,6 +291,8 @@ human.
 - **Known faults:**
   - The Fruit Jam's openocd reset-init intermittently times out (`rcp_init`, core0 halted in the bootrom NMI
     handler), failing one flash. A retry passes.
+  - A CMSIS-DAP flash on ci.lan once failed with `CMSIS-DAP command mismatch` (Pico W) and left core0 halted in the
+    flash stub. A retry passed; reflash before judging the firmware after a failed flash.
   - On the RP2040, and on the RP2350 (Fruit Jam, 1 of 3), a GDB `continue` prints openocd SMP resume errors (core1
     sits in the bootrom). The breakpoint is still reached.
 - **Missing documentation:** the Fruit Jam, Metro M4 and the farm's USB mux fixture are not in the reference library.

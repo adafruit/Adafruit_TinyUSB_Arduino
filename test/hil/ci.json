@@ -124,7 +124,8 @@
       "debug": {
         "openocd": "-f board/esp32p4-builtin.cfg",
         "tool": "openocd-esp32",
-        "uid": "60:55:F9:F9:87:15"
+        "uid": "60:55:F9:F9:87:15",
+        "usb_port": "11-1.2"
       },
       "arduino": {
         "tests": ["cdc_echo", "hid_inout", "msc_ramdisk"]

@@ -151,8 +151,10 @@ class Tables(unittest.TestCase):
                  ('espressif_s3_devkitm', {'usb_port': '/dev/x'}, 'bus port'),
                  ('espressif_p4_function_ev', {'debug': {'openocd': '-f x', 'tool': 'openocd-esp32'}}, 'debug.uid'),
                  ('espressif_p4_function_ev', {'debug': {'openocd': '-f board/esp32p4-builtin.cfg', 'uid': 'M',
-                                                         'tool': 'openocd-esp32', 'vid_pid': '0x303a 0x1001'}},
-                  'no vid_pid'),
+                                                         'tool': 'openocd-esp32', 'vid_pid': '0x303a 0x1001',
+                                                         'usb_port': '11-1.2'}}, 'no vid_pid'),
+                 ('espressif_p4_function_ev', {'debug': {'openocd': '-f board/esp32p4-builtin.cfg', 'uid': 'M',
+                                                         'tool': 'openocd-esp32'}}, 'debug.usb_port'),
                  ('espressif_p4_function_ev', {'debug': {'openocd': '-f board/esp32s3-builtin.cfg', 'uid': 'M',
                                                          'tool': 'openocd-esp32'}}, 'no vid_pid'),
                  ('raspberry_pi_pico', {'flasher': {'name': 'pyocd'}}, 'flasher must be'))
@@ -328,11 +330,12 @@ class Esp(Base):
         esp = mock.Mock()
         esp.admit.return_value = ('esp32p4', ['board/esp32p4-builtin.cfg'])
         esp.find_openocd.return_value = {'exe': '/o/bin/openocd', 'scripts': '/o/scripts'}
-        esp.usj_location.return_value = '11-1.2'
         ht.A.esp = lambda: esp
         p4 = ht.load_roster(ROOT / 'test/hil/ci.json')['espressif_p4_function_ev']
-        pipe = ht.shlex.split(ht.gdb_argv('espressif_p4_function_ev', p4, 'fw.elf', [])[4]
-                              .removeprefix('target extended-remote | '))
+        with mock.patch.object(ht, 'usj_at', return_value='11-1.2'):
+            pipe = ht.shlex.split(ht.gdb_argv('espressif_p4_function_ev', p4, 'fw.elf', [])[4]
+                                  .removeprefix('target extended-remote | '))
+        esp.usj_location.assert_not_called()   # it refuses while the S3's serial-less DUT is on the bus
         self.assertEqual(esp.admit.call_args[0][0], {'name': 'openocd_esp', 'uid': '60:55:F9:F9:87:15',
                                                      'args': '-f board/esp32p4-builtin.cfg'})
         self.assertEqual(esp.find_openocd.call_args[0][0], 'openocd-esp32')
@@ -348,6 +351,38 @@ class Esp(Base):
         esp.admit.return_value = ('esp32s3', ['board/esp32s3-builtin.cfg'])
         with self.assertRaisesRegex(ValueError, 'names esp32s3'):
             ht.gdb_argv('espressif_p4_function_ev', p4, 'fw.elf', [])
+
+    def test_flash_names_what_the_flasher_wrote(self):
+        image = {'elf': '/r/serial_echo.ino.elf', 'hex': '/r/serial_echo.ino.hex', 'segments': [[0, 'a'], [1, 'b']]}
+        self.assertEqual([ht.written({'name': n}, image) for n in ('openocd', 'jlink', 'esptool')],
+                         ['serial_echo.ino.elf', 'serial_echo.ino.hex', '2 flash_args images'])
+        board = ht.load_roster(ROOT / 'test/hil/ci.json')['metro_m4_express']
+        dev = {'busport': '9-1.4', 'devnum': 95, 'ino': 3, 'after': 1.9}
+        with mock.patch.object(ht, 'flash_and_enumerate', return_value=('', 'n/a', dev)):
+            row = ht.flash_only('metro_m4_express', board, {**image, 'vidPid': '239a:8020'}, self.dir, None)
+        self.assertEqual((row['detail'], row['device']), ('flashed serial_echo.ino.hex; enumerated as 239a:8020 at '
+                                                          '9-1.4', {'busport': '9-1.4', 'devnum': 95, 'after': 1.9}))
+
+    def test_usb_serial_jtag_is_checked_at_its_roster_port(self):
+        root = self.dir / 'sys'
+        usj = root / '11-1.2'
+        usj.mkdir(parents=True)
+        (usj / 'idVendor').write_text('303a\n')
+        (usj / 'idProduct').write_text('1001\n')
+        ht.A.usb.SYS_USB_DEVICES = str(root)
+        ht.A.usb.enumeration_id = lambda d: 7 if Path(d).exists() else None
+        dbg = {'uid': '60:55:F9:F9:87:15', 'usb_port': '11-1.2'}
+        ht.A.usb.read_sysfs = lambda p: '60:55:F9:F9:87:15'
+        self.assertEqual(ht.usj_at(dbg), '11-1.2')
+        for serial, port in (('84:F7:03:C0:84:E4', '11-1.2'), (None, '11-1.2'), ('60:55:F9:F9:87:15', '11-1.3')):
+            ht.A.usb.read_sysfs = lambda p, s=serial: s
+            with self.subTest(serial=serial, port=port), self.assertRaisesRegex(RuntimeError, 'no USB-Serial/JTAG'):
+                ht.usj_at({**dbg, 'usb_port': port})
+        ids = iter([7, 8])   # re-enumerated during the check
+        ht.A.usb.enumeration_id = lambda d: next(ids)
+        ht.A.usb.read_sysfs = lambda p: '60:55:F9:F9:87:15'
+        with self.assertRaisesRegex(RuntimeError, 'no USB-Serial/JTAG'):
+            ht.usj_at(dbg)
 
     def test_admit_carries_the_flash_inputs_and_checks_the_role(self):
         self.roster.write_text(json.dumps({'boards': [
@@ -493,7 +528,7 @@ class RolesInRun(Base):
                 mock.patch.object(ht, 'flash') as flashed, \
                 mock.patch.dict(ht.TEST_FUNCS, {'cdc_echo': lambda *a: (True, 'echoed')}):
             row = ht.op_check(args, board, self.dir, mock.Mock(), None)
-        self.assertEqual((row['pass'], row['test'], row['device']), (True, 'cdc_echo', '21-1.3'))
+        self.assertEqual((row['pass'], row['test'], row['device']['busport']), (True, 'cdc_echo', '21-1.3'))
         self.assertEqual(admitted.call_args[0][1], 'serial_echo')
         flashed.assert_not_called()
         with mock.patch.object(ht, 'admit_sketch', return_value=({}, image, {})), \
