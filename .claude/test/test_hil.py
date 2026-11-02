@@ -446,7 +446,7 @@ class Console(Base):
         def tick():
             now[0] += 1
             return now[0]
-        args = argparse.Namespace(reset=reset, baud=115200, seconds=10)
+        args = argparse.Namespace(board=board_name, reset=reset, baud=115200, seconds=10)
         with mock.patch.object(ht, 'console_tty', return_value='/dev/ttyX'), \
                 mock.patch.object(ht, 'reset', lambda *a: calls.append('reset') or ''), \
                 mock.patch.object(serial, 'Serial', Port), mock.patch.object(ht.time, 'monotonic', tick):
@@ -458,6 +458,26 @@ class Console(Base):
         self.assertEqual(calls[:2], [('open', '/dev/ttyX', 115200), 'reset'])
         self.assertTrue(row['pass'])
         self.assertIn('boot', (self.dir / 'console.log').read_text())
+
+    def test_rp2040_device_console_reset_detaches_first(self):
+        with mock.patch.object(ht, 'detach', lambda *a: calls_detach.append(a[2]) or 'detached'):
+            calls_detach = []
+            _, calls = self.capture('raspberry_pi_pico', True)
+        self.assertEqual((calls_detach, calls[:2]), ([None], [('open', '/dev/ttyX', 115200), 'reset']))
+        with mock.patch.object(ht, 'detach', return_value='still enumerated 5s after the detach'):
+            row, calls = self.capture('raspberry_pi_pico', True)
+        self.assertEqual((row['pass'], 'reset' in calls), (False, False))
+        self.assertIn('detach: still enumerated', row['detail'])
+
+    def test_detach_without_a_record_waits_for_the_serial(self):
+        board = ht.load_roster(ROOT / 'test/hil/ci.json')['raspberry_pi_pico']
+        ht.A.flash.run_openocd_commands.return_value = mock.Mock(returncode=0, stdout=b'', stderr=b'')
+        ht.A.usb.usb_scan.side_effect = [[{'busport': '21-1.3'}], []]
+        with mock.patch.object(ht.time, 'sleep'):
+            self.assertEqual(ht.detach('raspberry_pi_pico', board, None, mock.Mock()), 'detached')
+        self.assertEqual(ht.A.usb.usb_scan.call_args[1], {'serial': board['uid']})
+        pico_w = ht.load_roster(ROOT / 'test/hil/ci.json')['raspberry_pi_pico_w']
+        self.assertEqual(ht.detach('raspberry_pi_pico_w', pico_w, None, mock.Mock()), '')   # a host board
 
     def test_esptool_reset_pulses_en_with_the_bridge_open(self):
         row, calls = self.capture('espressif_s3_devkitm', True)

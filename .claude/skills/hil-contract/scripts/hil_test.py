@@ -369,9 +369,9 @@ def flash(flasher, image, run_dir, tracker):
 def detach(name, board, vid_pid, tracker):
     """Take the DUT off the bus through the probe, where its family needs it (DETACH); evidence text. A failed
     write is evidence, not a failure: a firmware without USB has nothing to detach, and the enumeration check after
-    the flash decides."""
+    the flash decides. vid_pid None (no record, as for a console reset): the DUT is whatever carries its serial."""
     cmds = DETACH.get(check_build.BOARDS[name]['family'])
-    if not cmds or board['flasher']['name'] != 'openocd':
+    if not cmds or board['flasher']['name'] != 'openocd' or role(name) == 'host':
         return ''
     op = A.flash.run_openocd_commands(board['flasher'], cmds, timeout=VERIFY_TIMEOUT, run=tracker.run)
     tracker.check()
@@ -380,7 +380,7 @@ def detach(name, board, vid_pid, tracker):
         return f'detach session failed (exit {op.returncode})'
     deadline = time.monotonic() + DETACH_WAIT
     while time.monotonic() < deadline:
-        if not dut_devices(vid_pid, board):
+        if not (dut_devices(vid_pid, board) if vid_pid else A.usb.usb_scan(serial=board['uid'])):
             return 'detached'
         time.sleep(0.2)
     return f'still enumerated {DETACH_WAIT}s after the detach'
@@ -1112,12 +1112,17 @@ def op_console(args, board, run_dir, tracker, manifest):
             t0 = time.monotonic()
             port.reset_input_buffer()
             if args.reset:
-                times.append({'t': round(time.monotonic() - t0, 3), 'reset': True})
-                if board['flasher']['name'] == 'esptool':
-                    pulse_en(port)
+                # an RP2040 core reset keeps USBCTRL attached: without the detach the host keeps a dead device
+                detached = '' if board['flasher']['name'] == 'esptool' else detach(args.board, board, None, tracker)
+                if detached not in ('', 'detached'):
+                    why = f'detach: {detached}'
                 else:
-                    why = reset(board['flasher'], tracker)
-                    why = why and f'reset: {why}'
+                    times.append({'t': round(time.monotonic() - t0, 3), 'reset': True})
+                    if board['flasher']['name'] == 'esptool':
+                        pulse_en(port)
+                    else:
+                        why = reset(board['flasher'], tracker)
+                        why = why and f'reset: {why}'
             if not why:
                 read_console(port, time.monotonic() + args.seconds, buf, times, t0)
     except (serial.SerialException, OSError) as e:   # pyserial's line setters raise a bare OSError

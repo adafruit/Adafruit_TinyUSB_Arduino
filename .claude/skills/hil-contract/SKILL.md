@@ -138,6 +138,7 @@ python3 $H/hil_remote.py session exec <id> flash --bundle B --build-record R --s
 python3 $H/hil_remote.py session exec <id> gdb --bundle B --build-record R --sketch S --ex 'bt' [--ex ...]
 python3 $H/hil_remote.py session exec <id> console [--seconds S] [--reset]   # the board's console to a log
 python3 $H/hil_remote.py session exec <id> check --bundle B --build-record R [--test T]   # a device test, no flash
+# the clean record session open staged: --bundle bundles/restore --build-record build/hil/<board>.build.json
 python3 $H/hil_remote.py session exec <id> exec [--timeout S] -- <argv>   # a command on the rig, in the tree
 python3 $H/hil_remote.py session close <id>                         # restore the board's sketch, then release
 ```
@@ -159,7 +160,9 @@ python3 $H/hil_remote.py session close <id>                         # restore th
 - `check` runs a device test (`--test`, default `cdc_echo`) against the firmware as it runs, without flashing: the one
   DUT enumerated with the record's VID:PID for that test's sketch. Use it after a GDB session or a reset; it shows the
   function works, not which image is flashed nor every core's state (a halted RP2040 core1 leaves Arduino's
-  single-core firmware echoing). Host boards refuse it: read their console.
+  single-core firmware echoing). On an RP2040 or RP2350 board a reset you run yourself (`exec`, a gdb `monitor
+  reset`) without the harness's detach leaves the host holding a dead enumeration, so `check` then fails while the
+  firmware runs; `flash`, `restore` and `console --reset` detach first. Host boards refuse it: read their console.
 - `flash` and `check` name the DUT they chose by bus-port and devnum; `flash` adds `after`, the seconds from the flash's
   end to a stable enumeration (the 1 s hold included).
 - A refused `session open` (the board is held) prints the holder and leaves its attempt dir unused. Within the
@@ -282,8 +285,15 @@ human.
   `USB_VID`/`USB_PID`; the P4 as `239a:cafe`.
 - **ESP32-S3 GDB:** its OTG controller takes the PHY its USB-Serial/JTAG uses, and the farm wires no pad JTAG: no GDB
   under Arduino. The P4's USB-Serial/JTAG has its own port (60:55:F9:F9:87:15 at 11-1.2), so its GDB works.
-- **RP2040/RP2350:** a probe reset leaves the USB controller running. The harness clears `SIE_CTRL.PULLUP_EN` through
-  the probe before each flash so the host sees the new image enumerate.
+- **RP2040/RP2350:** a probe reset resets only the cores (RP2040 datasheet 2.4.2.9) and leaves the USB controller
+  attached; the firmware's `dcd_init` then resets it without a disconnect the host sees, so the host keeps a dead
+  enumeration. The harness clears `SIE_CTRL.PULLUP_EN` through the probe before each flash and console reset so the
+  host sees the new image enumerate.
+- **Shared hub 11-1 on ci.lan:** the S3 (11-1.3) and the P4's OTG (11-1.1) and USB-Serial/JTAG (11-1.2) share a hub
+  whose port events Linux handles one port at a time. Each esptool connect to the P4 brings its ROM download device
+  up at full speed on 11-1.1, where it never enumerates; such a failing enumeration once held the hub for 32 s and a
+  concurrent S3 restore missed its 20 s window (its retried `session close` passed). Run S3 and P4 sessions one after
+  the other.
 - **Shared VID:PID:** the library ignores the rp2040 core's board VID/PID (`Adafruit_USBD_Device.cpp`), so every RP2040
   and RP2350 board enumerates as `239a:cafe`; the harness tells boards apart by serial.
 - **Metro M4 ELF:** the SAMD51 ELF's first load segment starts at 0x0 (headers and padding). Flashing the ELF, or GDB
