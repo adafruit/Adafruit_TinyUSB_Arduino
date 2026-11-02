@@ -132,7 +132,7 @@ def loader(root):
 
 def staged():
     """A rig tree hil_remote.py staged: no .git, its agentrc files under agentrc/."""
-    return not (ROOT / '.git').exists()
+    return not (ROOT / '.git').exists() and (ROOT / 'agentrc').is_dir()
 
 
 def root():

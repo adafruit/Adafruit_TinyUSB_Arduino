@@ -67,14 +67,38 @@ class Pin(unittest.TestCase):
     def test_a_staged_tree_loads_its_own_copy(self):
         with tempfile.TemporaryDirectory() as d, mock.patch.object(agentrc_pin, 'ROOT', Path(d)), \
                 mock.patch.object(agentrc_pin, 'checkout', side_effect=AssertionError('a rig has no cache')):
+            (Path(d) / 'agentrc').mkdir()
             self.assertTrue(agentrc_pin.staged())
             self.assertEqual(agentrc_pin.root(), Path(d) / 'agentrc')
         self.assertFalse(agentrc_pin.staged())
 
+    def test_a_plain_copy_without_agentrc_uses_the_pinned_checkout(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(agentrc_pin, 'ROOT', Path(d)), \
+                mock.patch.object(agentrc_pin, 'checkout', return_value=Path('/pinned')):
+            self.assertFalse(agentrc_pin.staged())
+            self.assertEqual(agentrc_pin.root(), Path('/pinned'))
+
     def test_a_staged_tree_without_the_engines_is_a_pin_error(self):
         with tempfile.TemporaryDirectory() as d, mock.patch.object(agentrc_pin, 'ROOT', Path(d)), \
                 self.assertRaisesRegex(agentrc_pin.PinError, 'lacks'):
+            (Path(d) / 'agentrc').mkdir()
             agentrc_pin.load('skills/arduino/scripts/arduino_build.py')
+
+    def test_a_staged_tree_loads_an_engine_from_its_own_copy(self):
+        rel = 'skills/arduino/scripts/arduino_build.py'
+        with tempfile.TemporaryDirectory() as d, mock.patch.dict(sys.modules), \
+                mock.patch.object(agentrc_pin, 'ROOT', Path(d)), \
+                mock.patch.object(agentrc_pin, 'checkout', side_effect=AssertionError('a rig has no cache')):
+            sys.modules.pop('agentrc_hil_load', None)
+            staged = Path(d) / 'agentrc'
+            for f in agentrc_pin.ENGINES:
+                (staged / f).parent.mkdir(parents=True, exist_ok=True)
+                (staged / f).write_text('')
+            (staged / 'skills/hil/scripts/hil_load.py').parent.mkdir(parents=True, exist_ok=True)
+            (staged / 'skills/hil/scripts/hil_load.py').write_text(
+                'class _L:\n    def load_file(self, rel):\n        return "STAGED:" + rel\n\n\n'
+                'def load(name, origin):\n    return _L()\n')
+            self.assertEqual(agentrc_pin.load(rel), 'STAGED:' + rel)
 
     def test_closure_reads_files_without_importing(self):
         with tempfile.TemporaryDirectory() as d:
