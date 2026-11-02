@@ -168,7 +168,8 @@ python3 $H/hil_remote.py session close <id>                         # restore th
   `run_tracked`.
 - One session command runs at a time per tree and board. It ignores SIGHUP; SIGTERM ends it as SIGINT does, its
   child ended or recorded pending.
-- Each command's JSON is the last stdout line and `result.json` in its `build/hil-manual/<board>-<cmd>-<time>/`.
+- Each command's JSON is the last stdout line and `result.json` in its `build/hil-manual/<board>-<cmd>-<time>/`;
+  `gdb` and `exec` keep the last 4000 characters of the child's output there, the whole of it in that dir's `hil.log`.
 - On a dev PC the same commands are `hil_test.py flash|gdb|console|check|exec|restore -b B --under-hold <reason> ...
   ROSTER`,
   under
@@ -290,7 +291,10 @@ human.
   [0x4000, 0x80000). Use GDB on metro_m4_express for symbols and state, never `load`.
 - **Known faults:**
   - The Fruit Jam's openocd reset-init intermittently times out (`rcp_init`, core0 halted in the bootrom NMI
-    handler), failing one flash. A retry passes.
+    handler), failing one flash; a retry passes (2 of 36 battery flashes). Cause, supported on the rig (2026-11-02):
+    `rp2350.cfg` warm-resets core0 before core1 without halting core1, whose bootrom wait loop can then take an RCP
+    fault that is mirrored to core0 (RP2350 datasheet 3.6.3.3-3.6.3.4) and stalls `rcp_init` until the next session's
+    reset.
   - A CMSIS-DAP flash on ci.lan once failed with `CMSIS-DAP command mismatch` (Pico W) and left core0 halted in the
     flash stub. A retry passed; reflash before judging the firmware after a failed flash.
   - On the RP2040, and on the RP2350 (Fruit Jam, 1 of 3), a GDB `continue` prints openocd SMP resume errors (core1
