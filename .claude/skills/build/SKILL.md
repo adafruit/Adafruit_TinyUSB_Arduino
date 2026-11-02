@@ -6,7 +6,9 @@ description: The Adafruit TinyUSB Arduino build contract. Use when a change must
 # Build contract
 
 `scripts/check_build.py` is the entry point for verifying a change; agents and workflows call it rather than composing
-`arduino-cli compile` lines.
+`arduino-cli compile` lines. It is this library's profile for agentrc's `arduino` skill (`arduino_build.py`), loaded
+from the agentrc commit `test/hil/agentrc.json` pins: run `python3 .claude/skills/hil-contract/scripts/agentrc_pin.py
+fetch` once per pin. That skill's page has the mechanics this library shares with Adafruit SPIFlash.
 
 ```bash
 B=.claude/skills/build/scripts/check_build.py
@@ -65,8 +67,11 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
   dir for `flash_args`. Example eligibility mirrors ci-arduino `build_platform.py`: `.<platform>.test.skip`,
   a `.skip.txt` line equal to the platform, and `.<platform>.test.only` when any `.*.test.only` exists; a rig board
   takes its CI platform's files (`filters`). A board whose core is not installed is exit 2 naming
-  `arduino-cli core install`; a missing library dependency fails that sketch, the README's `arduino-cli lib install`
-  line installs them. Local cores need not be CI's versions; the record names what built.
+  `arduino-cli core install`. Local cores need not be CI's versions; the record names what built.
+- **Dependencies** (`arduino` skill): `library.properties` `depends=` plus `EXTRA_DEPENDENCIES` (CI's `ARDUINO_LIBS`
+  beyond it), and theirs, transitively, must be installed before a build: a missing one is exit 2 naming the
+  `arduino-cli lib install` line. A compile that takes any other library, outside the core, fails its sketch; the
+  JSON's `dependencies` and each row's `libraries` say what was used.
 - **Every compile** is `arduino-cli compile --clean --format json --warnings all --fqbn <F> --library <this checkout>
   --build-path <dir>`, so the core and every library rebuild from scratch and this library comes from this checkout
   whatever else is installed (the primary checkout under `~/Arduino/libraries`, a core's bundled copy). The build
@@ -90,10 +95,11 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
   not checked, since the SAMD ELF's first starts at 0x0. For an esptool board it is the core's `flash_args`: a line of
   options, then each image at its offset, every file in the build dir, ascending, not overlapping, inside the span.
   A device sketch needs its VID:PID: a `-D` define, on ESP32 the variant's `pins_arduino.h` (the S3's 303a:1001),
-  else the library's fallback. It also refuses a foreign header that differs. It records HEAD, the FQBN, the platform
-  (id, version, install dir, and commit and dirty state when the core is a git checkout), the arduino-cli version, the
-  roster's and harness's sha256, the board's role, ESP `chip` and `fixture` (path and sha256), and per sketch its
-  images with sha256, load spans, VID:PID, foreign headers and, for esptool, `segments` (the build's `flash_args`
+  else the library's fallback. It also refuses a foreign header that differs. It records (schema 2, the `arduino`
+  skill's The HIL build record) HEAD, the FQBN, the platform (id, version, install dir, and commit and dirty state
+  when the core is a git checkout), the arduino-cli version, the resolved dependencies with their contents' sha256,
+  the roster's sha256, the contract files' and the agentrc engines' sha256, the board's role, ESP `chip` and `fixture` (path and sha256), and per sketch its
+  images with sha256, load spans, VID:PID, foreign headers, used libraries and, for esptool, `segments` (the build's `flash_args`
   hashed beside them); paths are checkout-relative so the record stages to a rig unchanged.
 - **Experimental records** (`--experimental`, with `--record`) are for debug and instrumentation: a dirty tree and
   `--build-property` are allowed, untracked files under `src/`, `examples/` or `test/hil/` are refused (put

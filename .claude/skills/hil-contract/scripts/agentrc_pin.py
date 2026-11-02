@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The agentrc commit the HIL harness loads its shared scripts from (agentrc `hil` skill, Shared mechanisms).
+"""The agentrc commit the build and HIL contracts load their shared scripts from (agentrc `arduino` and `hil` skills).
 
   agentrc_pin.py fetch    fetch the pinned commit into the user cache (never touches another agentrc checkout)
   agentrc_pin.py check    exit 0 when the cached checkout is the pin and clean, else 1 naming why
@@ -21,6 +21,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 PIN_FILE = ROOT / 'test' / 'hil' / 'agentrc.json'
 FETCH_HINT = 'python3 .claude/skills/hil-contract/scripts/agentrc_pin.py fetch'
+# the agentrc engines the contracts run; their FILES closures are what a staged rig tree carries and a record binds
+ENGINES = ('skills/arduino/scripts/arduino_build.py', 'skills/arduino/scripts/arduino_hil.py',
+           'skills/arduino/scripts/arduino_remote.py')
 
 
 class PinError(Exception):
@@ -108,7 +111,8 @@ def closure(root, scripts):
     out = set()
     for rel in scripts:
         out.add(rel)
-        out.update(files_of(root, rel))
+        if (Path(root) / rel).is_file():
+            out.update(files_of(root, rel))
     missing = sorted(r for r in out if not (Path(root) / r).is_file())
     if missing:
         raise PinError(f'agentrc at {root} lacks {missing}')
@@ -124,6 +128,29 @@ def loader(root):
         spec.loader.exec_module(mod)
         sys.modules.setdefault(spec.name, mod)
     return sys.modules[spec.name].load(spec.name, spec.origin)
+
+
+def staged():
+    """A rig tree hil_remote.py staged: no .git, its agentrc files under agentrc/."""
+    return not (ROOT / '.git').exists()
+
+
+def root():
+    """The agentrc this process loads from: the staged copy on a rig, else the pinned checkout."""
+    return ROOT / 'agentrc' if staged() else checkout()
+
+
+def load(rel):
+    """agentrc's `rel`, loaded through its hil_load once the engines' closure is all present."""
+    r = root()
+    closure(r, ENGINES)
+    return loader(r).load_file(rel)
+
+
+def identity():
+    """{commit, root, files}: the pin, where it is loaded from, and the engines' closure (agentrc-relative)."""
+    r = root()
+    return {'commit': pin()[1], 'root': r, 'files': closure(r, ENGINES)}
 
 
 def main(argv):

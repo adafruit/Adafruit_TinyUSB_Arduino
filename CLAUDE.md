@@ -36,7 +36,8 @@
 - Agents, skills and workflows beyond this repo's `.claude/` come from [agentrc](https://github.com/hathach/agentrc);
   install it before agent work on Adafruit TinyUSB Arduino.
 - Skill script tests live in `.claude/test/test_*.py`; pre-commit runs them after fetching the agentrc commit pinned
-  in `test/hil/agentrc.json`, whose HIL scripts the contracts load.
+  in `test/hil/agentrc.json`, whose `arduino` skill holds the mechanics both contracts run (shared with Adafruit
+  SPIFlash) and whose HIL scripts they load.
 - Hardware diagnosis and repair use agentrc's `hw-debugger`; independent hardware claims and committed-fix validation
   use `hw-validator`; routine HIL runs use `hil-operator` — all orchestrated by `chief`.
 - Library audit: the `code-audit` workflow with `dirs` (e.g. `src/arduino`, `src/arduino/ports/<mcu>`) and

@@ -5,8 +5,9 @@ description: The Adafruit TinyUSB Arduino HIL contract, under agentrc's `hil` ru
 
 # HIL contract
 
-Read agentrc's `hil` skill first; this page supplies its contract sections. Manual runs only: no CI job runs this
-battery. Scripts, all in `scripts/`:
+Read agentrc's `hil` skill first; this page supplies its contract sections. The mechanics are agentrc's `arduino`
+skill (`arduino_hil.py`, `arduino_remote.py`), shared with Adafruit SPIFlash; the battery, the host step and the roster
+checks are this library's (`hil_test.py`). Manual runs only: no CI job runs this battery. Scripts, all in `scripts/`:
 
 - `hil_test.py`: the harness on the host with the boards.
 - `hil_remote.py`: drives the harness on ci.lan from the dev PC that built the firmware.
@@ -34,10 +35,11 @@ A roster entry:
 
 - `name`: the board's `check_build.py` rig name, which is also its lock name. The names are tinyusb's farm names,
   so this harness and tinyusb's exclude each other on a shared board.
-- `uid`: the DUT's USB serial under Arduino firmware (Limits, commissioning); for a host board or a `usb_port`
+- `uid`: the DUT's USB serial under Arduino firmware (Limits, commissioning); for a host board or a `no_serial`
   board, the board's tinyusb farm id, unused here.
-- `usb_port`: the sysfs bus port the DUT enumerates at, for firmware with an empty serial string (ESP32 under
-  Arduino, Limits); the harness then tells the DUT by port, not serial. Required for esptool boards.
+- `usb_port`: the sysfs bus port the DUT enumerates at; the DUT must be there. Required for esptool boards.
+- `no_serial`: `true` for firmware with an empty serial string (ESP32 under Arduino, Limits): the harness then tells
+  the DUT by `usb_port` alone, as the serial-less device there.
 - `flasher`: `name` `openocd`, `jlink` or `esptool`, `uid` the probe serial (esptool: its USB-UART bridge's), `args`,
   for openocd `vid_pid` and `verify`.
 - `debug.openocd`: the openocd config the GDB session uses; with `debug.tool` `openocd-esp32`, exactly
@@ -274,11 +276,13 @@ human.
   reached the device (usbmon, 2026-11-02). The open is not bounded by the test deadline; allow for it in any host-side
   timing claim.
 - **Commissioning.** `hil_test.py commission -b <board> ROSTER` finds the DUT's serial under Arduino firmware
-  (exactly one device re-enumerating across a flash and a probe reset), or for a `usb_port` board its port. It runs
+  (exactly one device re-enumerating across a flash and a probe reset, at the roster's `usb_port` when it has one), or
+  for a `no_serial` board its port, then checks the restoration sketch with `cdc_echo`. It runs
   from a checkout on the board's host and is not staged by `hil_remote.py`; host boards have nothing to commission.
   The ci.lan boards' uids come from tinyusb's roster; the battery confirmed the Pico's and the Fruit Jam's.
 - **ESP32 identity:** under Arduino the ESP32-S3 and ESP32-P4 enumerate with an empty serial string (the library's ESP32
-  `TinyUSB_Port_GetSerialNumber` returns none), so the roster pins each by `usb_port` (S3 11-1.3, P4 11-1.1 on ci.lan):
+  `TinyUSB_Port_GetSerialNumber` returns none), so the roster marks each `no_serial` and pins it by `usb_port` (S3
+  11-1.3, P4 11-1.1 on ci.lan):
   the DUT candidate is the device there with no cached sysfs `serial`, since while esptool runs the S3's ROM
   USB-Serial/JTAG appears at the same port as `303a:1001` with its MAC as serial; a failed serial read would also leave
   none, so the test run on the candidate is the evidence. The S3 enumerates as `303a:1001`, its core variant's
