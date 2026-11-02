@@ -120,6 +120,7 @@ class Selection(unittest.TestCase):
             '.claude/test/test_hil.py': ('tests', 'hil'),
             'README.md': ('nothing', None),
             'library.properties': ('nothing', None),
+            '.coderabbit.yaml': ('nothing', None),
             'weird/file.c': ('uncovered', None),
         }
         for path, (effect, detail) in cases.items():

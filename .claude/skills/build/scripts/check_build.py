@@ -105,7 +105,7 @@ CONTRACT_TESTS = {'build': '.claude/test/test_build.py', 'hil': '.claude/test/te
                   'hil_remote': '.claude/test/test_hil_remote.py'}
 HIL_CONTROL = ('.claude/skills/hil-contract/scripts/', 'test/hil/')
 NOTHING = ('.claude/', '.github/', '.codespell/', 'docs/', 'tools/', '.agents', '.gitignore', '.codespellrc',
-           '.pre-commit-config.yaml', 'library.properties', 'library.json', 'LICENSE')
+           '.coderabbit.yaml', '.pre-commit-config.yaml', 'library.properties', 'library.json', 'LICENSE')
 LIBRARY_NAME = 'Adafruit TinyUSB Library'
 BOOT_APP0 = 'tools/partitions/boot_app0.bin'   # the ESP core's otadata image its flash_args name, under the platform
 
