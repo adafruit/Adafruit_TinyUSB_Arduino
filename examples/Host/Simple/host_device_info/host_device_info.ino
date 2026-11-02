@@ -46,7 +46,7 @@ typedef struct {
   tusb_desc_device_t desc_device;
   uint16_t manufacturer[32];
   uint16_t product[48];
-  uint16_t serial[16];
+  uint16_t serial[32];
   bool mounted;
 } dev_info_t;
 
@@ -147,7 +147,7 @@ void print_device_descriptor(tuh_xfer_t *xfer) {
   if (XFER_RESULT_SUCCESS ==
       tuh_descriptor_get_manufacturer_string_sync(daddr, LANGUAGE_ID, dev->manufacturer, sizeof(dev->manufacturer))) {
     utf16_to_utf8(dev->manufacturer, sizeof(dev->manufacturer));
-    Serial1.printf((char *) dev->manufacturer);
+    Serial1.print((char *) dev->manufacturer);
   }
   Serial1.printf("\r\n");
 
@@ -155,7 +155,7 @@ void print_device_descriptor(tuh_xfer_t *xfer) {
   if (XFER_RESULT_SUCCESS ==
       tuh_descriptor_get_product_string_sync(daddr, LANGUAGE_ID, dev->product, sizeof(dev->product))) {
     utf16_to_utf8(dev->product, sizeof(dev->product));
-    Serial1.printf((char *) dev->product);
+    Serial1.print((char *) dev->product);
   }
   Serial1.printf("\r\n");
 
@@ -163,7 +163,7 @@ void print_device_descriptor(tuh_xfer_t *xfer) {
   if (XFER_RESULT_SUCCESS ==
       tuh_descriptor_get_serial_string_sync(daddr, LANGUAGE_ID, dev->serial, sizeof(dev->serial))) {
     utf16_to_utf8(dev->serial, sizeof(dev->serial));
-    Serial1.printf((char *) dev->serial);
+    Serial1.print((char *) dev->serial);
   }
   Serial1.printf("\r\n");
 
@@ -177,49 +177,55 @@ void print_device_descriptor(tuh_xfer_t *xfer) {
 // String Descriptor Helper
 //--------------------------------------------------------------------+
 
-static void _convert_utf16le_to_utf8(const uint16_t *utf16, size_t utf16_len, uint8_t *utf8, size_t utf8_len) {
-  // TODO: Check for runover.
-  (void) utf8_len;
-  // Get the UTF-16 length out of the data itself.
-
+// Returns the bytes written, stopping before a unit that would leave no room for the terminating NUL.
+static size_t _convert_utf16le_to_utf8(const uint16_t *utf16, size_t utf16_len, uint8_t *utf8, size_t utf8_len) {
+  size_t count = 0;
   for (size_t i = 0; i < utf16_len; i++) {
-    uint16_t chr = utf16[i];
-    if (chr < 0x80) {
-      *utf8++ = chr & 0xff;
-    } else if (chr < 0x800) {
-      *utf8++ = (uint8_t) (0xC0 | (chr >> 6 & 0x1F));
-      *utf8++ = (uint8_t) (0x80 | (chr >> 0 & 0x3F));
-    } else {
-      // TODO: Verify surrogate.
-      *utf8++ = (uint8_t) (0xE0 | (chr >> 12 & 0x0F));
-      *utf8++ = (uint8_t) (0x80 | (chr >> 6 & 0x3F));
-      *utf8++ = (uint8_t) (0x80 | (chr >> 0 & 0x3F));
+    uint32_t chr = utf16[i];
+    if (chr >= 0xD800 && chr <= 0xDFFF) {
+      // A high/low surrogate pair is one code point above U+FFFF; a lone surrogate becomes U+FFFD
+      if (chr <= 0xDBFF && i + 1 < utf16_len && utf16[i + 1] >= 0xDC00 && utf16[i + 1] <= 0xDFFF) {
+        chr = 0x10000 + ((chr - 0xD800) << 10) + (utf16[++i] - 0xDC00);
+      } else {
+        chr = 0xFFFD;
+      }
     }
-    // TODO: Handle UTF-16 code points that take two entries.
-  }
-}
-
-// Count how many bytes a utf-16-le encoded string will take in utf-8.
-static int _count_utf8_bytes(const uint16_t *buf, size_t len) {
-  size_t total_bytes = 0;
-  for (size_t i = 0; i < len; i++) {
-    uint16_t chr = buf[i];
-    if (chr < 0x80) {
-      total_bytes += 1;
-    } else if (chr < 0x800) {
-      total_bytes += 2;
-    } else {
-      total_bytes += 3;
+    size_t chr_bytes = (chr < 0x80) ? 1 : (chr < 0x800) ? 2 : (chr < 0x10000) ? 3 : 4;
+    if (count + chr_bytes >= utf8_len) {
+      break;
     }
-    // TODO: Handle UTF-16 code points that take two entries.
+    if (chr < 0x80) {
+      utf8[count++] = chr & 0xff;
+    } else if (chr < 0x800) {
+      utf8[count++] = (uint8_t) (0xC0 | (chr >> 6 & 0x1F));
+      utf8[count++] = (uint8_t) (0x80 | (chr >> 0 & 0x3F));
+    } else if (chr < 0x10000) {
+      utf8[count++] = (uint8_t) (0xE0 | (chr >> 12 & 0x0F));
+      utf8[count++] = (uint8_t) (0x80 | (chr >> 6 & 0x3F));
+      utf8[count++] = (uint8_t) (0x80 | (chr >> 0 & 0x3F));
+    } else {
+      utf8[count++] = (uint8_t) (0xF0 | (chr >> 18 & 0x07));
+      utf8[count++] = (uint8_t) (0x80 | (chr >> 12 & 0x3F));
+      utf8[count++] = (uint8_t) (0x80 | (chr >> 6 & 0x3F));
+      utf8[count++] = (uint8_t) (0x80 | (chr >> 0 & 0x3F));
+    }
   }
-  return total_bytes;
+  return count;
 }
 
 void utf16_to_utf8(uint16_t *temp_buf, size_t buf_len) {
-  size_t utf16_len = ((temp_buf[0] & 0xff) - 2) / sizeof(uint16_t);
-  size_t utf8_len = _count_utf8_bytes(temp_buf + 1, utf16_len);
+  // bLength is the whole descriptor's, but only buf_len bytes were requested
+  size_t desc_len = tu_min16(temp_buf[0] & 0xff, buf_len);
+  if (desc_len < 2) {
+    temp_buf[0] = 0;
+    return;
+  }
+  size_t utf16_len = (desc_len - 2) / sizeof(uint16_t);
 
-  _convert_utf16le_to_utf8(temp_buf + 1, utf16_len, (uint8_t *) temp_buf, buf_len);
+  // UTF-8 can outgrow its UTF-16 source, so convert from a copy; bLength <= 255 bounds it to 126 units
+  uint16_t utf16[126];
+  memcpy(utf16, temp_buf + 1, utf16_len * sizeof(uint16_t));
+
+  size_t utf8_len = _convert_utf16le_to_utf8(utf16, utf16_len, (uint8_t *) temp_buf, buf_len);
   ((uint8_t *) temp_buf)[utf8_len] = '\0';
 }
