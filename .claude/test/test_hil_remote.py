@@ -45,7 +45,8 @@ class Wrapper(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()) as err, self.assertRaises(SystemExit) as e:
             hil_remote.main(['run', '--run-id', 'r1', '-t', 'nope'])
         self.assertEqual(e.exception.code, 2)
-        self.assertIn(', '.join(sorted(hil_test.TESTS)), err.getvalue())
+        # newer argparse quotes each choice
+        self.assertIn(', '.join(sorted(hil_test.TESTS)), err.getvalue().replace("'", ''))
 
     def test_the_rig_gets_every_contract_file(self):
         for f in hil_test.BUILD.CONTRACT_FILES:
