@@ -81,13 +81,20 @@ class Tables(unittest.TestCase):
             self.assertIn(platform, cb.BOARDS)
 
     def test_rig_boards_have_a_span_and_filters(self):
-        for name in ('raspberry_pi_pico', 'adafruit_fruit_jam', 'metro_m4_express'):
+        for name in ('raspberry_pi_pico', 'adafruit_fruit_jam', 'metro_m4_express', 'raspberry_pi_pico_w',
+                     'raspberry_pi_pico2', 'espressif_s3_devkitm', 'espressif_p4_function_ev'):
             self.assertIn('span', cb.BOARDS[name])
             self.assertIn(cb.BOARDS[name]['filters'], cb.BOARDS)
+            self.assertIn(cb.BOARDS[name].get('role', 'device'), cb.HIL_SKETCHES)
+            fixture = cb.BOARDS[name].get('fixture')
+            self.assertTrue(fixture is None or (ROOT / fixture).is_file())
 
-    def test_hil_sketches_exist(self):
-        for e in cb.HIL_SKETCHES:
-            self.assertIn(e, cb.examples())
+    def test_hil_sketches_exist_and_are_eligible_on_their_boards(self):
+        for role, sketches in cb.HIL_SKETCHES.items():
+            for e in sketches:
+                self.assertIn(e, cb.examples())
+        for b in ('raspberry_pi_pico_w', 'raspberry_pi_pico2'):
+            self.assertTrue(all(cb.eligible(b, e) for e in cb.hil_sketches(b)))
 
     def test_every_portable_and_port_dir_is_classified(self):
         for d in (ROOT / 'src/portable').glob('*/*'):
@@ -178,6 +185,24 @@ class Selection(unittest.TestCase):
         self.assertEqual(sel['hil']['boards'], ['metro_m4_express'])
         self.assertEqual([u['family'] for u in sel['hil']['uncovered']], ['nrf'])
 
+    def test_hil_sketch_change_selects_only_boards_of_its_role(self):
+        roster = ['raspberry_pi_pico', 'raspberry_pi_pico_w', 'espressif_s3_devkitm']
+        sel = cb.select(['examples/Host/Simple/host_device_info/host_device_info.ino'], roster=roster)
+        self.assertEqual(sel['hil']['boards'], ['raspberry_pi_pico_w'])
+        sel = cb.select(['examples/CDC/serial_echo/serial_echo.ino'], roster=roster)
+        self.assertEqual(sel['hil']['boards'], ['espressif_s3_devkitm', 'raspberry_pi_pico'])
+
+    def test_fixture_change_builds_and_selects_its_boards(self):
+        sel = cb.select(['test/hil/esp32_ts3usb30.cpp'], roster=['raspberry_pi_pico', 'espressif_p4_function_ev'])
+        sketches = list(cb.HIL_SKETCHES['device'])
+        self.assertEqual(sel['builds'], {'espressif_p4_function_ev': sketches, 'espressif_s3_devkitm': sketches})
+        self.assertEqual(sel['hil']['boards'], ['espressif_p4_function_ev'])
+
+    def test_build_contract_change_smoke_builds_each_image_kind(self):
+        sel = cb.select(['.claude/skills/build/scripts/check_build.py'])
+        self.assertEqual(sel['builds'], {b: ['examples/CDC/serial_echo'] for b in
+                                         ('espressif_s3_devkitm', 'metro_m4_express', 'raspberry_pi_pico')})
+
     def test_select_only_exit_and_shape(self):
         code, out = run_main(['--select-only', '--scope', 'README.md'])
         self.assertEqual(code, 0)
@@ -214,6 +239,14 @@ class Images(unittest.TestCase):
         self.assertEqual(ids('-DBOARD_VENDORID=0x2341', '-DBOARD_PRODUCTID=0x005e'), '2341:005e')
         with tempfile.TemporaryDirectory() as d:
             self.assertIsNone(cb.vid_pid(d))
+        with tempfile.TemporaryDirectory() as v:
+            variant = Path(v) / 'variants/esp32s3'
+            variant.mkdir(parents=True)
+            (variant / 'pins_arduino.h').write_text('#define USB_VID 0x303a\n#define USB_PID 0x1001\n')
+            self.assertEqual(ids('-DARDUINO_ARCH_ESP32', f'-I{variant}'), '303a:1001')
+            self.assertEqual(ids(f'-I{variant}'), '239a:cafe')   # only ESP32 builds take the variant's
+            (variant / 'pins_arduino.h').write_text('#define LED_BUILTIN 2\n')
+            self.assertEqual(ids('-DARDUINO_ARCH_ESP32', f'-I{variant}'), '239a:cafe')   # esp32p4: fallback
 
 
 class Provenance(unittest.TestCase):
@@ -367,6 +400,137 @@ class Record(unittest.TestCase):
         with mock.patch.object(cb, 'source_identity', return_value=(after, '')):
             _, err = cb.make_record(args, 'metro_m4_express', [self.samd_row()], before, '', self.roster)
         self.assertIn('changed while building', err)
+
+
+class EspRecord(unittest.TestCase):
+    """An esptool board's record: the core's flash_args segments."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.roster = self.root / 'test/hil/ci.json'
+        self.roster.parent.mkdir(parents=True)
+        self.roster.write_text(json.dumps({'boards': [{'name': 'espressif_s3_devkitm', 'flasher': {'name': 'esptool'}},
+                                                      {'name': 'raspberry_pi_pico_w', 'flasher': {'name': 'openocd'}}]}))
+        (self.root / 'test/hil/esp32_ts3usb30.cpp').write_text('// fixture\n')
+        self.patches = [mock.patch.object(cb, 'ROOT', self.root),
+                        mock.patch.object(cb, 'tool_version', return_value='1.5.1'),
+                        mock.patch.object(cb, 'platform_git', return_value=None)]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+        self.tmp.cleanup()
+
+    def row(self, flash_args, sizes):
+        b = self.root / 'build/hil/espressif_s3_devkitm/serial_echo'
+        b.mkdir(parents=True, exist_ok=True)
+        (b / 'serial_echo.ino.elf').write_bytes(elf32([(1, 0x42000000, 16)]))
+        for name, n in sizes.items():
+            (b / name).write_bytes(bytes(n))
+        (b / 'flash_args').write_text(flash_args)
+        return {'example': 'examples/CDC/serial_echo', 'buildDir': 'build/hil/espressif_s3_devkitm/serial_echo',
+                'vidPid': '303a:1001', 'foreignHeaders': [],
+                'platform': {'id': 'espressif:esp32', 'version': '3.3.7', 'install_dir': '/x'}}
+
+    def record(self, row, board='espressif_s3_devkitm'):
+        args = mock.Mock(experimental=False, build_property=[], record=str(self.root / 'build/r.json'))
+        ident = {'head': 'abc', 'dirty': False, 'diffSha256': 'd', 'status': ''}
+        with mock.patch.object(cb, 'source_identity', return_value=(ident, '')):
+            return cb.make_record(args, board, [row], ident, '', self.roster)
+
+    ARGS = '--flash-mode dio --flash-freq 80m --flash-size 4MB\n0x0 b.bin\n0x8000 p.bin\n0xe000 boot_app0.bin\n' \
+           '0x10000 a.bin\n'
+    SIZES = {'b.bin': 0x5000, 'p.bin': 0xc00, 'boot_app0.bin': 0x2000, 'a.bin': 0x58000}
+
+    def test_segments_hashes_chip_and_fixture_recorded(self):
+        rec, err = self.record(self.row(self.ARGS, self.SIZES))
+        self.assertIsNone(err)
+        s = rec['sketches']['serial_echo']
+        self.assertEqual(s['image'], 'esptool')
+        self.assertEqual(s['segments'], [[0, 'b.bin'], [0x8000, 'p.bin'], [0xe000, 'boot_app0.bin'],
+                                         [0x10000, 'a.bin']])
+        self.assertEqual(len(s['sha256']), 6)   # ELF, flash_args, four images
+        self.assertEqual((rec['chip'], rec['role'], rec['fixture']['path']),
+                         ('esp32s3', 'device', 'test/hil/esp32_ts3usb30.cpp'))
+
+    def test_overlapping_segments_refused(self):
+        _, err = self.record(self.row(self.ARGS, dict(self.SIZES, **{'b.bin': 0x9000})))
+        self.assertIn('overlaps', err)
+
+    def test_missing_image_refused(self):
+        _, err = self.record(self.row(self.ARGS + '0x200000 gone.bin\n', self.SIZES))
+        self.assertIn('gone.bin', err)
+
+    def test_image_past_the_flash_refused(self):
+        _, err = self.record(self.row(self.ARGS, dict(self.SIZES, **{'a.bin': 0x400000})))
+        self.assertIn('outside the board span', err)
+
+    def test_image_on_the_options_line_refused(self):
+        moved = self.ARGS.replace('4MB\n0x0 b.bin', '4MB 0x0 b.bin')
+        _, err = self.record(self.row(moved, self.SIZES))
+        self.assertIn('first line', err)
+        _, err = self.record(self.row('--flash-mode dio gone.bin\n0x0 b.bin\n', self.SIZES))
+        self.assertIn('first line', err)
+
+    def test_malformed_line_refused(self):
+        _, err = self.record(self.row(self.ARGS + '0x300000\n', self.SIZES))
+        self.assertIn('want "<offset> <file>"', err)
+
+    def test_host_board_needs_no_vid_pid(self):
+        b = self.root / 'build/hil/raspberry_pi_pico_w/host_device_info'
+        b.mkdir(parents=True)
+        (b / 'host_device_info.ino.elf').write_bytes(elf32([(1, 0x10000000, 64)]))
+        row = {'example': 'examples/Host/Simple/host_device_info', 'buildDir': rel_to(b, self.root), 'vidPid': None,
+               'foreignHeaders': [], 'platform': {'id': 'rp2040:rp2040', 'version': '5.4.3', 'install_dir': '/x'}}
+        rec, err = self.record(row, 'raspberry_pi_pico_w')
+        self.assertIsNone(err)
+        self.assertEqual(rec['role'], 'host')
+
+
+def rel_to(path, root):
+    return Path(path).relative_to(root).as_posix()
+
+
+class Fixture(unittest.TestCase):
+    def test_fixture_board_compiles_a_copy_with_the_fixture(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / 'examples/CDC/serial_echo').mkdir(parents=True)
+            (root / 'examples/CDC/serial_echo/serial_echo.ino').write_text('void setup(){}\n')
+            (root / 'test/hil').mkdir(parents=True)
+            (root / 'test/hil/esp32_ts3usb30.cpp').write_text('// fixture\n')
+            build = root / 'build/hil/espressif_s3_devkitm/serial_echo'
+            with mock.patch.object(cb, 'ROOT', root):
+                src = cb.sketch_source('espressif_s3_devkitm', 'examples/CDC/serial_echo', build)
+                self.assertEqual(src, cb.sketch_source('raspberry_pi_pico', 'examples/CDC/serial_echo', build)
+                                 .parent.parent.parent / 'build/hil/espressif_s3_devkitm/.sketch/serial_echo')
+                self.assertEqual(sorted(p.name for p in src.iterdir()), ['esp32_ts3usb30.cpp', 'serial_echo.ino'])
+                self.assertEqual(sorted(p.name for p in (root / 'examples/CDC/serial_echo').iterdir()),
+                                 ['serial_echo.ino'])   # the example untouched
+
+    def test_esp_build_snapshots_boot_app0_or_fails(self):
+        with tempfile.TemporaryDirectory() as d:
+            root, core = Path(d), Path(d) / 'core'
+            (core / 'tools/partitions').mkdir(parents=True)
+            out = {'success': True, 'builder_result': {
+                'used_libraries': [{'name': cb.LIBRARY_NAME, 'install_dir': str(root)}],
+                'board_platform': {'id': 'espressif:esp32', 'install_dir': str(core)}}}
+            proc = mock.Mock(returncode=0, stdout=json.dumps(out), stderr='')
+            with mock.patch.object(cb, 'ROOT', root), mock.patch.object(cb.subprocess, 'run', return_value=proc), \
+                    mock.patch.object(cb, 'sketch_source', return_value=root), \
+                    mock.patch.object(cb, 'vid_pid', return_value='303a:1001'), \
+                    mock.patch.object(cb, 'foreign_headers', return_value=[]):
+                build = root / 'build/x'
+                row = cb.compile_sketch('espressif_s3_devkitm', 'examples/CDC/serial_echo', build, [])
+                self.assertEqual(row['status'], 'failed')
+                self.assertIn('boot_app0.bin missing', row['firstError'])
+                (core / 'tools/partitions/boot_app0.bin').write_bytes(b'\x01' * 8)
+                row = cb.compile_sketch('espressif_s3_devkitm', 'examples/CDC/serial_echo', build, [])
+                self.assertEqual(row['status'], 'ok')
+                self.assertEqual((build / 'boot_app0.bin').read_bytes(), b'\x01' * 8)
 
 
 class Usage(unittest.TestCase):

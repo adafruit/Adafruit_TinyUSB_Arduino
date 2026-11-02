@@ -116,7 +116,7 @@ class Base(unittest.TestCase):
 
 class Tables(unittest.TestCase):
     def test_tests_use_recorded_sketches(self):
-        names = {Path(e).name for e in ht.check_build.HIL_SKETCHES}
+        names = {Path(e).name for e in ht.check_build.HIL_SKETCHES['device']}
         self.assertLessEqual(set(ht.TESTS.values()) | {ht.RESTORE_SKETCH}, names)
         self.assertEqual(set(ht.TESTS), set(ht.TEST_FUNCS))
 

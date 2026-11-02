@@ -58,13 +58,31 @@ BOARDS = {
                            'span': (0x10000000, 0x11000000)},
     'metro_m4_express': {'fqbn': 'adafruit:samd:adafruit_metro_m4:speed=120,usbstack=tinyusb', 'family': 'samd',
                          'filters': 'metro_m4_tinyusb', 'span': (0x4000, 0x80000)},
+    # USB wired as host on the farm: the native-host build of the CI host platform
+    'raspberry_pi_pico_w': {'fqbn': 'rp2040:rp2040:rpipicow:flash=2097152_0,dbgport=Disabled,dbglvl=None,'
+                                    'usbstack=tinyusb_host', 'family': 'rp2040', 'filters': 'pico_rp2040_tinyusb_host',
+                            'span': (0x10000000, 0x10200000), 'role': 'host'},
+    'raspberry_pi_pico2': {'fqbn': 'rp2040:rp2040:rpipico2:flash=4194304_0,arch=arm,dbgport=Disabled,dbglvl=None,'
+                                   'usbstack=tinyusb_host', 'family': 'rp2040', 'filters': 'pico_rp2040_tinyusb_host',
+                           'span': (0x10000000, 0x10400000), 'role': 'host'},
+    # espressif:esp32 (arduino-esp32 3.3.x; CI's esp32:esp32 entries above stay as they are). `span` is the SPI flash
+    # (FlashSize), `chip` esptool's --chip, `fixture` a HIL file compiled into every sketch of the board.
+    'espressif_s3_devkitm': {'fqbn': 'espressif:esp32:esp32s3:USBMode=default,CDCOnBoot=cdc,FlashSize=4M,'
+                                     'PSRAM=disabled', 'family': 'esp32', 'filters': 'feather_esp32s3',
+                             'span': (0, 0x400000), 'chip': 'esp32s3', 'fixture': 'test/hil/esp32_ts3usb30.cpp'},
+    # ChipVariant prev3: the farm's P4 is revision v0.1 (openocd-esp32's examination)
+    'espressif_p4_function_ev': {'fqbn': 'espressif:esp32:esp32p4:USBMode=default,CDCOnBoot=cdc,FlashSize=4M,'
+                                         'ChipVariant=prev3', 'family': 'esp32', 'filters': 'esp32p4',
+                                 'span': (0, 0x400000), 'chip': 'esp32p4', 'fixture': 'test/hil/esp32_ts3usb30.cpp'},
 }
-# what a shared-code change builds: rig boards first, and each family's distinct stacks (samd21/samd51, PIO-USB host)
+FIXTURES = {b['fixture'] for b in BOARDS.values() if 'fixture' in b}
+# what a shared-code change builds: rig boards first, and each family's distinct stacks (RP2350, samd21/samd51,
+# native host, ESP32-P4's high-speed OTG)
 REPRESENTATIVES = {
-    'rp2040': ['raspberry_pi_pico', 'pico_rp2040_tinyusb_host'],
+    'rp2040': ['raspberry_pi_pico', 'adafruit_fruit_jam', 'pico_rp2040_tinyusb_host'],
     'samd': ['metro_m4_express', 'metro_m0_tinyusb'],
     'nrf': ['nrf52840'],
-    'esp32': ['feather_esp32s3'],
+    'esp32': ['feather_esp32s3', 'espressif_p4_function_ev'],
     'ch32': ['CH32V20x_EVT'],
 }
 PORTABLE_FAMILY = {
@@ -73,18 +91,26 @@ PORTABLE_FAMILY = {
 }
 # compiled only by MAX3421 host examples on every family
 SHARED_PORTABLE = ('analog/max3421',)
-# the sketches a HIL record carries (hil_test.py's tests run them; serial_echo is also the restoration image)
-HIL_SKETCHES = ('examples/CDC/serial_echo', 'examples/HID/hid_generic_inout', 'examples/MassStorage/msc_ramdisk')
+# the sketches a HIL record carries per board role (hil_test.py's tests run them), the first also the restoration image
+HIL_SKETCHES = {'device': ('examples/CDC/serial_echo', 'examples/HID/hid_generic_inout',
+                           'examples/MassStorage/msc_ramdisk'),
+                'host': ('examples/Host/Simple/host_device_info',)}
 # headers the cores' own sources include from their bundled copy of this library, not from this checkout
 # (seen in the .d files of rp2040:rp2040 5.4.3 and adafruit:samd 1.7.13 builds; builds report the live set)
 CORE_CONSUMED = ('src/arduino/Adafruit_TinyUSB_API.h', 'src/arduino/Adafruit_USBD_CDC.h',
                  'src/arduino/Adafruit_USBD_Interface.h')
+IMAGE_KIND = {'openocd': 'elf', 'jlink': 'hex', 'esptool': 'esptool'}   # what hil_test.py flashes per flasher
 CONTRACT_TESTS = {'build': '.claude/test/test_build.py', 'hil': '.claude/test/test_hil.py',
                   'hil_remote': '.claude/test/test_hil_remote.py'}
 HIL_CONTROL = ('.claude/skills/hil-contract/scripts/', 'test/hil/')
 NOTHING = ('.claude/', '.github/', '.codespell/', 'docs/', 'tools/', '.agents', '.gitignore', '.codespellrc',
            '.pre-commit-config.yaml', 'library.properties', 'library.json', 'LICENSE')
 LIBRARY_NAME = 'Adafruit TinyUSB Library'
+BOOT_APP0 = 'tools/partitions/boot_app0.bin'   # the ESP core's otadata image its flash_args name, under the platform
+
+
+def hil_sketches(board):
+    return HIL_SKETCHES[BOARDS[board].get('role', 'device')]
 
 
 def fail(msg, **extra):
@@ -138,7 +164,7 @@ def eligible(board, example):
 
 def classify(path):
     """(effect, detail, reason) for one changed path, first match wins. effect: family | shared | example | tests |
-    hil | nothing | uncovered."""
+    fixture | hil | nothing | uncovered."""
     if path in CORE_CONSUMED:
         return 'uncovered', None, 'the cores compile their own sources against their bundled copy of this header'
     if path.startswith('src/arduino/ports/'):
@@ -165,6 +191,8 @@ def classify(path):
         return 'uncovered', None, 'under examples/ but in no sketch dir'
     if path.startswith('.claude/skills/build/scripts/'):
         return 'tests', 'build', 'the build contract; its tests and smoke builds verify it'
+    if path in FIXTURES:
+        return 'fixture', path, 'a HIL fixture compiled into every sketch of its rig boards'
     if path.startswith(HIL_CONTROL):
         return 'hil', None, 'the HIL harness or rosters: its tests, and the battery on every roster board'
     if path.startswith('.claude/test/'):
@@ -199,13 +227,19 @@ def select(paths, roster=None, only_examples=None):
                 uncovered.append({'path': path, 'reason': 'sketch eligible on no board this contract builds'})
             for b in BOARDS:
                 add(b, [detail])
-            if roster and detail in HIL_SKETCHES:
-                hil_boards.update(roster)
+            if roster:
+                hil_boards.update(b for b in roster if detail in hil_sketches(b))
         elif effect == 'tests':
             tests.add(detail)
             if detail == 'build':
-                add('raspberry_pi_pico', [HIL_SKETCHES[0]])
-                add('metro_m4_express', [HIL_SKETCHES[0]])
+                for b in ('raspberry_pi_pico', 'metro_m4_express', 'espressif_s3_devkitm'):   # each image kind
+                    add(b, hil_sketches(b)[:1])
+        elif effect == 'fixture':
+            boards = [b for b in BOARDS if BOARDS[b].get('fixture') == detail]
+            for b in boards:
+                add(b, hil_sketches(b))
+            if roster:
+                hil_boards.update(b for b in roster if b in boards)
         elif effect == 'hil':
             tests.update(('hil', 'hil_remote'))
             hil_full = True
@@ -332,6 +366,19 @@ def library_root(path, cache):
     return root
 
 
+def sketch_source(board, example, build_dir):
+    """The sketch dir to compile: the example, or for a board with a `fixture` a copy of it beside the build dir with
+    the fixture added (examples stay untouched)."""
+    fixture = BOARDS[board].get('fixture')
+    if not fixture:
+        return ROOT / example
+    copy = build_dir.parent / '.sketch' / Path(example).name
+    shutil.rmtree(copy, ignore_errors=True)
+    shutil.copytree(ROOT / example, copy)
+    shutil.copy2(ROOT / fixture, copy / Path(fixture).name)
+    return copy
+
+
 def compile_sketch(board, example, build_dir, properties):
     shutil.rmtree(build_dir, ignore_errors=True)
     build_dir.mkdir(parents=True)
@@ -339,7 +386,7 @@ def compile_sketch(board, example, build_dir, properties):
            '--library', str(ROOT), '--build-path', str(build_dir)]
     for prop in properties:
         cmd += ['--build-property', prop]
-    cmd.append(str(ROOT / example))
+    cmd.append(str(sketch_source(board, example, build_dir)))
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=COMPILE_TIMEOUT)
     except OSError as e:
@@ -372,7 +419,15 @@ def compile_sketch(board, example, build_dir, properties):
         row.update(status='failed', firstError=f'{LIBRARY_NAME} came from '
                    f'{used[0]["install_dir"] if used else "nowhere"}, not this checkout')
         return row
-    row.update(status='ok', platform=result.get('board_platform'), buildPlatform=result.get('build_platform'),
+    platform = result.get('board_platform') or {}
+    if 'chip' in BOARDS[board]:
+        # flash_args names the core's boot_app0.bin beside the build's images: snapshot it into the build dir
+        boot_app0 = Path(platform.get('install_dir', '')) / BOOT_APP0
+        if not boot_app0.is_file():
+            row.update(status='failed', firstError=f'{boot_app0} missing: the ESP core layout changed')
+            return row
+        shutil.copy2(boot_app0, build_dir / boot_app0.name)
+    row.update(status='ok', platform=platform, buildPlatform=result.get('build_platform'),
                vidPid=vid_pid(build_dir), foreignHeaders=foreign_headers(build_dir),
                artifacts=sorted(rel(f) for f in build_dir.glob('*.ino.*') if f.suffix in ('.elf', '.hex', '.bin',
                                                                                             '.uf2', '.map')))
@@ -381,8 +436,9 @@ def compile_sketch(board, example, build_dir, properties):
 
 def vid_pid(build_dir):
     """VID:PID the sketch enumerates with: Adafruit_USBD_Device.cpp's USB_VID/USB_PID as its compile command defines
-    them (compile_commands.json), else its BOARD_VENDORID/BOARD_PRODUCTID, else its own fallback. The rp2040 core
-    passes USBD_VID/USBD_PID, which this library ignores. A core header defining USB_VID is not seen."""
+    them (compile_commands.json) or, on ESP32, as the variant's pins_arduino.h does (esp32s3: 303a:1001), else its
+    BOARD_VENDORID/BOARD_PRODUCTID, else its own fallback. The rp2040 core passes USBD_VID/USBD_PID, which this
+    library ignores. Other core headers defining USB_VID are not seen."""
     try:
         commands = json.loads((Path(build_dir) / 'compile_commands.json').read_text())
     except (OSError, ValueError):
@@ -394,9 +450,15 @@ def vid_pid(build_dir):
     else:
         return None
     source = (ROOT / 'src/arduino/Adafruit_USBD_Device.cpp').read_text()
+    variant = ''
+    if '-DARDUINO_ARCH_ESP32' in flags:
+        for inc in re.findall(r'-I(\S+/variants/[^/\s]+)', flags):
+            header = Path(inc) / 'pins_arduino.h'
+            variant += header.read_text(errors='replace') if header.is_file() else ''
     ids = []
     for name, board_name in (('USB_VID', 'BOARD_VENDORID'), ('USB_PID', 'BOARD_PRODUCTID')):
-        defined = re.findall(rf'-D{name}=(\S+)', flags) or re.findall(rf'-D{board_name}=(\S+)', flags)
+        defined = re.findall(rf'-D{name}=(\S+)', flags) or re.findall(rf'#define\s+{name}\s+(0x[0-9a-fA-F]+)', variant) \
+            or re.findall(rf'-D{board_name}=(\S+)', flags)
         fallback = re.search(rf'#define {name} (0x[0-9a-fA-F]+)', source)
         value = defined[-1] if defined else fallback.group(1) if fallback else None
         if value is None:
@@ -496,6 +558,37 @@ def hex_runs(path):
     return [(start, bytes(data)) for start, data in runs]
 
 
+def esp_segments(build_dir, lo, hi):
+    """([(offset, file)], '') of the build's flash_args (the ESP core writes it: a line of options, then one
+    "<offset> <file>" per line), or (None, why): no image on the options line, every file present in the build dir,
+    offsets ascending and not overlapping."""
+    try:
+        lines = (Path(build_dir) / 'flash_args').read_text().splitlines()
+    except OSError as e:
+        return None, f'flash_args: {e}'
+    options = lines[0].split() if lines else []
+    if len(options) % 2 or not all(w.startswith('--') for w in options[::2]):
+        return None, f'flash_args first line {lines[:1]}: want only "--option value" pairs'
+    segments, end = [], lo
+    for line in lines[1:]:
+        words = line.split()
+        if not words:
+            continue
+        if len(words) != 2 or not re.fullmatch(r'0x[0-9a-fA-F]+', words[0]):
+            return None, f'flash_args line {line!r}: want "<offset> <file>"'
+        off, name = int(words[0], 16), words[1]
+        path = Path(build_dir) / name
+        if '/' in name or not path.is_file():
+            return None, f'flash_args names {name}, which is not a file in the build dir'
+        if off < end:
+            return None, f'flash_args {name} at {off:#x} overlaps the previous image (ends {end:#x})'
+        segments.append((off, name))
+        end = off + path.stat().st_size
+    if not segments:
+        return None, 'flash_args names no image'
+    return segments, ''
+
+
 def merge(spans):
     out = []
     for s, e in spans:
@@ -530,16 +623,24 @@ def make_record(args, board, rows, before, diff, roster_path):
         return None, 'the source changed while building'
     lo, hi = BOARDS[board]['span']
     flasher = rig_roster(roster_path)[board]['flasher']['name']
-    image = 'elf' if flasher == 'openocd' else 'hex'   # what hil_test.py flashes for this probe
+    image = IMAGE_KIND[flasher]   # what hil_test.py flashes for this probe
+    host = BOARDS[board].get('role') == 'host'
     sketches = {}
     for row in rows:
         build_dir = ROOT / row['buildDir']
-        if not row['vidPid']:
+        if not row['vidPid'] and not host:
             return None, f'{row["example"]}: its VID:PID could not be read from compile_commands.json'
         elf = next(build_dir.glob('*.ino.elf'))
         hexfile = next(build_dir.glob('*.ino.hex'), None)
+        files, segments = [elf] + ([hexfile] if hexfile else []), None
         if image == 'elf':
             spans = elf_load_spans(elf)
+        elif image == 'esptool':
+            segments, why = esp_segments(build_dir, lo, hi)
+            if why:
+                return None, f'{row["example"]}: {why}'
+            spans = [[off, off + (build_dir / name).stat().st_size] for off, name in segments]
+            files += [build_dir / 'flash_args'] + [build_dir / name for _, name in segments]
         elif not hexfile:
             return None, f'{row["example"]}: a {flasher} board flashes the HEX, and this build made none'
         else:
@@ -554,12 +655,13 @@ def make_record(args, board, rows, before, diff, roster_path):
             if bad:
                 return None, f'{row["example"]}: compiled against headers that differ from this checkout: ' \
                              f'{[h["path"] for h in bad]}'
-        files = [elf] + ([hexfile] if hexfile else [])
         sketches[Path(row['example']).name] = {
             'example': row['example'], 'buildDir': row['buildDir'], 'elf': rel(elf),
             'hex': rel(hexfile) if hexfile else None, 'image': image, 'loadSpans': [[s, e] for s, e in spans],
             'vidPid': row['vidPid'], 'foreignHeaders': row['foreignHeaders'],
             'sha256': {rel(f): sha256(f) for f in files},
+            **({'flashArgs': rel(build_dir / 'flash_args'), 'segments': [[o, n] for o, n in segments]}
+               if segments else {}),
         }
     platform = rows[0]['platform']
     record = {
@@ -571,7 +673,10 @@ def make_record(args, board, rows, before, diff, roster_path):
         'harness': {p: sha256(ROOT / p) for p in ('.claude/skills/build/scripts/check_build.py',
                                                   '.claude/skills/hil-contract/scripts/hil_test.py')
                     if (ROOT / p).exists()},
-        'span': [lo, hi], 'sketches': sketches,
+        'span': [lo, hi], 'role': 'host' if host else 'device', 'sketches': sketches,
+        **({'chip': BOARDS[board]['chip']} if 'chip' in BOARDS[board] else {}),
+        **({'fixture': {'path': BOARDS[board]['fixture'], 'sha256': sha256(ROOT / BOARDS[board]['fixture'])}}
+           if 'fixture' in BOARDS[board] else {}),
     }
     if args.experimental:
         patch = Path(args.record).with_suffix('.patch')
@@ -634,7 +739,7 @@ def main(argv=None):
         for b in args.board:
             if args.record and b not in (roster or []):
                 fail(f'{b} is not in {args.hil_config}')
-            want = list(HIL_SKETCHES) if args.record else (only or examples())
+            want = list(hil_sketches(b)) if args.record else (only or examples())
             sel['builds'][b] = [e for e in want if args.record or eligible(b, e)]
     else:
         sel = select(changed_paths(args), roster, only)
