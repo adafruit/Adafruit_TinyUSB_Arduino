@@ -46,7 +46,7 @@ typedef struct {
   tusb_desc_device_t desc_device;
   uint16_t manufacturer[32];
   uint16_t product[48];
-  uint16_t serial[16];
+  uint16_t serial[32];
   bool mounted;
 } dev_info_t;
 
@@ -217,7 +217,13 @@ static int _count_utf8_bytes(const uint16_t *buf, size_t len) {
 }
 
 void utf16_to_utf8(uint16_t *temp_buf, size_t buf_len) {
-  size_t utf16_len = ((temp_buf[0] & 0xff) - 2) / sizeof(uint16_t);
+  // bLength is the whole descriptor's, but only buf_len bytes were requested
+  size_t desc_len = tu_min16(temp_buf[0] & 0xff, buf_len);
+  if (desc_len < 2) {
+    temp_buf[0] = 0;
+    return;
+  }
+  size_t utf16_len = (desc_len - 2) / sizeof(uint16_t);
   size_t utf8_len = _count_utf8_bytes(temp_buf + 1, utf16_len);
 
   _convert_utf16le_to_utf8(temp_buf + 1, utf16_len, (uint8_t *) temp_buf, buf_len);

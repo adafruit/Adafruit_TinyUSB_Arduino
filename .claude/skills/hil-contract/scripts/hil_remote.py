@@ -12,9 +12,10 @@ attempt dir <base>/<run-id> (agentrc hil_remote_core). Local records and collect
   hil_remote.py session open --run-id ID -b BOARD [--host H] [--roster R]
       stage the board's clean record and take a hold on the board under the reason `arduino-hil session ID`
   hil_remote.py session stage ID RECORD...    stage records (experimental too) into a new bundle; prints its options
-  hil_remote.py session exec ID flash|gdb|restore OPTS...  hil_test.py's command under the session's hold
+  hil_remote.py session exec ID flash|gdb|restore|console OPTS...  hil_test.py's command under the session's hold
   hil_remote.py session exec ID exec [--timeout S] -- ARGV...
-  hil_remote.py session close ID           restore serial_echo, check its echo, release the hold (one rig command)
+  hil_remote.py session close ID           restore the board's restoration sketch, check it, release the hold (one
+                                           rig command)
 
 Exits: run, session open/stage 0 launched/held/staged, 1 refused or failed (an `error:` line names why), 2 the agentrc
 pin is missing; wait 0 done, 3 running, 4 dead, 5 inconclusive (hil_remote_core); collect 0 complete (a session's:
@@ -44,7 +45,7 @@ HARNESS = (HIL, '.claude/skills/hil-contract/scripts/agentrc_pin.py', '.claude/s
 RUN_DIR = 'hil-run'
 MANIFEST = 'manifest.json'
 RESTORE_BUNDLE = 'bundles/restore'   # the clean record session close restores from, staged at open
-SESSION_CMDS = ('flash', 'gdb', 'restore', 'exec')
+SESSION_CMDS = ('flash', 'gdb', 'restore', 'exec', 'console')
 OWN_OPTS = ('-b', '--board', '--under-hold', '--staged')
 
 core = None
@@ -146,11 +147,10 @@ def roster_boards(roster):
 
 def cmd_run(a):
     roster = rel(a.roster)
-    boards = roster_boards(roster)
-    names = a.board or list(boards)
-    unknown = [b for b in names if b not in boards]
-    if unknown:
-        core.fail(f'not in {roster}: {unknown}')
+    try:
+        names = list(hil_test.selection(roster_boards(roster), a.board, a.test))
+    except hil_test.Refused as e:
+        core.fail(f'{roster}: {e}')
     head = head_of_clean_tree()
     records = [record_files(ROOT / 'build' / 'hil' / f'{b}.build.json', head, b) for b in names]
     tree = staged_tree(a.run_id, a.host, roster, records, head)
@@ -312,7 +312,7 @@ def parse(argv):
     st = s.add_parser('stage')
     st.add_argument('run_id')
     st.add_argument('records', nargs='+')
-    s.add_parser('exec', help='session exec ID flash|gdb|restore|exec ... (parsed by hil_test.py on the rig)')
+    s.add_parser('exec', help='session exec ID flash|gdb|restore|exec|console ... (parsed by hil_test.py on the rig)')
     cl = s.add_parser('close')
     cl.add_argument('run_id')
     return ap.parse_args(argv)

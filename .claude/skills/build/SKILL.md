@@ -42,21 +42,27 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
 
 - **Selection is the script's**, first match per path, and `paths[].reason` says why:
   - `src/arduino/ports/<mcu>/` and `src/portable/<vendor>/<driver>/` build that MCU family's representatives
-    (`REPRESENTATIVES`: rig boards first, then each distinct stack: SAMD21 beside SAMD51, the RP2040 PIO-USB host
-    build), every example each one may build. `analog/max3421` and all other `src/` code build every family's
-    representatives.
+    (`REPRESENTATIVES`: rig boards first, then each distinct stack: RP2350 beside RP2040, SAMD21 beside SAMD51, the
+    RP2040 native-host build, the ESP32-P4's high-speed OTG), every example each one may build. `analog/max3421`
+    and all other `src/` code build every family's representatives.
   - A port or driver no CI platform builds (`ports/stm32`, `st/stm32_fsdev`, `renesas/rusb2`) is uncovered.
   - The headers the cores compile their own sources against (`CORE_CONSUMED`: `Adafruit_TinyUSB_API.h`,
     `Adafruit_USBD_CDC.h`, `Adafruit_USBD_Interface.h` under `src/arduino/`) are uncovered: both cores include
     those three from their bundled copy of this library, never from this checkout (`-I` to it in the rp2040
     core's usbstack flags), so no build here shows a change to them working.
   - A sketch dir under `examples/` builds on every board in the table whose ci-arduino filters allow it.
-  - This script builds its tests plus a `serial_echo` smoke build on `raspberry_pi_pico` and `metro_m4_express`;
-    the HIL harness and rosters (`.claude/skills/hil-contract/scripts/`, `test/hil/`) run their tests and select every
-    roster board for HIL; docs, agent and repo metadata build nothing; anything else is uncovered.
+  - This script builds its tests plus a `serial_echo` smoke build per image kind (`raspberry_pi_pico`,
+    `metro_m4_express`, `espressif_s3_devkitm`); a HIL fixture (`test/hil/esp32_ts3usb30.cpp`) builds the HIL
+    sketches of its boards; the HIL harness and rosters (`.claude/skills/hil-contract/scripts/`, `test/hil/`) run
+    their tests and select every roster board for HIL; docs, agent and repo metadata build nothing; anything else is
+    uncovered.
 - **Boards** (`BOARDS`): CI's matrix (`.github/workflows/githubci.yml`) with adafruit/ci-arduino `all_platforms.py`'s
-  FQBNs under the same names, plus the rig boards `raspberry_pi_pico`, `adafruit_fruit_jam` and `metro_m4_express`,
-  named as in tinyusb's HIL farm. Example eligibility mirrors ci-arduino `build_platform.py`: `.<platform>.test.skip`,
+  FQBNs under the same names, plus the rig boards named as in tinyusb's HIL farm: `raspberry_pi_pico`,
+  `adafruit_fruit_jam`, `metro_m4_express`, the native-host `raspberry_pi_pico_w` and `raspberry_pi_pico2` (`role`
+  host), and `espressif_s3_devkitm` and `espressif_p4_function_ev` on `espressif:esp32` (arduino-esp32 3.3; CI's
+  `esp32:esp32` boards keep their own core). An ESP32 rig board compiles a copy of each sketch beside its build dir
+  with its `fixture` added, leaving `examples/` untouched, and snapshots the core's `boot_app0.bin` into the build
+  dir for `flash_args`. Example eligibility mirrors ci-arduino `build_platform.py`: `.<platform>.test.skip`,
   a `.skip.txt` line equal to the platform, and `.<platform>.test.only` when any `.*.test.only` exists; a rig board
   takes its CI platform's files (`filters`). A board whose core is not installed is exit 2 naming
   `arduino-cli core install`; a missing library dependency fails that sketch, the README's `arduino-cli lib install`
@@ -73,17 +79,22 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
   build is refused, never waited for; the HIL copies what it flashes once the hashes match). `-j` (default 4) compiles
   in parallel.
 - **A HIL record** (`--board B --shared --record FILE --hil-config ROSTER`, `FILE` inside the checkout, by convention
-  `build/hil/<board>.build.json`) builds the HIL sketches (`HIL_SKETCHES`: `serial_echo`, `hid_generic_inout`,
-  `msc_ramdisk`) for one roster board and is the HIL contract's build receipt. It requires a clean tree before and the
+  `build/hil/<board>.build.json`) builds the HIL sketches of the board's role (`HIL_SKETCHES`: device `serial_echo`,
+  `hid_generic_inout`, `msc_ramdisk`; host `host_device_info`; the first is the restoration image) for one roster
+  board and is the HIL contract's build receipt. It requires a clean tree before and the
   same source identity after the build, and checks the image the roster's flasher writes against the board's `span`
   (metro_m4_express [0x4000, 0x80000), above the UF2 bootloader; raspberry_pi_pico [0x10000000, 0x10200000);
-  adafruit_fruit_jam [0x10000000, 0x11000000)). For an openocd board that image is the ELF, its load segments
-  (physical addresses of `PT_LOAD` with file bytes) inside the span. For a J-Link board it is the HEX, its runs equal
-  to the ELF's allocated sections and inside the span; the ELF's own segments are not checked, since the SAMD ELF's
-  first starts at 0x0. It also refuses a foreign header that differs. It records HEAD, the FQBN, the platform
+  adafruit_fruit_jam [0x10000000, 0x11000000); the ESP32 boards their 4 MB SPI flash). For an openocd board that
+  image is the ELF, its load segments (physical addresses of `PT_LOAD` with file bytes) inside the span. For a J-Link
+  board it is the HEX, its runs equal to the ELF's allocated sections and inside the span; the ELF's own segments are
+  not checked, since the SAMD ELF's first starts at 0x0. For an esptool board it is the core's `flash_args`: a line of
+  options, then each image at its offset, every file in the build dir, ascending, not overlapping, inside the span.
+  A device sketch needs its VID:PID: a `-D` define, on ESP32 the variant's `pins_arduino.h` (the S3's 303a:1001),
+  else the library's fallback. It also refuses a foreign header that differs. It records HEAD, the FQBN, the platform
   (id, version, install dir, and commit and dirty state when the core is a git checkout), the arduino-cli version, the
-  roster's and harness's sha256, and per sketch its ELF and HEX with sha256, load spans, VID:PID and foreign headers;
-  paths are checkout-relative so the record stages to a rig unchanged.
+  roster's and harness's sha256, the board's role, ESP `chip` and `fixture` (path and sha256), and per sketch its
+  images with sha256, load spans, VID:PID, foreign headers and, for esptool, `flashArgs` and `segments`; paths are
+  checkout-relative so the record stages to a rig unchanged.
 - **Experimental records** (`--experimental`, with `--record`) are for debug and instrumentation: a dirty tree and
   `--build-property` are allowed, untracked files under `src/`, `examples/` or `test/hil/` are refused (put
   instrumentation in tracked files), the source must not change during the build, and `git diff HEAD` is saved beside

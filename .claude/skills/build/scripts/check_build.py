@@ -457,8 +457,8 @@ def vid_pid(build_dir):
             variant += header.read_text(errors='replace') if header.is_file() else ''
     ids = []
     for name, board_name in (('USB_VID', 'BOARD_VENDORID'), ('USB_PID', 'BOARD_PRODUCTID')):
-        defined = re.findall(rf'-D{name}=(\S+)', flags) or re.findall(rf'#define\s+{name}\s+(0x[0-9a-fA-F]+)', variant) \
-            or re.findall(rf'-D{board_name}=(\S+)', flags)
+        defined = re.findall(rf'-D{name}=(\S+)', flags) or \
+            re.findall(rf'#define\s+{name}\s+(0x[0-9a-fA-F]+)', variant) or re.findall(rf'-D{board_name}=(\S+)', flags)
         fallback = re.search(rf'#define {name} (0x[0-9a-fA-F]+)', source)
         value = defined[-1] if defined else fallback.group(1) if fallback else None
         if value is None:

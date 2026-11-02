@@ -410,8 +410,9 @@ class EspRecord(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.roster = self.root / 'test/hil/ci.json'
         self.roster.parent.mkdir(parents=True)
-        self.roster.write_text(json.dumps({'boards': [{'name': 'espressif_s3_devkitm', 'flasher': {'name': 'esptool'}},
-                                                      {'name': 'raspberry_pi_pico_w', 'flasher': {'name': 'openocd'}}]}))
+        self.roster.write_text(json.dumps({'boards': [
+            {'name': 'espressif_s3_devkitm', 'flasher': {'name': 'esptool'}},
+            {'name': 'raspberry_pi_pico_w', 'flasher': {'name': 'openocd'}}]}))
         (self.root / 'test/hil/esp32_ts3usb30.cpp').write_text('// fixture\n')
         self.patches = [mock.patch.object(cb, 'ROOT', self.root),
                         mock.patch.object(cb, 'tool_version', return_value='1.5.1'),

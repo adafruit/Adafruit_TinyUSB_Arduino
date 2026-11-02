@@ -8,6 +8,7 @@
   hil_test.py gdb -b BOARD --build-record R --sketch S --under-hold REASON [--ex CMD]... [--timeout S] [--staged M]
                  ROSTER
   hil_test.py exec -b BOARD --under-hold REASON [--timeout S] [--staged M] ROSTER -- ARGV...
+  hil_test.py console -b BOARD --under-hold REASON [--seconds S] [--baud N] [--reset] [--staged M] ROSTER
   hil_test.py report RUN_DIR [-b BOARD]...
   hil_test.py lock (hold|release|status) ...        the pinned agentrc hil_lock.py
 
@@ -25,6 +26,7 @@ import glob
 import hashlib
 import json
 import os
+import re
 import secrets
 import select
 import shlex
@@ -46,8 +48,10 @@ import check_build  # noqa: E402
 LOCK_SCRIPT = 'skills/hil/scripts/hil_lock.py'
 SCRIPTS = (LOCK_SCRIPT, 'skills/hil/scripts/hil_flash.py', 'skills/hil/scripts/hil_process.py',
            'skills/hil/scripts/hil_report_core.py', 'skills/hil/scripts/usb_observe.py')
-TESTS = {'cdc_echo': 'serial_echo', 'hid_inout': 'hid_generic_inout', 'msc_ramdisk': 'msc_ramdisk'}
-RESTORE_SKETCH = 'serial_echo'
+TESTS = {'cdc_echo': 'serial_echo', 'hid_inout': 'hid_generic_inout', 'msc_ramdisk': 'msc_ramdisk',
+         'host_device_info': 'host_device_info'}
+ROLE_TESTS = {'device': ('cdc_echo', 'hid_inout', 'msc_ramdisk'), 'host': ('host_device_info',)}
+RESTORE_TEST = {'device': 'cdc_echo', 'host': 'host_device_info'}   # each runs its role's restoration sketch
 # msc_ramdisk's fixture (examples/MassStorage/msc_ramdisk: DISK_BLOCK_NUM * DISK_BLOCK_SIZE, README_CONTENTS)
 MSC_DISK_BYTES = 16 * 512
 MSC_README = b'This is TinyUSB MassStorage device demo for Arduino on RAM disk.'
@@ -61,6 +65,7 @@ DETACH = {'rp2040': ['mww 0x5011304c 0x00010000']}
 DETACH_WAIT = 5
 
 FLASH_TIMEOUT, VERIFY_TIMEOUT, ENUM_TIMEOUT, TEST_TIMEOUT, SETTLE = 120, 60, 20, 30, 2
+CONSOLE_MAX = 120   # one console capture, seconds
 BOARD_BUDGET = 900
 EXEC_MAX = 600   # one session exec or gdb child
 GDB_DETACH_RESUME = 'foreach t [target names] { $t configure -event gdb-detach { resume } }'
@@ -108,18 +113,58 @@ def emit(obj):
 
 # ---- roster, staged manifest, build record
 
+def role(name):
+    return check_build.BOARDS[name].get('role', 'device')
+
+
+def restore_sketch(name):
+    return Path(check_build.hil_sketches(name)[0]).name
+
+
 def load_roster(path):
     try:
         boards = check_build.rig_roster(path)
     except ValueError as e:
         raise Refused(str(e))
     for name, b in boards.items():
-        if b.get('flasher', {}).get('name') not in ('openocd', 'jlink'):
-            raise Refused(f'roster {path}: {name}: flasher must be openocd or jlink')
-        unknown = set(b.get('arduino', {}).get('tests', [])) - set(TESTS)
-        if unknown:
-            raise Refused(f'roster {path}: {name}: unknown tests {sorted(unknown)}')
+        flasher = b.get('flasher', {}).get('name')
+        if flasher not in check_build.IMAGE_KIND:
+            raise Refused(f'roster {path}: {name}: flasher must be one of {sorted(check_build.IMAGE_KIND)}')
+        if (flasher == 'esptool') != ('chip' in check_build.BOARDS[name]):
+            raise Refused(f'roster {path}: {name}: esptool flashes exactly the boards with an ESP chip profile')
+        wrong = set(b.get('arduino', {}).get('tests', [])) - set(ROLE_TESTS[role(name)])
+        if wrong:
+            raise Refused(f'roster {path}: {name}: tests {sorted(wrong)} are not {role(name)} tests')
+        attached = b.get('arduino', {}).get('dev_attached')
+        if role(name) == 'host' and not (attached and all(re.fullmatch(r'[0-9a-f]{4}:[0-9a-f]{4}', d.get('vid_pid', ''))
+                                                          and d.get('serial') for d in attached)):
+            raise Refused(f'roster {path}: {name}: a host board needs arduino.dev_attached, each a vid_pid '
+                          f'"vvvv:pppp" and a serial')
+        if 'usb_port' in b and not re.fullmatch(r'\d+-\d+(\.\d+)*', b['usb_port']):
+            raise Refused(f'roster {path}: {name}: usb_port {b["usb_port"]!r} is not a sysfs bus port')
+        if flasher == 'esptool' and 'usb_port' not in b:
+            # Arduino on ESP32 enumerates without an iSerial: the DUT is the device at its port
+            raise Refused(f'roster {path}: {name}: an esptool board needs usb_port')
+        tool = b.get('debug', {}).get('tool', 'openocd')
+        if tool not in ('openocd', 'openocd-esp32') or (tool == 'openocd-esp32') != ('uid' in b.get('debug', {})):
+            raise Refused(f'roster {path}: {name}: debug.tool is openocd, or openocd-esp32 with the debug '
+                          f'probe\'s debug.uid')
     return boards
+
+
+def selection(roster, boards, tests):
+    """{board: its tests} for -b/-t: the roster's battery, or with -t the named tests of each board's role, boards with
+    none dropped; Refused when nothing is left."""
+    names = boards or list(roster)
+    unknown = [b for b in names if b not in roster]
+    if unknown:
+        raise Refused(f'not in the roster: {unknown}')
+    picked = {b: [t for t in tests if t in ROLE_TESTS[role(b)]] if tests else
+              roster[b].get('arduino', {}).get('tests', []) for b in names}
+    picked = {b: ts for b, ts in picked.items() if ts}
+    if not picked:
+        raise Refused(f'no selected board runs any of {tests or "its tests"}')
+    return picked
 
 
 def verify_staged(manifest_path):
@@ -173,7 +218,9 @@ def admit(record_path, board, roster_path, run_dir, *, manifest=None, experiment
     if check_build.sha256(roster_path) != rec['roster']['sha256']:
         raise Refused(f'{roster_path} changed since the record was built: rebuild it')
     flasher = load_roster(roster_path)[board]['flasher']['name']
-    want = 'elf' if flasher == 'openocd' else 'hex'
+    want = check_build.IMAGE_KIND[flasher]
+    if rec.get('role', 'device') != role(board):
+        raise Refused(f'{record_path}: a {rec.get("role", "device")} record, {board} is a {role(board)} board')
     images = {}
     for name, s in rec['sketches'].items():
         if s.get('image') != want:
@@ -189,7 +236,8 @@ def admit(record_path, board, roster_path, run_dir, *, manifest=None, experiment
             (dest / Path(rel).name).write_bytes(data)
         images[name] = {'elf': str(dest / Path(s['elf']).name),
                         'hex': str(dest / Path(s['hex']).name) if s.get('hex') else None,
-                        'vidPid': s['vidPid'], 'sha256': s['sha256']}
+                        'vidPid': s['vidPid'], 'sha256': s['sha256'], 'dir': str(dest),
+                        'segments': s.get('segments'), 'chip': rec.get('chip')}
     return rec, images
 
 
@@ -242,8 +290,36 @@ def jlink_device(flasher):
     return words[words.index('-device') + 1]
 
 
+def esptool_setup(flasher):
+    """(the bridge tty, the esptool executable), resolved under the board's reservation, or RuntimeError."""
+    return A.flash.esptool_port(flasher['uid']), A.flash.esptool_runtime()['exe']
+
+
+def flash_esptool(flasher, image, tracker):
+    """The build's flash_args through esptool write_flash, whose per-image hash check is the verify."""
+    flash_args = ' '.join(Path(image['dir'], 'flash_args').read_text().split())
+    why = A.flash.esptool_input_problem(image['chip'], flash_args, image['dir'])
+    if why:
+        return f'esptool inputs: {why}'
+    try:
+        port, exe = esptool_setup(flasher)
+    except RuntimeError as e:
+        return f'esptool: {e}'
+    op = A.flash.flash_esptool(flasher, chip=image['chip'], port=port, flash_args=flash_args, cwd=image['dir'],
+                               timeout=FLASH_TIMEOUT, run=tracker.run, esptool=exe)
+    tracker.check()
+    why = A.flash.esptool_problem(op)
+    if why:
+        return f'esptool flash: {why}'
+    verified = (_text(op.stdout) + _text(op.stderr)).count('Hash of data verified.')
+    want = len(image['segments'])
+    return '' if verified == want else f'esptool verified {verified} of {want} images'
+
+
 def flash(flasher, image, run_dir, tracker):
     """Program and verify one image. Returns '' or why it failed; raises Unclean when a child outlived it."""
+    if flasher['name'] == 'esptool':
+        return flash_esptool(flasher, image, tracker)
     if flasher['name'] == 'openocd':
         op = A.flash.flash_openocd(flasher, image['elf'], timeout=FLASH_TIMEOUT, run=tracker.run)
         tracker.check()
@@ -278,7 +354,7 @@ def detach(name, board, vid_pid, tracker):
     write is evidence, not a failure: a firmware without USB has nothing to detach, and the enumeration check after
     the flash decides."""
     cmds = DETACH.get(check_build.BOARDS[name]['family'])
-    if not cmds or board['flasher']['name'] != 'openocd':
+    if not cmds or board['flasher']['name'] != 'openocd' or not vid_pid:   # no vid_pid: a host board
         return ''
     op = A.flash.run_openocd_commands(board['flasher'], cmds, timeout=VERIFY_TIMEOUT, run=tracker.run)
     tracker.check()
@@ -287,7 +363,7 @@ def detach(name, board, vid_pid, tracker):
         return f'detach session failed (exit {op.returncode})'
     deadline = time.monotonic() + DETACH_WAIT
     while time.monotonic() < deadline:
-        if not scan(vid_pid, board['uid']):
+        if not dut_devices(vid_pid, board):
             return 'detached'
         time.sleep(0.2)
     return f'still enumerated {DETACH_WAIT}s after the detach'
@@ -296,15 +372,23 @@ def detach(name, board, vid_pid, tracker):
 def flash_and_enumerate(name, board, image, run_dir, tracker):
     """Note the DUT's enumeration, detach, flash, then wait for it to enumerate anew: (why the flash failed or '',
     detach evidence, the new device or None)."""
-    before = enumeration_of(image['vidPid'], board['uid'])
+    before = enumeration_of(image['vidPid'], board)
     detached = detach(name, board, image['vidPid'], tracker)
     why = flash(board['flasher'], image, run_dir, tracker)
     if why:
         return why, detached, None
-    return '', detached, wait_enumerated(image['vidPid'], board['uid'], before)
+    return '', detached, wait_enumerated(image['vidPid'], board, before)
 
 
 def reset(flasher, tracker):
+    if flasher['name'] == 'esptool':
+        try:
+            port, exe = esptool_setup(flasher)
+        except RuntimeError as e:
+            return f'esptool: {e}'
+        op = A.flash.reset_esptool(flasher, port=port, timeout=VERIFY_TIMEOUT, run=tracker.run, esptool=exe)
+        tracker.check()
+        return A.flash.esptool_problem(op)
     if flasher['name'] == 'openocd':
         op = A.flash.reset_openocd(flasher, timeout=VERIFY_TIMEOUT, run=tracker.run)
         tracker.check()
@@ -320,12 +404,24 @@ def scan(vid_pid, serial=None):
     return A.usb.usb_scan(vid_pid=tuple(vid_pid.split(':')), serial=serial)
 
 
-def wait_enumerated(vid_pid, serial, before, timeout=ENUM_TIMEOUT):
-    """The device with this VID:PID and serial once it enumerated anew (an enumeration id other than `before`)
-    and stayed for a second, or None."""
+def dut_devices(vid_pid, board):
+    """The DUT's enumerations with this VID:PID: the device at the roster's usb_port where the firmware reports no
+    iSerial (ESP32 under Arduino), else the one whose serial is the roster uid."""
+    if 'usb_port' in board:
+        return [d for d in A.usb.usb_devices(vid_pid=tuple(vid_pid.split(':'))) if d['busport'] == board['usb_port']]
+    return scan(vid_pid, board['uid'])
+
+
+def dut_name(board):
+    return f'at {board["usb_port"]}' if 'usb_port' in board else f'with serial {board["uid"]}'
+
+
+def wait_enumerated(vid_pid, board, before, timeout=ENUM_TIMEOUT):
+    """The DUT with this VID:PID once it enumerated anew (an enumeration id other than `before`) and stayed for a
+    second, or None."""
     deadline, seen, since = time.monotonic() + timeout, None, 0
     while time.monotonic() < deadline:
-        devs = [d for d in scan(vid_pid, serial) if d['ino'] != before]
+        devs = [d for d in dut_devices(vid_pid, board) if d['ino'] != before]
         if len(devs) == 1:
             if seen and seen['ino'] == devs[0]['ino'] and time.monotonic() - since >= 1:
                 return devs[0]
@@ -337,8 +433,8 @@ def wait_enumerated(vid_pid, serial, before, timeout=ENUM_TIMEOUT):
     return None
 
 
-def enumeration_of(vid_pid, serial):
-    devs = scan(vid_pid, serial)
+def enumeration_of(vid_pid, board):
+    devs = dut_devices(vid_pid, board)
     return devs[0]['ino'] if len(devs) == 1 else None
 
 
@@ -424,18 +520,69 @@ def fat12_file(img, name83):
 
 TEST_FUNCS = {'cdc_echo': test_cdc, 'hid_inout': test_hid, 'msc_ramdisk': test_msc}
 
+# examples/Host/Simple/host_device_info: a mounted device's descriptor dump, from its "Device N: ID" line to its
+# iSerialNumber line (index, then the string read back)
+HOST_DEVICE_RE = re.compile(r'Device (\d+): ID ([0-9a-f]{4}:[0-9a-f]{4})\r?\nDevice Descriptor:\r?\n'
+                            r'(?:  .*\r?\n)*?  iSerialNumber +\d+ +(.*?)\r?\n')
+
+
+def host_devices(text):
+    """{(vid:pid, serial)} host_device_info reported in full."""
+    return {(m.group(2), m.group(3).strip()) for m in HOST_DEVICE_RE.finditer(text)}
+
+
+def console_tty(board, deadline):
+    """The board's console: its CMSIS-DAP probe's VCOM (the target's UART0, Serial1), or an esptool board's
+    USB-UART bridge (UART0). TimeoutError or RuntimeError naming why not."""
+    fl = board['flasher']
+    if fl['name'] == 'esptool':
+        return A.flash.esptool_port(fl['uid'])
+    if fl['name'] != 'openocd' or 'vid_pid' not in fl:
+        raise RuntimeError(f'no console route for a {fl["name"]} probe without vid_pid')
+    probes = A.usb.usb_scan(vid_pid=tuple(v[2:] for v in fl['vid_pid'].split()), serial=fl['uid'])
+    if len(probes) != 1:
+        raise RuntimeError(f'probe {fl["uid"]}: want one on the bus, found {len(probes)}')
+    return node(probes[0], '*:*/tty/tty*', deadline)
+
+
+def step_host(name, board, image, test, run_dir, tracker):
+    """A host board's step: the console open and drained before the flash, so the boot's enumeration output is
+    kept; pass when every roster dev_attached device is reported with its serial."""
+    import serial
+    started, want = time.monotonic(), {(d['vid_pid'], d['serial']) for d in board['arduino']['dev_attached']}
+    try:
+        tty = console_tty(board, time.monotonic() + 5)
+    except (RuntimeError, TimeoutError) as e:
+        return {'test': test, 'pass': False, 'detail': f'console: {e}'}
+    log = Path(run_dir) / f'console-{test}-{secrets.token_hex(2)}.log'
+    with serial.Serial(tty, 115200, timeout=0.2) as port:
+        port.reset_input_buffer()
+        why = flash(board['flasher'], image, run_dir, tracker)
+        if why:
+            return {'test': test, 'pass': False, 'detail': why}
+        text, deadline = '', time.monotonic() + TEST_TIMEOUT
+        while time.monotonic() < deadline and not want <= host_devices(text):
+            text += port.read(4096).decode(errors='replace')
+    log.write_text(text)
+    found = host_devices(text)
+    missing = sorted(want - found)
+    return {'test': test, 'pass': not missing, 'console': str(log), 'seconds': round(time.monotonic() - started, 1),
+            'detail': f'{tty}: reported {sorted(found)}' + (f', missing {missing}' if missing else '')}
+
 
 def step(name, board, image, test, run_dir, tracker):
     """Flash the test's sketch, wait for the DUT to enumerate anew, run the host check. A dict row."""
+    if role(name) == 'host':
+        return step_host(name, board, image, test, run_dir, tracker)
     started = time.monotonic()
-    vid_pid, uid = image['vidPid'], board['uid']
+    vid_pid = image['vidPid']
     why, detached, dev = flash_and_enumerate(name, board, image, run_dir, tracker)
     if why:
         return {'test': test, 'pass': False, 'detail': why, 'detach': detached}
     if not dev:
-        others = [d['serial'] for d in scan(vid_pid)]
-        return {'test': test, 'pass': False, 'detail': f'no {vid_pid} with serial {uid} enumerated within '
-                                                       f'{ENUM_TIMEOUT}s (present: {others})'}
+        others = [d['busport'] for d in A.usb.usb_devices(vid_pid=tuple(vid_pid.split(':')))]
+        return {'test': test, 'pass': False, 'detail': f'no {vid_pid} {dut_name(board)} enumerated anew within '
+                                                       f'{ENUM_TIMEOUT}s (that VID:PID at: {others})'}
     deadline = time.monotonic() + TEST_TIMEOUT
     try:
         ok, detail = TEST_FUNCS[test](dev, secrets.token_hex(4), deadline, tracker, run_dir)
@@ -449,8 +596,9 @@ def step(name, board, image, test, run_dir, tracker):
 
 
 def restore(name, board, images, run_dir, tracker):
-    row = step(name, board, images[RESTORE_SKETCH], 'cdc_echo', run_dir, tracker)
-    return {'pass': row['pass'], 'state': 'serial_echo restored' if row['pass'] else 'unknown',
+    sketch = restore_sketch(name)
+    row = step(name, board, images[sketch], RESTORE_TEST[role(name)], run_dir, tracker)
+    return {'pass': row['pass'], 'state': f'{sketch} restored' if row['pass'] else 'unknown',
             'evidence': row['detail']}
 
 
@@ -484,6 +632,12 @@ def mark_pending(name, tracker):
 
 def probe_present(flasher):
     """'' when exactly one probe with the flasher's serial is on this host's bus, else why not."""
+    if flasher['name'] == 'esptool':
+        try:
+            A.flash.esptool_port(flasher['uid'])
+            return ''
+        except RuntimeError as e:
+            return str(e)
     if flasher['name'] == 'jlink':
         serials = {d['busport']: d['serial'] for d in A.usb.usb_scan(vid='1366')}
         found = A.usb.jlink_serial_candidates(flasher['uid'], serials)
@@ -630,16 +784,14 @@ def cmd_run(args):
     staged = verify_staged(args.staged) if args.staged else None
     load_agentrc(bool(staged))
     roster = load_roster(args.roster)
-    names = args.board or list(roster)
-    unknown = [b for b in names if b not in roster]
-    if unknown:
-        raise Refused(f'not in {args.roster}: {unknown}')
+    picked = selection(roster, args.board, args.test)
+    names = list(picked)
     try:
         import serial  # noqa: F401
     except ImportError:
         raise Refused('pyserial is missing (python3 -m pip install pyserial, or the distro package)')
     for b in names:
-        tool = {'openocd': 'openocd', 'jlink': 'JLinkExe'}[roster[b]['flasher']['name']]
+        tool = {'openocd': 'openocd', 'jlink': 'JLinkExe', 'esptool': 'esptool'}[roster[b]['flasher']['name']]
         if not shutil.which(tool):
             raise Refused(f'{b}: {tool} not on PATH')
     run_root = Path(args.run_dir or ROOT / 'build' / 'hil-run' / time.strftime('%Y%m%d-%H%M%S'))
@@ -649,9 +801,8 @@ def cmd_run(args):
     rows, termination = [], 'completed'
     try:
         for b in names:
-            tests = args.test or roster[b].get('arduino', {}).get('tests', [])
             record = Path(args.record_dir) / f'{b}.build.json'
-            rows.append(run_board(b, roster[b], tests, record, Path(args.roster), run_root, staged))
+            rows.append(run_board(b, roster[b], picked[b], record, Path(args.roster), run_root, staged))
             if rows[-1].pop('interrupted', False):
                 termination = 'aborted'
                 break
@@ -783,7 +934,7 @@ def op_restore(args, board, run_dir, tracker, manifest):
         open_receipts = [r for r in receipts if not proven_ended(r)]
         if open_receipts:
             raise Refused(f'children of the failed run are not proven ended: {open_receipts}')
-    meta, _, images = admit_sketch(args, RESTORE_SKETCH, run_dir, manifest, False)
+    meta, _, images = admit_sketch(args, restore_sketch(args.board), run_dir, manifest, False)
     row = {**meta, **restore(args.board, board, images, run_dir, tracker)}
     if args.release and row['pass']:
         row['released'] = release_hold(args.board)
@@ -816,12 +967,18 @@ def gdb_argv(board, elf, commands):
     - with a memory map openocd probes every flash bank on connect (gdb_server.c gdb_new_connection), and the
       RP2040's probe leaves the QSPI flash out of XIP mode: no map, no probe;
     - without a map gdb takes flash for RAM and would patch a software breakpoint into it, so every breakpoint is
-      made a hardware one (openocd.texi, gdb_breakpoint_override)."""
-    probe = {'name': 'openocd', 'uid': board['flasher']['uid'], 'args': board['debug']['openocd']}
-    if board['flasher']['name'] == 'openocd' and 'vid_pid' in board['flasher']:
+      made a hardware one (openocd.texi, gdb_breakpoint_override).
+    debug.tool openocd-esp32 runs Espressif's openocd on its own probe (debug.uid, e.g. the ESP32-P4's
+    USB-Serial/JTAG, pinned by debug.vid_pid)."""
+    dbg = board['debug']
+    probe = {'name': 'openocd', 'uid': dbg.get('uid', board['flasher']['uid']), 'args': dbg['openocd']}
+    if 'uid' in dbg:
+        probe.update({'vid_pid': dbg['vid_pid']} if 'vid_pid' in dbg else {})
+    elif board['flasher']['name'] == 'openocd' and 'vid_pid' in board['flasher']:
         probe['vid_pid'] = board['flasher']['vid_pid']
-    openocd = A.flash.openocd_cmd_base(probe) + ['-c', 'gdb_port pipe', '-c', 'gdb_memory_map disable',
-                                                 '-c', 'gdb_breakpoint_override hard', '-c', GDB_DETACH_RESUME]
+    base = A.flash.openocd_cmd_base(probe)
+    openocd = [dbg.get('tool', 'openocd')] + base[1:] + ['-c', 'gdb_port pipe', '-c', 'gdb_memory_map disable',
+                                                         '-c', 'gdb_breakpoint_override hard', '-c', GDB_DETACH_RESUME]
     return ['gdb-multiarch', '-batch', '-nx', '-ex', f'target extended-remote | {shlex.join(openocd)}',
             *(w for c in commands for w in ('-ex', c)), elf]
 
@@ -833,26 +990,65 @@ def op_gdb(args, board, run_dir, tracker, manifest):
     return {**meta, **run_child(gdb_argv(board, image['elf'], args.ex), args.timeout, tracker)}
 
 
-OPS = {'flash': op_flash, 'restore': op_restore, 'gdb': op_gdb, 'exec': op_exec}
+def op_console(args, board, run_dir, tracker, manifest):
+    """Capture the board's console for --seconds into console.log, after a probe reset with --reset. An esptool
+    board's reset takes the same bridge tty, so it runs first and the boot's first lines may be lost."""
+    import serial
+    reset_first = args.reset and board['flasher']['name'] == 'esptool'
+    if reset_first:
+        why = reset(board['flasher'], tracker)
+        if why:
+            return {'pass': False, 'detail': f'reset: {why}'}
+    try:
+        tty = console_tty(board, time.monotonic() + 5)
+    except (RuntimeError, TimeoutError) as e:
+        return {'pass': False, 'detail': f'console: {e}'}
+    log, text = run_dir / 'console.log', b''
+    with serial.Serial(tty, args.baud, timeout=0.2) as port:
+        port.reset_input_buffer()
+        if args.reset and not reset_first:
+            why = reset(board['flasher'], tracker)
+            if why:
+                return {'pass': False, 'detail': f'reset: {why}'}
+        deadline = time.monotonic() + args.seconds
+        while time.monotonic() < deadline:
+            text += port.read(4096)
+    log.write_bytes(text)
+    return {'pass': True, 'detail': f'{tty}: {len(text)} bytes in {args.seconds:g} s', 'console': str(log),
+            'tail': text.decode(errors='replace')[-2000:]}
+
+
+OPS = {'flash': op_flash, 'restore': op_restore, 'gdb': op_gdb, 'exec': op_exec, 'console': op_console}
 
 
 def flash_only(name, board, image, run_dir, tracker):
+    if role(name) == 'host':   # no DUT on this host's bus: the console shows what runs
+        why = flash(board['flasher'], image, run_dir, tracker)
+        return {'pass': not why, 'detail': why or f'flashed {Path(image["elf"]).name} (a host board: read its console)'}
     why, detached, dev = flash_and_enumerate(name, board, image, run_dir, tracker)
     if why:
         return {'pass': False, 'detail': why, 'detach': detached}
     return {'pass': True, 'detail': f'flashed {Path(image["elf"]).name}; ' +
             (f'enumerated as {image["vidPid"]} at {dev["busport"]}' if dev else
-             f'no {image["vidPid"]} with serial {board["uid"]} enumerated (the image may not run USB)')}
+             f'no {image["vidPid"]} {dut_name(board)} enumerated (the image may not run USB)')}
 
 
 def cmd_commission(args):
-    """Find the DUT's serial under Arduino firmware: exactly one device of the record's VID:PID must re-enumerate
-    across the flash's reset and again across a probe reset, with one serial."""
+    """Find the DUT's identity under Arduino firmware: exactly one device of the record's VID:PID must re-enumerate
+    across the flash's reset and again across a probe reset, with one serial (a usb_port board: at one port)."""
     load_agentrc(False)
     roster = load_roster(args.roster)
     if args.board not in roster:
         raise Refused(f'{args.board} is not in {args.roster}')
+    if role(args.board) == 'host':
+        raise Refused(f'{args.board} is a host board: no DUT enumerates here, its battery checks the console')
     board = roster[args.board]
+    by_port = 'usb_port' in board
+
+    def enumerated(vid_pid):   # {identity: enumeration id}
+        if by_port:
+            return {d['busport']: d['ino'] for d in A.usb.usb_devices(vid_pid=tuple(vid_pid.split(':')))}
+        return {d['serial']: d['ino'] for d in scan(vid_pid)}
     run_dir = ROOT / 'build' / 'hil-manual' / f'commission-{args.board}-{time.strftime("%Y%m%d-%H%M%S")}'
     run_dir.mkdir(parents=True, exist_ok=True)
     try:
@@ -865,10 +1061,10 @@ def cmd_commission(args):
         if why:
             raise Refused(why)
         _, images = admit(Path(args.record_dir) / f'{args.board}.build.json', args.board, args.roster, run_dir)
-        image = images[RESTORE_SKETCH]
+        image = images[restore_sketch(args.board)]
         observed = []
         for action in ('flash', 'reset'):
-            before = {d['serial']: d['ino'] for d in scan(image['vidPid'])}
+            before = enumerated(image['vidPid'])
             touched = True
             if action == 'flash':
                 detach(args.board, board, image['vidPid'], tracker)
@@ -881,16 +1077,23 @@ def cmd_commission(args):
             time.sleep(ENUM_TIMEOUT / 4)
             deadline, changed = time.monotonic() + ENUM_TIMEOUT, set()
             while time.monotonic() < deadline and not changed:
-                changed = {d['serial'] for d in scan(image['vidPid']) if before.get(d['serial']) != d['ino']}
+                changed = {k for k, ino in enumerated(image['vidPid']).items() if before.get(k) != ino}
                 time.sleep(0.5)
             observed.append(sorted(changed))
         out['observed'] = observed
-        serials = {s for obs in observed for s in obs}
-        if not (all(len(o) == 1 for o in observed) and len(serials) == 1):
-            raise RuntimeError('ambiguous: not exactly one device re-enumerated with one serial both times')
-        out['serial'] = serials.pop()
-        out['matchesRoster'] = out['serial'].lower() == board['uid'].lower()
-        dev = scan(image['vidPid'], out['serial'])[0]
+        found = {s for obs in observed for s in obs}
+        if not (all(len(o) == 1 for o in observed) and len(found) == 1):
+            raise RuntimeError(f'ambiguous: not exactly one device re-enumerated with one '
+                               f'{"port" if by_port else "serial"} both times')
+        if by_port:
+            out['port'] = found.pop()
+            out['matchesRoster'] = out['port'] == board['usb_port']
+            dev = next(d for d in A.usb.usb_devices(vid_pid=tuple(image['vidPid'].split(':')))
+                       if d['busport'] == out['port'])
+        else:
+            out['serial'] = found.pop()
+            out['matchesRoster'] = out['serial'].lower() == board['uid'].lower()
+            dev = scan(image['vidPid'], out['serial'])[0]
         ok, out['cleanup'] = test_cdc(dev, secrets.token_hex(4), time.monotonic() + TEST_TIMEOUT, tracker, run_dir)
         if not ok:
             raise RuntimeError(f'serial_echo left running does not echo: {out["cleanup"]}')
@@ -941,19 +1144,24 @@ def parse(argv):
     c.add_argument('-b', '--board', required=True)
     c.add_argument('--record-dir', default=str(ROOT / 'build' / 'hil'))
     c.add_argument('roster')
-    for name in ('flash', 'restore', 'gdb', 'exec'):
+    for name in ('flash', 'restore', 'gdb', 'exec', 'console'):
         m = sub.add_parser(name)
         m.add_argument('-b', '--board', required=True)
         m.add_argument('--under-hold', required=True, metavar='REASON')
         m.add_argument('--staged', help='the manifest of a tree hil_remote.py staged (rig side)')
-        if name != 'exec':
+        if name == 'console':
+            m.add_argument('--seconds', type=float, default=10, help=f'at most {CONSOLE_MAX}')
+            m.add_argument('--baud', type=int, default=115200)
+            m.add_argument('--reset', action='store_true', help='reset the target through its probe first')
+        if name not in ('exec', 'console'):
             m.add_argument('--build-record', required=True)
             m.add_argument('--bundle', help='a staged record bundle (tree-relative); --build-record is inside it')
         if name in ('flash', 'gdb'):
             m.add_argument('--sketch', required=True)
         if name == 'restore':
             m.add_argument('--report', help="a failed run's report: its children must be proven ended first")
-            m.add_argument('--release', action='store_true', help='release the hold once serial_echo is restored')
+            m.add_argument('--release', action='store_true',
+                           help="release the hold once the board's restoration sketch is restored")
         if name in ('gdb', 'exec'):
             m.add_argument('--timeout', type=float, default=60, help=f'seconds, at most {EXEC_MAX}')
         if name == 'gdb':
@@ -978,10 +1186,13 @@ def main(argv=None):
     if args.cmd in ('gdb', 'exec') and not 0 < args.timeout <= EXEC_MAX:
         emit({'pass': False, 'error': f'--timeout must be in (0, {EXEC_MAX}]'})
         return 2
-    if args.cmd in ('flash', 'restore', 'gdb', 'exec'):
+    if args.cmd == 'console' and not 0 < args.seconds <= CONSOLE_MAX:
+        emit({'pass': False, 'error': f'--seconds must be in (0, {CONSOLE_MAX}]'})
+        return 2
+    if args.cmd in ('flash', 'restore', 'gdb', 'exec', 'console'):
         # a session command runs over ssh: a dropped link must not end it between a child's start and its proof
         signal.signal(signal.SIGHUP, signal.SIG_IGN)
-    if args.cmd in ('run', 'commission', 'flash', 'restore', 'gdb', 'exec'):
+    if args.cmd in ('run', 'commission', 'flash', 'restore', 'gdb', 'exec', 'console'):
         # SIGTERM unwinds as SIGINT does: run_tracked ends the child, and run_board, cmd_commission and _manual
         # record one it could not prove ended
         signal.signal(signal.SIGTERM, signal.default_int_handler)
@@ -990,7 +1201,7 @@ def main(argv=None):
             return cmd_run(args)
         if args.cmd == 'commission':
             return cmd_commission(args)
-        if args.cmd in ('flash', 'restore', 'gdb', 'exec'):
+        if args.cmd in ('flash', 'restore', 'gdb', 'exec', 'console'):
             return manual(args)
         if args.cmd == 'report':
             return cmd_report(args)

@@ -1,6 +1,6 @@
 ---
 name: hil-contract
-description: The Adafruit TinyUSB Arduino HIL contract, under agentrc's `hil` rules. Use when running the Arduino HIL battery on rig boards (Raspberry Pi Pico, Adafruit Fruit Jam, Metro M4), when a HIL run fails, hangs or reports a board locked, when reading its report, or for a manual session (flash, GDB, a command) on a rig board from hw-validator or hw-debugger.
+description: The Adafruit TinyUSB Arduino HIL contract, under agentrc's `hil` rules. Use when running the Arduino HIL battery on rig boards (Raspberry Pi Pico, Pico W, Pico 2, Adafruit Fruit Jam, Metro M4, ESP32-S3 DevKitM, ESP32-P4 Function EV), when a HIL run fails, hangs or reports a board locked, when reading its report, or for a manual session (flash, GDB, console, a command) on a rig board from hw-validator or hw-debugger.
 ---
 
 # HIL contract
@@ -34,27 +34,41 @@ A roster entry:
 
 - `name`: the board's `check_build.py` rig name, which is also its lock name. The names are tinyusb's farm names,
   so this harness and tinyusb's exclude each other on a shared board.
-- `uid`: the DUT's USB serial under Arduino firmware (Limits, commissioning).
-- `flasher`: `name` `openocd` or `jlink`, `uid` the probe serial, `args`, for openocd `vid_pid` and `verify`.
-- `debug.openocd`: the openocd config the GDB session uses.
-- `arduino.tests`: the tests the battery runs.
+- `uid`: the DUT's USB serial under Arduino firmware (Limits, commissioning); for a host board or a `usb_port`
+  board, the board's tinyusb farm id, unused here.
+- `usb_port`: the sysfs bus port the DUT enumerates at, for firmware without an iSerial (ESP32 under Arduino,
+  Limits); the harness then tells the DUT by port, not serial. Required for esptool boards.
+- `flasher`: `name` `openocd`, `jlink` or `esptool`, `uid` the probe serial (esptool: its USB-UART bridge's), `args`,
+  for openocd `vid_pid` and `verify`.
+- `debug.openocd`: the openocd config the GDB session uses; with `debug.tool` `openocd-esp32`, Espressif's openocd on
+  its own probe `debug.uid` (pinned by `debug.vid_pid`). No `debug`: no GDB route.
+- `arduino.tests`: the tests the battery runs, all of the board's role (device or host, the build contract's board
+  table); a host board's `arduino.dev_attached` lists the devices on its USB port, each a `vid_pid` `vvvv:pppp` and
+  its `serial`.
 
 ci.lan's boards are also on tinyusb's roster (tinyusb `test/hil/tinyusb.json`) and tinyuf2's. This contract performs
 no rig-wide operation (hub power, port cycle, controller rebind).
 
 **Farm check.** There is no launcher of its own: these boards are tinyusb farm boards, so use tinyusb's:
-`ssh ci.lan 'cd ~/code/tinyusb && python3 test/hil/helper/hil_farm_check.py -b raspberry_pi_pico -b adafruit_fruit_jam
--b metro_m4_express'`.
+`ssh ci.lan 'cd ~/code/tinyusb && python3 test/hil/helper/hil_farm_check.py -b <board>...'` with the roster's board
+names.
 
 ## Selection
 
-A fixed battery per board, the roster's `arduino.tests`:
+A fixed battery per board, the roster's `arduino.tests`. Device boards (USB to this host):
 
 - `cdc_echo`: `serial_echo` echoes random payloads upper-cased.
 - `hid_inout`: `hid_generic_inout` echoes a 64-byte report over hidraw.
 - `msc_ramdisk`: `msc_ramdisk`'s 8 KiB disk reads back with its FAT12 `README.TXT`.
 
-`-t` narrows the tests and `-b` the boards. The PR-scoped selector is the build contract's:
+Host boards (Pico W, Pico 2: devices wired to their USB port):
+
+- `host_device_info`: `examples/Host/Simple/host_device_info` on the native host reports every `dev_attached` device,
+  VID:PID and serial, on the console (the probe's VCOM, Serial1), opened before the flash so the boot's enumeration
+  is kept. Descriptor-level coverage: no transfer to the devices.
+
+`-t` narrows the tests (each board runs those of its role) and `-b` the boards. The PR-scoped selector is the build
+contract's:
 
 ```bash
 python3 .claude/skills/build/scripts/check_build.py --select-only --base origin/master --hil-config test/hil/ci.json
@@ -79,13 +93,17 @@ The harness admits a record only when:
 - it was built at the checkout's HEAD on a clean tree, or the staged manifest's head on a rig;
 - every image hashes as recorded.
 
-A record carries the image its flasher writes (the ELF for openocd, the HEX for J-Link). The battery and the restore
-take clean records only. A manual flash or GDB session also takes an experimental record (`--experimental`, same
-HEAD, a dirty tree allowed, its diff saved beside it).
+A record carries the image its flasher writes: the ELF for openocd, the HEX for J-Link, and for esptool the ESP
+core's `flash_args` with every image it names (`boot_app0.bin` snapshotted from the core) at its offset. ESP32 rig
+builds compile `test/hil/esp32_ts3usb30.cpp` into each sketch: its `initVariant()` switches the farm's USB mux
+(TS3USB30, GPIO47 high) to this host. The battery and the restore take clean records only. A manual flash or GDB
+session also takes an experimental record (`--experimental`, same HEAD, a dirty tree allowed, its diff saved beside
+it).
 
 ## Execution
 
-Budgets: a flash 120 s, a verify or reset session 60 s, re-enumeration 20 s, a test 30 s, a board 900 s. A test
+Budgets: a flash 120 s, a verify or reset session 60 s, re-enumeration 20 s, a test 30 s, a console capture 120 s,
+a board 900 s. A test
 starts only when its worst case plus one restore still fits the board budget. Boards run one after another.
 
 **On ci.lan, from the dev PC** (records built first):
@@ -115,15 +133,21 @@ python3 $H/hil_remote.py session open --run-id <id> -b <board>      # stages the
 python3 $H/hil_remote.py session stage <id> <record>...             # prints the --bundle/--build-record to use
 python3 $H/hil_remote.py session exec <id> flash --bundle B --build-record R --sketch S
 python3 $H/hil_remote.py session exec <id> gdb --bundle B --build-record R --sketch S --ex 'bt' [--ex ...]
+python3 $H/hil_remote.py session exec <id> console [--seconds S] [--reset]   # the board's console to a log
 python3 $H/hil_remote.py session exec <id> exec [--timeout S] -- <argv>   # a command on the rig, in the tree
-python3 $H/hil_remote.py session close <id>                         # restore serial_echo, then release
+python3 $H/hil_remote.py session close <id>                         # restore the board's sketch, then release
 ```
 
 - `gdb` runs `gdb-multiarch -batch` over `target extended-remote | openocd ... -c "gdb_port pipe"`, with the roster's
   `debug.openocd` pinned to the board's probe serial. The attach halts the core and the detach resumes it, so the
   firmware runs on: an echo after the detach checked it for read-only and breakpoint sessions on Pico, read-only on
   Fruit Jam. openocd exits when GDB detaches. Breakpoints are hardware ones, and there is no flash `load`: reflash
-  with `flash`.
+  with `flash`. The ESP32-P4 goes through `openocd-esp32` on its USB-Serial/JTAG (`board/esp32p4-builtin.cfg`); the
+  ESP32-S3 has no GDB route (Limits).
+- `console` captures the board's console for `--seconds` into `console.log` (its tail in the JSON): the CMSIS-DAP
+  probe's VCOM (the target's UART0), or an esptool board's USB-UART bridge (UART0: the ESP boot log). `--reset` resets
+  through the probe with the console open; on an esptool board the reset takes the bridge first, so the boot's first
+  lines may be lost. Never run it while a flash holds the bridge: one session command at a time sees to that.
 - A refused `session open` (the board is held) prints the holder and leaves its attempt dir unused. Within the
   lock-wait budget, retry `session open` with a new run id; never wait on a recovery blocker.
 - Each command and child is bounded (`exec`/`gdb` `--timeout` at most 600 s) and runs through agentrc's
@@ -131,7 +155,8 @@ python3 $H/hil_remote.py session close <id>                         # restore se
 - One session command runs at a time per tree and board. It ignores SIGHUP; SIGTERM ends it as SIGINT does, its
   child ended or recorded pending.
 - Each command's JSON is the last stdout line and `result.json` in its `build/hil-manual/<board>-<cmd>-<time>/`.
-- On a dev PC the same commands are `hil_test.py flash|gdb|exec|restore -b B --under-hold <reason> ... ROSTER`, under
+- On a dev PC the same commands are `hil_test.py flash|gdb|console|exec|restore -b B --under-hold <reason> ... ROSTER`,
+  under
   `hil_test.py lock hold B --reason <reason>`.
 
 ## Reservation
@@ -144,9 +169,10 @@ The lock helper is `hil_test.py lock (hold|release|status) ...`, agentrc's `hil_
   recovery (exit 4), its children ended or recorded pending in the run's report or the commission's `result.json`.
 - A manual session holds the board under `arduino-hil session <id>`. Every session command checks that hold, and
   refuses while the board's pending-session record (`arduino-hil`) lists a child not proven ended.
-- Cleanup state is `serial_echo` flashed and echoing, every child proven ended, and the hold released.
-- The battery restores `serial_echo` after each board. `session close` restores, verifies a CDC echo and releases
-  in one command, and releases nothing when the restore fails.
+- Cleanup state is the board's restoration sketch flashed and checked (device boards: `serial_echo` echoing; host
+  boards: `host_device_info` reporting every attached device), every child proven ended, and the hold released.
+- The battery restores it after each board. `session close` restores, checks and releases in one command, and
+  releases nothing when the restore fails.
 
 ## Results
 
@@ -166,7 +192,7 @@ The lock helper is `hil_test.py lock (hold|release|status) ...`, agentrc's `hil_
   - blocker: a cleanup holder, a recovery blocker found at admission, a cleanup `pending` or `unknown`, or an aborted
     run;
   - not-run: probe missing, board locked, record refused;
-  - pass: every test passed and `serial_echo` was restored;
+  - pass: every test passed and the restoration sketch was restored;
   - otherwise fail.
 - **Retries:** the caller (the agent that asked for the run) retries a fail once under a new run id, per the `hil`
   Caller rules; `hil-operator` does not retry.
@@ -212,12 +238,18 @@ human.
 
 ## Limits
 
-- **USB enumeration:** the battery checks host-side behaviour of three sketches on the selected boards. It covers no
-  other example, class, core or MCU family, and no host mode.
+- **Coverage:** the battery checks three device sketches from this host's side and one host sketch's descriptor
+  report on the selected boards. It covers no other example, class, core or MCU family, no host-mode transfer, and no
+  ESP32 host mode (the Arduino ESP32 config's host is MAX3421).
 - **Commissioning.** `hil_test.py commission -b <board> ROSTER` finds the DUT's serial under Arduino firmware
-  (exactly one device re-enumerating across a flash and a probe reset). It runs from a checkout on the board's host
-  and is not staged by `hil_remote.py`. The ci.lan boards' uids come from tinyusb's roster; the battery confirmed the
-  Pico's and the Fruit Jam's.
+  (exactly one device re-enumerating across a flash and a probe reset), or for a `usb_port` board its port. It runs
+  from a checkout on the board's host and is not staged by `hil_remote.py`; host boards have nothing to commission.
+  The ci.lan boards' uids come from tinyusb's roster; the battery confirmed the Pico's and the Fruit Jam's.
+- **ESP32 identity:** under Arduino the ESP32-S3 and ESP32-P4 enumerate with no iSerial (the library's ESP32
+  `TinyUSB_Port_GetSerialNumber` returns none), so the roster pins each by `usb_port` (S3 11-1.3, P4 11-1.1 on
+  ci.lan). The S3 enumerates as `303a:1001`, its core variant's `USB_VID`/`USB_PID`; the P4 as `239a:cafe`.
+- **ESP32-S3 GDB:** its OTG controller takes the PHY its USB-Serial/JTAG uses, and the farm wires no pad JTAG: no GDB
+  under Arduino. The P4's USB-Serial/JTAG has its own port (60:55:F9:F9:87:15 at 11-1.2), so its GDB works.
 - **RP2040/RP2350:** a probe reset leaves the USB controller running. The harness clears `SIE_CTRL.PULLUP_EN` through
   the probe before each flash so the host sees the new image enumerate.
 - **Shared VID:PID:** the library ignores the rp2040 core's board VID/PID (`Adafruit_USBD_Device.cpp`), so every RP2040
@@ -230,7 +262,6 @@ human.
     handler), failing one flash. A retry passes.
   - On the RP2040 a GDB `continue` prints openocd SMP resume errors (core1 sits in the bootrom). The breakpoint is
     still reached.
-  - metro_m4_express's J-Link dropped off ci.lan's bus on 2026-11-01. It needs a human re-plug, and its runs are
-    not-run until then.
-- **Missing documentation:** the Fruit Jam and Metro M4 board documentation is not in the reference library. The
-  rig facts above rest on the RP2040, RP2350 and SAMD51 datasheets and on observed behaviour.
+- **Missing documentation:** the Fruit Jam, Metro M4 and the farm's USB mux fixture are not in the reference library.
+  The rig facts above rest on the RP2040, RP2350 and SAMD51 datasheets, the TS3USB30 datasheet (S high selects D2),
+  tinyusb's ESP32 board files (GPIO47) and observed behaviour.
