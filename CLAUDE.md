@@ -1,142 +1,70 @@
-# CLAUDE.md
+# Adafruit TinyUSB Arduino Agent Instructions
 
-This file provides guidance to AI coding agents when working with code in this repository.
+## Working Rules
 
-## Project Overview
+- An Arduino library with no standalone build: sketches compile against this checkout through the build contract.
+  CI's library list (`ARDUINO_LIBS`) and board matrix are in `.github/workflows/githubci.yml`, its FQBNs in
+  adafruit/ci-arduino's `all_platforms.py`.
+- Code references — wrappers: `src/arduino/` (`Adafruit_USBD_*`, `Adafruit_USBH_Host.*`, class dirs `cdc/`, `hid/`,
+  `msc/`, `midi/`, `video/`, `webusb/`); core API and integration macros: `src/arduino/Adafruit_TinyUSB_API.h`;
+  ports: `src/arduino/ports/<mcu>/`, their configs dispatched by `src/tusb_config.h`; vendored TinyUSB:
+  `src/{class,common,device,host,osal,portable}/`, `src/tusb.{c,h}`, `src/tusb_option.h`; examples:
+  `examples/<class>/<sketch>/`, filtered per CI platform by ci-arduino's `.<platform>.test.only`,
+  `.<platform>.test.skip` and `.skip.txt`.
 
-Adafruit TinyUSB Arduino — an Arduino library wrapping the [TinyUSB](https://github.com/hathach/tinyusb) USB stack. Provides Arduino-friendly classes for USB device and host functionality across multiple MCU families (nRF52, SAMD, ESP32, RP2040, CH32, STM32).
+## Code Rules
 
-## Build Commands
+- `.pre-commit-config.yaml` is authoritative: clang-format v15 on the library's own C/C++ (never `examples/` or the
+  vendored TinyUSB paths), codespell with `-w`.
+- Keep each file's line endings; some are CRLF (`src/tusb_config.h`, several `tusb_config_<mcu>.h`).
+- Vendored TinyUSB is copied from hathach/tinyusb as-is, then `src/tusb_option.h`'s ESP32 branch is re-added
+  (`#elif defined(ARDUINO_ARCH_ESP32)` including `arduino/ports/esp32/tusb_config_esp32.h`): the ESP32 core's own
+  TinyUSB headers come first on the include path (`tusb_config_esp32.h:32`).
+- Ports implement the `TinyUSB_Port_*` hooks of `src/arduino/Adafruit_TinyUSB_API.h`. On cores with built-in support
+  (SAMD, nRF, RP2040, CH32) the core initialises and services the stack through that header's `TinyUSB_Device_*`
+  functions (nRF from the library's own RTOS task); elsewhere (STM32, mbed RP2040) `TINYUSB_NEED_POLLING_TASK` is set
+  and sketches call `TinyUSBDevice.begin()` and `TinyUSBDevice.task()`. ESP32 differs throughout: its core owns
+  TinyUSB initialisation and the task, CDC is the core's, the port hooks are empty and `TinyUSB_Device_FlushCDC` is
+  not built.
+- The RP2040 and SAMD cores compile their own bundled copy of `Adafruit_TinyUSB_API.h`, `Adafruit_USBD_CDC.h` and
+  `Adafruit_USBD_Interface.h` (the build reports the live set as foreign headers); changing a declaration they rely
+  on needs a matching core update.
+- `library.json` (PlatformIO registry) and the `PLATFORMIO` guards serve users; there is no PlatformIO build here.
 
-This is an Arduino library — there is no standalone build. It compiles as part of Arduino sketches via `arduino-cli`.
+## Skills
 
-**Install library dependencies:**
-```bash
-arduino-cli lib install "Adafruit SPIFlash" "Adafruit seesaw Library" "Adafruit NeoPixel" "Adafruit Circuit Playground" "Adafruit InternalFlash" "SdFat - Adafruit Fork" "SD" "MIDI Library" "Pico PIO USB"
-```
+- Agents, skills and workflows beyond this repo's `.claude/` come from [agentrc](https://github.com/hathach/agentrc);
+  install it before agent work on Adafruit TinyUSB Arduino.
+- Skill script tests live in `.claude/test/test_*.py`; pre-commit runs them after fetching the agentrc commit pinned
+  in `test/hil/agentrc.json`, whose HIL scripts the contracts load.
+- Hardware diagnosis and repair use agentrc's `hw-debugger`; independent hardware claims and committed-fix validation
+  use `hw-validator`; routine HIL runs use `hil-operator` — all orchestrated by `chief`.
+- Library audit: the `code-audit` workflow with `dirs` (e.g. `src/arduino`, `src/arduino/ports/<mcu>`) and
+  `dimensions`: `descriptors and interfaces: configuration descriptor building, interface and endpoint allocation,
+  string descriptors, re-enumeration`; `core integration: built-in vs polling cores, the ESP32 exceptions, headers the
+  cores bundle`; `concurrency: the TinyUSB task vs the Arduino loop and ISRs, shared buffers`; `style: repo
+  conventions and the clang-format scope`.
 
-**Build a single sketch** (one representative board per platform):
-```bash
-# nRF52840
-arduino-cli compile --warnings all --fqbn adafruit:nrf52:feather52840:softdevice=s140v6,debug=l0 path/to/sketch
+## Build and Validate
 
-# SAMD21 (M0)
-arduino-cli compile --warnings all --fqbn adafruit:samd:adafruit_metro_m0:usbstack=tinyusb path/to/sketch
-
-# SAMD51 (M4)
-arduino-cli compile --warnings all --fqbn adafruit:samd:adafruit_metro_m4:usbstack=tinyusb path/to/sketch
-
-# RP2040
-arduino-cli compile --warnings all --fqbn rp2040:rp2040:adafruit_feather:usbstack=tinyusb path/to/sketch
-
-# ESP32-S3
-arduino-cli compile --warnings all --fqbn esp32:esp32:adafruit_feather_esp32s3 path/to/sketch
-
-# ESP32-P4
-arduino-cli compile --warnings all --fqbn espressif:esp32:esp32p4 path/to/sketch
-
-# CH32V20x
-arduino-cli compile --warnings all --fqbn WCH:ch32v:CH32V20x_EVT path/to/sketch
-```
-
-**CI builds** use [adafruit/ci-arduino](https://github.com/adafruit/ci-arduino) scripts:
-```bash
-# Build for a specific platform (requires ci-arduino checked out to ./ci)
-python3 ci/build_platform.py <platform>
-```
-
-**CI platform matrix**: `feather_esp32_v2`, `feather_esp32s2`, `feather_esp32s3`, `esp32p4`, `cpb`, `nrf52840`, `feather_rp2040_tinyusb`, `pico_rp2040_tinyusb_host`, `metro_m0_tinyusb`, `metro_m4_tinyusb`, `CH32V20x_EVT`
-
-**PlatformIO**: `platformio.ini` has environment definitions for all supported boards. Build with `pio run -e <env>`.
-
-## Code Quality
-
-**Pre-commit hooks** (`.pre-commit-config.yaml`):
-```bash
-pre-commit run --all-files
-```
-- **clang-format** (v15): applies only to `src/arduino/` code. The vendored TinyUSB core directories (`src/class/`, `src/common/`, `src/device/`, `src/host/`, `src/osal/`, `src/portable/`, `src/tusb.c`, `src/tusb.h`, `src/tusb_option.h`) are excluded.
-- **codespell**: spell checking with ignore list in `.codespell/`
-- **agent contract tests**: `.claude/test/`, the build and HIL scripts' tests (after fetching the agentrc pin)
-
-## Agent Contracts
-
-- Build contract: `.claude/skills/build/SKILL.md`. Its script resolves a change to boards and example sketches and
-  builds them with arduino-cli against this checkout; agents verify a change through it rather than composing the
-  lines above. `--shared --record` writes a board's HIL record and keeps `build/hil/<board>/<sketch>`, which HIL
-  flashes from.
+- Build contract: `.claude/skills/build/SKILL.md`. It resolves a change to boards and example sketches and builds them
+  with arduino-cli against this checkout; `--shared --record` writes the HIL build record and keeps the images HIL
+  flashes.
 - HIL contract: `.claude/skills/hil-contract/SKILL.md`. It owns taking and releasing a rig board, names the roster for
-  the host you are on, runs the battery on a dev PC's board or on ci.lan, and gives hw-validator and hw-debugger their
-  manual sessions (flash, GDB, a command). Manual runs only: no CI job runs it.
+  the host you are on, runs the battery on a dev PC's board or the ci.lan farm, and gives hw-validator and hw-debugger
+  their manual sessions. Manual runs only: no CI job runs it. Hardware validation comes from its report, never from a
+  build; what no roster board covers is reported pending.
+- Before submitting, and again after a rebase: `pre-commit run --all-files`.
+- For code changes: `python3 .claude/skills/build/scripts/check_build.py --base origin/master --worktree`.
 
-## Architecture
+## PRs and Follow-ups
 
-### Layer Diagram
-```
-User Sketch  →  Adafruit_TinyUSB.h
-                      │
-        ┌─────────────┼─────────────┐
-        ▼             ▼             ▼
-   USBD_Device   USBD_* classes  USBH_Host
-   (descriptor    (CDC, HID,     (host mode
-    management)    MSC, MIDI,     manager)
-                   Video, WebUSB)
-        │             │             │
-        ▼             ▼             ▼
-      TinyUSB Stack (tusb.h / tusb.c)
-                      │
-                      ▼
-         Port Layer (src/arduino/ports/<mcu>/)
-                      │
-                      ▼
-         Portable Drivers (src/portable/<vendor>/)
-```
-
-### Key Source Directories
-
-- **`src/arduino/`** — Arduino abstraction layer (the code this project maintains)
-  - `Adafruit_USBD_Device.*` — USB device manager, descriptor building, endpoint allocation
-  - `Adafruit_USBD_CDC.*` — CDC serial (replaces Arduino `Serial` on supported cores)
-  - `Adafruit_USBD_Interface.*` — Base class for all USB interfaces
-  - `Adafruit_USBH_Host.*` — USB host stack manager
-  - `hid/`, `msc/`, `midi/`, `video/`, `webusb/`, `cdc/` — class-specific wrappers
-  - `ports/` — MCU-specific port implementations (nrf, samd, esp32, rp2040, ch32, stm32)
-
-- **`src/class/`, `src/device/`, `src/host/`, `src/common/`, `src/portable/`, `src/osal/`** — Vendored TinyUSB core. Do NOT apply clang-format to these.
-
-### Updating Vendored TinyUSB Core
-
-When syncing `src/` from upstream [hathach/tinyusb](https://github.com/hathach/tinyusb), most files are copied as-is. However, **`src/tusb_option.h`** has an Arduino-specific patch that must be preserved. After copying the upstream version, re-add the following block (around line 265, inside the MCU detection `#elif` chain):
-
-```c
-#elif defined(ARDUINO_ARCH_ESP32)
-  // ESP32 out-of-sync
-  #include "arduino/ports/esp32/tusb_config_esp32.h"
-```
-
-This is needed because the ESP32 Arduino core bundles an older TinyUSB version, so the config must be force-included here rather than relying on the core's copy.
-
-### Port Implementation Contract
-
-Each MCU port in `src/arduino/ports/<mcu>/` must implement:
-- `TinyUSB_Port_InitDevice()` — initialize USB hardware
-- `TinyUSB_Port_EnterDFU()` — enter bootloader (1200 baud touch)
-- `TinyUSB_Port_GetSerialNumber()` — return unique device serial
-
-### Core Integration Modes
-
-- **Built-in support** (nRF52, SAMD, RP2040, ESP32, CH32): the Arduino core calls `TinyUSB_Device_Init()`, `TinyUSB_Device_Task()`, `TinyUSB_Device_FlushCDC()` automatically. Macro `USE_TINYUSB` is defined.
-- **Non-built-in** (STM32, mbed_rp2040): sketches must call these functions explicitly. Macro `TINYUSB_NEED_POLLING_TASK` is set.
-
-### Configuration
-
-- `src/tusb_config.h` — dispatches to per-MCU config (`tusb_config_<mcu>.h`)
-- Per-class enable macros: `CFG_TUD_CDC`, `CFG_TUD_HID`, `CFG_TUD_MSC`, etc.
-- `CFG_TUD_ENABLED` / `CFG_TUH_ENABLED` — device/host stack toggles
-
-### Examples
-
-40+ examples organized by USB class in `examples/`:
-`CDC/`, `HID/`, `MassStorage/`, `MIDI/`, `WebUSB/`, `Video/`, `Vendor/`, `Composite/`, `DualRole/`, `Host/`
-
-Board-specific test filtering uses `.test.only` files within example directories.
+- Before opening or updating a PR, follow Build and Validate; CI does not run HIL.
+- A non-draft PR opened on the human's request, unless they declined babysitting, or their request or yes to babysit
+  one, authorizes one headless `chief` to drive its reviews and CI to green: push commits to its branch, reply to and
+  resolve its review threads through `pr-babysit` with `autoPush: true` and `markSonar: true`. Launch it in the PR
+  worktree through agentrc's `headless-chief` skill (`chief_run.py`), never a bare `claude -p`, and relay its exit as
+  that skill directs. Merging needs the human's own words asking to merge that PR. `pr-babysit` args:
+  `{"pr": <num>, "protected": "^test/hil/[^/]+\\.json$"}`; reviewers are agentrc's default (`protected` keeps the HIL
+  rosters and the agentrc pin out of automated fixes).
+- The repository has no follow-up label: file follow-ups as issues linking the originating PR.
