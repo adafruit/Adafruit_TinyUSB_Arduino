@@ -93,8 +93,9 @@ class Pin(unittest.TestCase):
             from unittest import mock
             sys.path.insert(0, sys.argv[1])
             import agentrc_pin
-            src, d = agentrc_pin.checkout(), Path(sys.argv[2])
-            for f in agentrc_pin.identity()['files']:
+            ident = agentrc_pin.identity()
+            src, d = ident['root'], Path(sys.argv[2])
+            for f in ident['files']:
                 (d / 'agentrc' / f).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src / f, d / 'agentrc' / f)
             before = set(sys.modules)
