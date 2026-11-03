@@ -4,6 +4,7 @@ which fetches and loads that pin. The staging and session mechanics are agentrc'
 reaches a rig. Stubs prove the plumbing only; the transport is verified by a real run."""
 import contextlib
 import io
+import json
 import os
 import shutil
 import subprocess
@@ -83,6 +84,38 @@ class Pin(unittest.TestCase):
                 'def load(name, origin):\n    return _L()\n')
             self.assertEqual(agentrc_pin.load(rel), 'STAGED:' + rel)
         self.assertFalse(agentrc_pin.staged())
+
+    def test_the_real_engines_load_from_their_staged_closure_alone(self):
+        # a fresh interpreter, so the staged modules never replace the cached engine the other tests load
+        code = '''if True:
+            import json, shutil, sys, sysconfig
+            from pathlib import Path
+            from unittest import mock
+            sys.path.insert(0, sys.argv[1])
+            import agentrc_pin
+            src, d = agentrc_pin.checkout(), Path(sys.argv[2])
+            for f in agentrc_pin.identity()['files']:
+                (d / 'agentrc' / f).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src / f, d / 'agentrc' / f)
+            before = set(sys.modules)
+            with mock.patch.object(agentrc_pin, 'ROOT', d), \\
+                    mock.patch.object(agentrc_pin, 'checkout', side_effect=AssertionError('a rig has no cache')):
+                assert agentrc_pin.staged()
+                engines = [agentrc_pin.load(e).__file__ for e in agentrc_pin.ENGINES]
+            lib = tuple(sysconfig.get_paths()[k] for k in ('stdlib', 'platstdlib', 'purelib', 'platlib'))
+            new = sorted(f for n in set(sys.modules) - before
+                         if (f := getattr(sys.modules[n], '__file__', None)) and not f.startswith(lib))
+            print(json.dumps({'engines': engines, 'modules': new}))
+        '''
+        with tempfile.TemporaryDirectory() as d:
+            p = subprocess.run([sys.executable, '-I', '-c', code, str(Path(agentrc_pin.__file__).parent), d],
+                               capture_output=True, text=True)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            got = json.loads(p.stdout)
+            staged = Path(d, 'agentrc').resolve()
+            self.assertEqual(got['engines'], [str(Path(d, 'agentrc', e)) for e in agentrc_pin.ENGINES])
+            for f in got['modules']:
+                self.assertTrue(Path(f).resolve().is_relative_to(staged), f)
 
     def test_a_plain_copy_without_agentrc_uses_the_pinned_checkout(self):
         with tempfile.TemporaryDirectory() as d, mock.patch.object(agentrc_pin, 'ROOT', Path(d)), \
