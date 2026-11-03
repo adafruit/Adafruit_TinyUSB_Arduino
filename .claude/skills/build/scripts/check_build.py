@@ -98,7 +98,7 @@ CONTRACT_TESTS = {'build': '.claude/test/test_build.py', 'hil': '.claude/test/te
                   'hil_remote': '.claude/test/test_hil_remote.py'}
 SMOKE_BOARDS = ('raspberry_pi_pico', 'metro_m4_express', 'espressif_s3_devkitm')   # one per image kind
 NOTHING = ('.claude/', '.github/', '.codespell/', 'docs/', 'tools/', '.agents', '.gitignore', '.codespellrc',
-           '.coderabbit.yaml', '.pre-commit-config.yaml', 'library.properties', 'library.json', 'LICENSE')
+           '.coderabbit.yaml', '.pre-commit-config.yaml', 'library.json', 'LICENSE')
 # CI's ARDUINO_LIBS (.github/workflows/githubci.yml) beyond library.properties depends=
 EXTRA_DEPENDENCIES = ('Adafruit seesaw Library', 'Adafruit NeoPixel', 'Adafruit Circuit Playground',
                       'Adafruit InternalFlash', 'SD', 'Pico PIO USB')

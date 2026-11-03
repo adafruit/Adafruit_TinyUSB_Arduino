@@ -3,13 +3,7 @@
     {
       "name": "raspberry_pi_pico",
       "uid": "E6614C311B764A37",
-      "flasher": {
-        "name": "openocd",
-        "uid": "E6614103E72C1D2F",
-        "vid_pid": "0x2e8a 0x000c",
-        "args": "-f interface/cmsis-dap.cfg -f target/rp2040.cfg -c \"adapter speed 5000\"",
-        "verify": true
-      },
+      "probe": "E6614103E72C1D2F",
       "debug": {
         "openocd": "-f interface/cmsis-dap.cfg -f target/rp2040.cfg -c \"adapter speed 5000\""
       },
@@ -20,13 +14,7 @@
     {
       "name": "adafruit_fruit_jam",
       "uid": "2B0DC7A45781189E",
-      "flasher": {
-        "name": "openocd",
-        "uid": "E663AC91D3359B38",
-        "vid_pid": "0x2e8a 0x000c",
-        "args": "-f interface/cmsis-dap.cfg -f target/rp2350.cfg -c \"adapter speed 5000\"",
-        "verify": true
-      },
+      "probe": "E663AC91D3359B38",
       "debug": {
         "openocd": "-f interface/cmsis-dap.cfg -f target/rp2350.cfg -c \"adapter speed 5000\""
       },
@@ -37,11 +25,7 @@
     {
       "name": "metro_m4_express",
       "uid": "9995AD485337433231202020FF100A34",
-      "flasher": {
-        "name": "jlink",
-        "uid": "000063728691",
-        "args": "-device ATSAMD51J19"
-      },
+      "probe": "000063728691",
       "debug": {
         "openocd": "-f interface/jlink.cfg -c \"transport select swd\" -c \"adapter speed 4000\" -f target/atsame5x.cfg"
       },
@@ -52,13 +36,7 @@
     {
       "name": "raspberry_pi_pico_w",
       "uid": "E6614864D35DAE36",
-      "flasher": {
-        "name": "openocd",
-        "uid": "E6633861A3819D38",
-        "vid_pid": "0x2e8a 0x000c",
-        "args": "-f interface/cmsis-dap.cfg -f target/rp2040.cfg -c \"adapter speed 5000\"",
-        "verify": true
-      },
+      "probe": "E6633861A3819D38",
       "debug": {
         "openocd": "-f interface/cmsis-dap.cfg -f target/rp2040.cfg -c \"adapter speed 5000\""
       },
@@ -79,13 +57,7 @@
     {
       "name": "raspberry_pi_pico2",
       "uid": "560AE75E1C7152C9",
-      "flasher": {
-        "name": "openocd",
-        "uid": "E6633861A3978538",
-        "vid_pid": "0x2e8a 0x000c",
-        "args": "-f interface/cmsis-dap.cfg -f target/rp2350.cfg -c \"adapter speed 5000\"",
-        "verify": true
-      },
+      "probe": "E6633861A3978538",
       "debug": {
         "openocd": "-f interface/cmsis-dap.cfg -f target/rp2350.cfg -c \"adapter speed 5000\""
       },
@@ -104,11 +76,7 @@
       "uid": "84F703C084E4",
       "usb_port": "11-1.3",
       "no_serial": true,
-      "flasher": {
-        "name": "esptool",
-        "uid": "3ea619acd1cdeb11a0a0b806e93fd3f1",
-        "args": "-b 1500000"
-      },
+      "probe": "3ea619acd1cdeb11a0a0b806e93fd3f1",
       "arduino": {
         "tests": ["cdc_echo", "hid_inout", "msc_ramdisk"]
       }
@@ -118,11 +86,7 @@
       "uid": "6055F9F98715",
       "usb_port": "11-1.1",
       "no_serial": true,
-      "flasher": {
-        "name": "esptool",
-        "uid": "4ea4f48f6bc3ee11bbb9d00f9e1b1c54",
-        "args": "-b 1500000"
-      },
+      "probe": "4ea4f48f6bc3ee11bbb9d00f9e1b1c54",
       "debug": {
         "openocd": "-f board/esp32p4-builtin.cfg",
         "tool": "openocd-esp32",

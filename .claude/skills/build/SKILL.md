@@ -25,9 +25,9 @@ python3 $B --board raspberry_pi_pico --shared --record build/hil/raspberry_pi_pi
 The last stdout line is JSON: `pass`; `firstError`, and `error` on exit 2 naming the cause or remedy; `boards[]` (one
 row per board and sketch: `status` `ok`, `failed` or `error`, `log`, `artifacts`, `vidPid`, `platform`,
 `foreignHeaders`, `removed`); `tests[]`; `paths[]` (each changed path's `rule` and `reason`); `uncovered`;
-`nothingToBuild`; `warnings`; `input` (HEAD, dirty); `record` when one was written. Exit 0 pass, 1 a build, test or
-record check failed, 2 usage or a missing prerequisite, 3 an uncovered path; 2 outranks 1, and 1 outranks 3. Each
-build's log is `<buildDir>/check_build.log`.
+`nothingToBuild`; `warnings`; `input` (HEAD, dirty); `narrowed`; `record` when one was written. Exit 0 pass, 1 a build,
+test or record check failed, 2 usage or a missing prerequisite, 3 an uncovered path; 2 outranks 1, and 1 outranks 3.
+Each build's log is `<buildDir>/check_build.log`.
 
 `--select-only` prints the selection (`build.{builds,tests,paths,uncovered}`) and stops before any compile. With
 `--hil-config <the host's roster>` it adds `hil.{boards,full,uncovered}`: the roster boards the change puts under the
@@ -45,14 +45,16 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
 - **Selection is the script's**, first match per path, and `paths[].reason` says why:
   - `src/arduino/ports/<mcu>/` and `src/portable/<vendor>/<driver>/` build that MCU family's representatives
     (`REPRESENTATIVES`: rig boards first, then each distinct stack: RP2350 beside RP2040, SAMD21 beside SAMD51, the
-    RP2040 native-host build, the ESP32-P4's high-speed OTG), every example each one may build. `analog/max3421`
-    and all other `src/` code build every family's representatives.
+    RP2040 native-host build, the ESP32-P4's high-speed OTG), every example each one may build. `analog/max3421`,
+    all other `src/` code and `library.properties` build every family's representatives.
   - A port or driver no CI platform builds (`ports/stm32`, `st/stm32_fsdev`, `renesas/rusb2`) is uncovered.
   - The headers the cores compile their own sources against (`CORE_CONSUMED`: `Adafruit_TinyUSB_API.h`,
     `Adafruit_USBD_CDC.h`, `Adafruit_USBD_Interface.h` under `src/arduino/`) are uncovered: both cores include
     those three from their bundled copy of this library, never from this checkout (`-I` to it in the rp2040
     core's usbstack flags), so no build here shows a change to them working.
   - A sketch dir under `examples/` builds on every board in the table whose ci-arduino filters allow it.
+    `MassStorage/msc_esp32_file_browser` builds on none (its `.test.only` names funhouse, magtag and metroesp32s2,
+    in neither this table nor CI's matrix): no build here compiles it, and `test_build.py` pins that list.
   - This script builds its tests plus a `serial_echo` smoke build per image kind (`raspberry_pi_pico`,
     `metro_m4_express`, `espressif_s3_devkitm`); a HIL fixture (`test/hil/esp32_ts3usb30.cpp`) builds the HIL
     sketches of its boards; the HIL harness and rosters (`.claude/skills/hil-contract/scripts/`, `test/hil/`) run

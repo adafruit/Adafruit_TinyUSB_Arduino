@@ -63,8 +63,7 @@ class Tables(unittest.TestCase):
             self.assertTrue(fixture is None or (ROOT / fixture).is_file())
 
     def test_smoke_boards_cover_each_image_kind(self):
-        flashers = {b['name']: b['flasher']['name'] for b in json.loads((ROOT / 'test/hil/ci.json').read_text())
-                    ['boards']}
+        flashers = {n: b['flasher']['name'] for n, b in eng.rig_roster(ROOT / 'test/hil/ci.json').items()}
         self.assertEqual(sorted(eng.IMAGE_KIND[flashers[b]] for b in cb.SMOKE_BOARDS), ['elf', 'esptool', 'hex'])
 
     def test_contract_files_and_tests_exist(self):
@@ -107,7 +106,7 @@ class Selection(unittest.TestCase):
             '.claude/test/test_hil.py': ('tests', 'hil'),
             '.claude/test/test_hil_remote.py': ('tests', 'hil_remote'),
             'README.md': ('nothing', None),
-            'library.properties': ('nothing', None),
+            'library.properties': ('shared', None),
             '.coderabbit.yaml': ('nothing', None),
             'weird/file.c': ('uncovered', None),
         }
@@ -132,7 +131,7 @@ class Selection(unittest.TestCase):
 
     def test_example_eligible_on_no_board_is_uncovered(self):
         sketch = 'examples/MassStorage/msc_esp32_file_browser'    # .funhouse/.magtag/.metroesp32s2.test.only
-        self.assertFalse(any(eng.eligible(b, sketch) for b in cb.BOARDS))
+        self.assertEqual(eng.unbuildable_examples(), [sketch])   # CI's matrix builds it on no board either
         path = f'{sketch}/msc_esp32_file_browser.ino'
         sel = eng.select([path])
         self.assertEqual(sel['builds'], {})

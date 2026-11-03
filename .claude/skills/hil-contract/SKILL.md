@@ -33,15 +33,16 @@ each requested board not-run naming the missing file.
 
 A roster entry:
 
-- `name`: the board's `check_build.py` rig name, which is also its lock name. The names are tinyusb's farm names,
+- `name`: the board's `check_build.py` rig name, which must be its name in agentrc's board registry: its lock name,
   so this harness and tinyusb's exclude each other on a shared board.
 - `uid`: the DUT's USB serial under Arduino firmware (Limits, commissioning); for a host board or a `no_serial`
   board, the board's tinyusb farm id, unused here.
 - `usb_port`: the sysfs bus port the DUT enumerates at; the DUT must be there. Required for esptool boards.
 - `no_serial`: `true` for firmware with an empty serial string (ESP32 under Arduino, Limits): the harness then tells
   the DUT by `usb_port` alone, as the serial-less device there.
-- `flasher`: `name` `openocd`, `jlink` or `esptool`, `uid` the probe serial (esptool: its USB-UART bridge's), `args`,
-  for openocd `vid_pid` and `verify`.
+- `probe`: the serial of the debug probe wired to the board (esptool: its USB-UART bridge's), its key in agentrc's
+  board registry (`skills/hil/boards.json`), which supplies the flasher. A dev PC's unregistered board carries its own
+  `flasher` instead (the `hil` skill's Flashers: `openocd`, `jlink` or `esptool` here).
 - `debug.openocd`: the openocd config the GDB session uses; with `debug.tool` `openocd-esp32`, exactly
   `-f board/<chip>-builtin.cfg`, `debug.uid` the chip's USB-Serial/JTAG serial and `debug.usb_port` its bus-port, no
   `vid_pid`. The harness checks that serial at that port and passes the port as openocd's `adapter usb location`;
@@ -188,8 +189,9 @@ The lock helper is `hil_test.py lock (hold|release|status) ...`, agentrc's `hil_
 - `hil_test.py run` and `commission` lock each board themselves (protected, reason `hil_test.py`, `hil_test.py
   commission`): never pre-hold for them. SIGTERM aborts them as SIGINT does: a board they touched stays held for
   recovery (exit 4), its children ended or recorded pending in the run's report or the commission's `result.json`.
-- A manual session holds the board under `arduino-hil session <id>`. Every session command checks that hold, and
-  refuses while the board's pending-session record (`arduino-hil`) lists a child not proven ended.
+- A manual session holds the board under a reason unique to its attempt, `arduino-hil session <attempt dir> <token>`.
+  Every session command checks that hold, and refuses while the board's pending-session record (`arduino-hil`)
+  lists a child not proven ended.
 - Cleanup state is the board's restoration sketch flashed and checked (device boards: `serial_echo` echoing; host
   boards: `host_device_info` reporting every attached device), every child proven ended, and the hold released.
 - The battery restores it after each board. `session close` restores, checks and releases in one command, and
@@ -256,9 +258,9 @@ restore. The Pico 2's Kingston stick once stopped answering the data stage of it
 resets and reflashes (2026-11-02); nothing in this contract power-cycles a device on a host board's port, so report
 that as the blocker for the human rather than retrying.
 
-A failed `session close`: the session keeps its hold (`arduino-hil session <id>`). Once the session's pending
-children are proven ended (the next session command clears the record by itself), run `hil_remote.py session close
-<id>` again. It restores from the session's own `bundles/restore/` record, and its JSON is the last stdout line and
+A failed `session close`: the session keeps its hold (its `reason` in `.hil-remote/<id>.session.json`). Once the
+session's pending children are proven ended (the next session command clears the record by itself), run
+`hil_remote.py session close <id>` again. It restores from the session's own `bundles/restore/` record, and its JSON is the last stdout line and
 `build/hil-manual/<board>-restore-<time>/result.json` in the attempt dir. If that close fails too, keep the hold and
 report.
 

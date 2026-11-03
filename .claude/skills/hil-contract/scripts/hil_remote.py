@@ -10,12 +10,14 @@ attempt dir <base>/<run-id> (agentrc hil_remote_core). Local records and collect
   hil_remote.py wait ID [--timeout S]      until done (collected into .hil-remote/ID), or the timeout
   hil_remote.py collect ID                 fetch whatever the attempt has now, whatever its state
   hil_remote.py session open --run-id ID -b BOARD [--host H] [--roster R]
-      stage the board's clean record and take a hold on the board under the reason `arduino-hil session ID`
+      stage the board's clean record and take a hold on the board under a reason unique to the attempt
+      (`arduino-hil session DIR TOKEN`, kept in .hil-remote/ID.session.json)
   hil_remote.py session stage ID RECORD...    stage records (experimental too) into a new bundle; prints its options
   hil_remote.py session exec ID flash|gdb|restore|console|check OPTS...  hil_test.py's command under the hold
   hil_remote.py session exec ID exec [--timeout S] -- ARGV...
   hil_remote.py session close ID           restore the board's restoration sketch, check it, release the hold (one
-                                           rig command)
+                                           rig command); after an open whose hold was not taken, release one
+                                           the rig took anyway under the session's reason, restoring nothing
 
 Exits: run, session open/stage 0 launched/held/staged, 1 refused or failed (an `error:` line names why), 2 the agentrc
 pin is missing; wait 0 done, 3 running, 4 dead, 5 inconclusive (hil_remote_core); collect 0 complete (a session's:
