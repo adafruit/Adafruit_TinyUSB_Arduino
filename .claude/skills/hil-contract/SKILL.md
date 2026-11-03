@@ -195,7 +195,9 @@ The lock helper is `hil_test.py lock (hold|release|status) ...`, agentrc's `hil_
 - Cleanup state is the board's restoration sketch flashed and checked (device boards: `serial_echo` echoing; host
   boards: `host_device_info` reporting every attached device), every child proven ended, and the hold released.
 - The battery restores it after each board. `session close` restores, checks and releases in one command, and
-  releases nothing when the restore fails.
+  releases nothing when the restore fails. A session command exits 3 when the lock record shows no live holder under
+  the session's reason (an unreadable record exits 2); a `session close` that gets 3 closes the session, its restore
+  unconfirmed (an earlier close's answer lost to a dropped ssh, or a holder that died).
 
 ## Results
 
