@@ -246,6 +246,14 @@ class Sync(unittest.TestCase):
         (self.lib / 'src/class/empty').mkdir()   # invisible to git, yet write() could not remove src/class
         self.assert_refused(['apply', '--ref', t], 'src/class: already exists')
 
+    def test_refuses_a_path_beneath_an_existing_file(self):
+        t = self.upstream_change({'src/class/b.c': b'b\n', 'src/tusb_config.h/x.h': b'x\n'})
+        self.assert_refused(['apply', '--ref', t], 'src/tusb_config.h/x.h: src/tusb_config.h is a file')
+        (self.lib / 'src/link').symlink_to('class')   # a write through it would land outside its path
+        commit(self.lib)
+        t = self.upstream_change({'src/link/y.c': b'y\n'})
+        self.assert_refused(['apply', '--ref', t], 'src/link/y.c: src/link is a file')
+
     def test_refuses_local_drift(self):
         t = self.upstream_change({'src/tusb.c': b'v2\n'})
         put(self.lib, {'src/class/a.c': b'local fix\n'})

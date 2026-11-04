@@ -274,6 +274,8 @@ def check_local(root, raw, have, added, removed):
     errors += [f'{p}: {kind} against the recorded upstream commit' for kind, ps in mismatches(root, have).items()
                for p in ps]
     removed_set = set(removed)
+    errors += [f'{p}: {a.as_posix()} is a file' for p in added for a in Path(p).parents
+               if a.as_posix() not in removed_set and ((root / a).is_file() or (root / a).is_symlink())]
     return errors + [f'{p}: already exists' for p in added
                      if os.path.lexists(root / p) and not cleared(root, p, removed_set)]
 
