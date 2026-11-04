@@ -2,7 +2,9 @@
 
 PROJECT_NAME = "Adafruit TinyUSB Library"
 INPUT = src
+# ci/doxy_gen_and_deploy.sh rewrites this line to redirect the output.
+HTML_OUTPUT = html
 
-# Doxygen 1.8.13 cannot evaluate TinyUSB's variadic MCU-selection macros.
-# Documentation is board-independent; retain the normal compiler definition.
+# Doxygen 1.8.13 cannot evaluate TinyUSB's variadic MCU-selection macros;
+# force every MCU check false so it can preprocess the headers.
 PREDEFINED += "TU_CHECK_MCU(...)=0"
