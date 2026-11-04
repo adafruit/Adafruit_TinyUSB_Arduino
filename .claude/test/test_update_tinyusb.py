@@ -130,6 +130,16 @@ class Sync(unittest.TestCase):
         self.assertFalse(os.stat(self.lib / 'src/tool.py').st_mode & 0o111)
         self.assertTrue(os.stat(self.lib / 'src/new.py').st_mode & 0o100)
 
+    def test_directory_replaced_by_a_file(self):
+        put(self.up, {'src/class/a.c': None, 'src/class/crlf.h': None})
+        (self.up / 'src/class').rmdir()
+        t = self.upstream_change({'src/class': b'f\n'})
+        code, out = self.run_op('apply', '--ref', t)
+        self.assertEqual(code, 0, out)
+        self.assertEqual((out['added'], out['removed']), (['src/class'], ['src/class/a.c', 'src/class/crlf.h']))
+        self.assertEqual((self.lib / 'src/class').read_bytes(), b'f\n')
+        self.assertEqual(self.run_op('verify')[0], 0)
+
     def test_skip_and_include(self):
         t = self.upstream_change({'src/class/b.c': b'b\n', 'src/class/c.c': b'c\n'})
         code, out = self.run_op('apply', '--ref', t, '--skip', 'src/class/c.c',
@@ -203,6 +213,27 @@ class Sync(unittest.TestCase):
     def test_refuses_upstream_adding_a_protected_path(self):
         t = self.upstream_change({'src/arduino/x.h': b'x\n'})
         self.assert_refused(['apply', '--ref', t], 'protected path')
+        code, out = self.run_op('apply', '--ref', t, '--skip', 'src/arduino/x.h')
+        self.assertEqual(code, 0, out)
+        self.assertNotIn('src/arduino/x.h', self.files())
+        self.assertFalse((self.lib / 'src/arduino/x.h').exists())
+
+    def test_refuses_non_utf8_upstream_path(self):
+        (self.up / os.fsdecode(b'src/bad\xff.c')).write_bytes(b'x\n')
+        t = commit(self.up)
+        self.assert_refused(['apply', '--ref', t], 'not UTF-8')
+
+    def test_refuses_replacing_a_directory_the_removals_leave_behind(self):
+        put(self.up, {'src/class/a.c': None, 'src/class/crlf.h': None})
+        (self.up / 'src/class').rmdir()
+        t = self.upstream_change({'src/class': b'f\n'})
+        put(self.lib, {'src/class/extra.c': b'e\n'})
+        commit(self.lib)
+        self.assert_refused(['apply', '--ref', t], 'src/class: already exists')
+        put(self.lib, {'src/class/extra.c': None})
+        commit(self.lib)
+        (self.lib / 'src/class/empty').mkdir()   # invisible to git, yet write() could not remove src/class
+        self.assert_refused(['apply', '--ref', t], 'src/class: already exists')
 
     def test_refuses_local_drift(self):
         t = self.upstream_change({'src/tusb.c': b'v2\n'})
@@ -247,6 +278,17 @@ class Sync(unittest.TestCase):
         with mock.patch.object(upd.Upstream, 'blobs', commit_manifest):
             self.assert_refused(['apply', '--ref', t], 'changed while preparing', unchanged=False)
         self.assertIn('src/zz.c', self.files())
+
+    def test_refuses_manifest_removed_while_fetching(self):
+        t = self.upstream_change({'src/tusb.c': b'v2\n'})
+        real = upd.Upstream.blobs
+
+        def remove_manifest(up, oids):
+            (self.lib / upd.MANIFEST).unlink()
+            return real(up, oids)
+        with mock.patch.object(upd.Upstream, 'blobs', remove_manifest):
+            self.assert_refused(['apply', '--ref', t], 'changed while preparing', unchanged=False)
+        self.assertFalse((self.lib / upd.MANIFEST).exists())
 
     def test_refuses_target_not_descending_from_base(self):
         git(self.up, 'checkout', '-q', '--orphan', 'other')

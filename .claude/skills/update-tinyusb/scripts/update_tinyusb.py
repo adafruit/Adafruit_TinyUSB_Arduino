@@ -121,7 +121,10 @@ class Upstream:
         out = {}
         for rec in self.git('ls-tree', '-r', '-z', '--full-tree', sha, '--', 'src').stdout.split(b'\0'):
             if rec:
-                meta, path = rec.decode().split('\t', 1)
+                try:
+                    meta, path = rec.decode().split('\t', 1)
+                except UnicodeDecodeError:
+                    raise Refused(f'upstream {sha[:12]} has a src/ path that is not UTF-8: {rec!r}') from None
                 mode, kind, oid = meta.split()
                 out[path] = (mode, kind, oid)
         return out
@@ -228,7 +231,8 @@ def verify(root, args):
 
 def select(files, new, tt, skip, include, target):
     """The next vendored set, and the errors the --skip/--include choices raise."""
-    errors = [f'{p}: upstream added a protected path; the library owns it' for p in new if protected(p)]
+    errors = [f'{p}: upstream added a protected path; the library owns it' for p in new
+              if protected(p) and p not in skip]
     errors += [f'{p}: both --include and --skip' for p in sorted(skip & include)]
     errors += [f'--skip {p}: not a file upstream added since the recorded commit' for p in sorted(skip - set(new))]
     errors += [f'--include {p}: not an omitted upstream file at {target[:12]}' for p in sorted(include)
@@ -236,16 +240,35 @@ def select(files, new, tt, skip, include, target):
     return sorted((files & tt.keys()) | (set(new) - skip) | include), errors
 
 
-def check_local(root, raw, have, added):
+def cleared(root, path, removed):
+    """Whether path is a directory the removals empty, so write()'s rmdir leaves room for a file there."""
+    if (root / path).is_symlink() or not (root / path).is_dir():
+        return False
+    for d, dirs, files in os.walk(root / path):
+        if not files and not dirs:   # an empty directory no removal reaches survives write()
+            return False
+        entries = files + [x for x in dirs if os.path.islink(os.path.join(d, x))]
+        rel = Path(d).relative_to(root).as_posix()
+        if any(f'{rel}/{e}' not in removed for e in entries):
+            return False
+    return True
+
+
+def check_local(root, raw, have, added, removed):
     """Why the checkout may not be written now; run after every fetch, so an edit made meanwhile is refused."""
     status = git('-C', str(root), 'status', '--porcelain', '--ignored', '--untracked-files=all', '--',
                  'src', MANIFEST).stdout.decode().splitlines()
     errors = [f'not clean: {line}' for line in status]
-    if (root / MANIFEST).read_bytes() != raw:
+    try:
+        changed = (root / MANIFEST).read_bytes() != raw
+    except OSError:
+        changed = True
+    if changed:
         errors.append(f'{MANIFEST} changed while preparing')
     errors += [f'{p}: {kind} against the recorded upstream commit' for kind, ps in mismatches(root, have).items()
                for p in ps]
-    return errors + [f'{p}: already exists' for p in added if os.path.lexists(root / p)]
+    return errors + [f'{p}: already exists' for p in added
+                     if os.path.lexists(root / p) and not cleared(root, p, set(removed))]
 
 
 def write_file(f, data, exe):
@@ -310,7 +333,7 @@ def sync(root, args, apply):
         outputs = [(p, (esp32_patch(blobs[tt[p][2]]) if p == OPTION_H else blobs[tt[p][2]], want[p][1]))
                    for p in writes]
 
-    errors += check_local(root, raw, have, out['added'])
+    errors += check_local(root, raw, have, out['added'], out['removed'])
     if errors or not apply:
         out['ok'] = not errors
         return (2 if errors else 0), out
