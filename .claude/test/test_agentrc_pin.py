@@ -219,9 +219,10 @@ class Installed(Env):
         config = (primary / '.git' / 'config').read_bytes()
         hook_git_dir = primary / '.git' / 'worktrees' / 'wt'   # what git exports to a hook committing in wt
         self.env(GIT_DIR=str(hook_git_dir), GIT_INDEX_FILE=str(hook_git_dir / 'index'))
-        run = subprocess.run
-        with mock.patch.object(agentrc_pin.subprocess, 'run', lambda *a, **k: run(*a, capture_output=True, **k)):
-            self.assertEqual(agentrc_pin.test(), 0)
+        run, done = subprocess.run, []
+        with mock.patch.object(agentrc_pin.subprocess, 'run',
+                               lambda *a, **k: done.append(run(*a, capture_output=True, text=True, **k)) or done[-1]):
+            self.assertEqual(agentrc_pin.test(), 0, done[-1].stdout + done[-1].stderr if done else None)
         self.assertTrue((target / '.git').is_dir())
         self.assertEqual((primary / '.git' / 'config').read_bytes(), config)
 
