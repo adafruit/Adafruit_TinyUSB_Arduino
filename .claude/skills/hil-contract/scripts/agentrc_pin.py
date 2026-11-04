@@ -174,8 +174,8 @@ def source():
 
 
 def installed():
-    """${AGENTRC_DIR:-$HOME/.claude} holding the arduino skill: never fetched, never another location."""
-    r = Path(os.environ.get('AGENTRC_DIR') or Path.home() / '.claude')
+    """${AGENTRC_DIR:-$HOME/.claude}, absolute, holding the arduino skill: never fetched, never another location."""
+    r = Path(os.environ.get('AGENTRC_DIR') or Path.home() / '.claude').absolute()
     if not (r / ENGINES[0]).is_file():
         raise PinError(f'{r} has no agentrc arduino skill ({ENGINES[0]})', INSTALL_HINT)
     return r
@@ -247,7 +247,7 @@ def test():
         fetch()
     src, r, _ = selected()
     # the child runs in ROOT: a relative AGENTRC_DIR must still name the agentrc validated here
-    env = {**os.environ, 'AGENTRC_DIR': str(Path(r).absolute())} if src == 'installed' else None
+    env = {**os.environ, 'AGENTRC_DIR': str(r)} if src == 'installed' else None
     return subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s', '.claude/test', '-p', 'test_*.py'],
                           cwd=ROOT, env=env).returncode
 

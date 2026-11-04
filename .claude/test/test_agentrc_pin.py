@@ -193,6 +193,7 @@ class Installed(Env):
         self.addCleanup(os.chdir, os.getcwd())
         os.chdir(self.tmp)
         self.env(AGENTRC_DIR=str(self.claude.relative_to(self.tmp)))
+        self.assertEqual(agentrc_pin.identity()['root'], self.claude)
         with mock.patch.object(agentrc_pin.subprocess, 'run', return_value=mock.Mock(returncode=0)) as run:
             self.assertEqual(agentrc_pin.test(), 0)
         self.assertEqual(run.call_args.kwargs['cwd'], agentrc_pin.ROOT)
