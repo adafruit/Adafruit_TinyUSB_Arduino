@@ -220,7 +220,7 @@ def identity():
     if src == 'staged':
         try:
             manifest = json.loads((ROOT / MANIFEST).read_text())
-        except (OSError, ValueError) as e:
+        except (OSError, ValueError, RecursionError) as e:
             raise PinError(f'{ROOT / MANIFEST} is not readable JSON ({e}): stage it again with hil_remote.py')
         staged_from = manifest.get('agentrc') if isinstance(manifest, dict) else None
         if (not isinstance(staged_from, dict) or not isinstance(staged_from.get('commit'), str)

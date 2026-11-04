@@ -231,7 +231,7 @@ class Staged(Env):
                 (self.tmp / 'manifest.json').write_text(bad)
                 with self.assertRaisesRegex(agentrc_pin.PinError, 'names no agentrc commit and dirty flag'):
                     agentrc_pin.identity()
-        for bad in (b'{not json', b'\xff'):
+        for bad in (b'{not json', b'\xff', b'{"agentrc": ' + b'[' * 200000):
             with self.subTest(manifest=bad):
                 (self.tmp / 'manifest.json').write_bytes(bad)
                 with self.assertRaisesRegex(agentrc_pin.PinError, 'is not readable JSON.*stage it again'):
