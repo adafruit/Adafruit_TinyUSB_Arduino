@@ -157,6 +157,7 @@ class Sync(unittest.TestCase):
         flags = ['--skip', 'src/class/c.c', '--include', 'src/portable/omitted/dcd.c']
         code, plan = self.run_op('plan', '--ref', t, *flags)
         self.assertEqual((code, plan['added']), (0, ['src/class/b.c', 'src/portable/omitted/dcd.c']))
+        self.assertEqual(self.run_op('plan', '--ref', t, '--skip', 'src/class/b.c', 'src/class/c.c')[1]['added'], [])
         bad = ['--skip', 'src/tusb.c']
         self.assertEqual(self.run_op('plan', '--ref', t, *bad)[1]['errors'],
                          self.run_op('apply', '--ref', t, *bad)[1]['errors'])
@@ -217,6 +218,16 @@ class Sync(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertNotIn('src/arduino/x.h', self.files())
         self.assertFalse((self.lib / 'src/arduino/x.h').exists())
+
+    def test_refuses_a_path_the_manifest_cannot_hold(self):
+        t = self.upstream_change({'src/new\\file.c': b'n\n'})
+        self.assert_refused(['apply', '--ref', t], 'cannot hold')
+        code, out = self.run_op('apply', '--ref', t, '--skip', 'src/new\\file.c')
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.run_op('verify')[0], 0)
+        commit(self.lib)
+        t2 = self.upstream_change({'src/tusb.c': b'v2\n'})
+        self.assert_refused(['apply', '--ref', t2, '--include', 'src/new\\file.c'], 'not an omitted upstream file')
 
     def test_refuses_non_utf8_upstream_path(self):
         (self.up / os.fsdecode(b'src/bad\xff.c')).write_bytes(b'x\n')

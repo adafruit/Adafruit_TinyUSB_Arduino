@@ -49,6 +49,12 @@ def protected(path):
     return path in PROTECTED_FILES or path.startswith(PROTECTED_DIRS)
 
 
+def vendorable(path):
+    """Whether path may be listed in the manifest's "files"."""
+    return (isinstance(path, str) and path.startswith('src/') and not protected(path)
+            and '..' not in path.split('/') and '\\' not in path)
+
+
 def git(*args, stdin=None, env=None, check=True):
     clean = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}   # a hook's GIT_DIR must not leak in
     r = subprocess.run(['git', *args], input=stdin, capture_output=True, env={**clean, **(env or {})})
@@ -169,8 +175,7 @@ def load_manifest(root):
     if not (isinstance(data.get('url'), str) and data['url'] and isinstance(data.get('commit'), str)
             and SHA.fullmatch(data['commit']) and isinstance(files, list)):
         raise Refused(f'{MANIFEST} needs "url", a full "commit" SHA and a "files" list')
-    bad = [f for f in files if not isinstance(f, str) or not f.startswith('src/') or protected(f)
-           or '..' in f.split('/') or '\\' in f]
+    bad = [f for f in files if not vendorable(f)]
     if bad or files != sorted(set(files)):
         raise Refused(f'{MANIFEST} "files" must be sorted, unique, non-protected src/ paths' +
                       (f': {bad[:5]}' if bad else ''))
@@ -231,12 +236,13 @@ def verify(root, args):
 
 def select(files, new, tt, skip, include, target):
     """The next vendored set, and the errors the --skip/--include choices raise."""
-    errors = [f'{p}: upstream added a protected path; the library owns it' for p in new
-              if protected(p) and p not in skip]
+    errors = [f'{p}: upstream added a protected path; the library owns it' if protected(p)
+              else f'{p}: upstream added a path {MANIFEST} cannot hold' for p in new
+              if not vendorable(p) and p not in skip]
     errors += [f'{p}: both --include and --skip' for p in sorted(skip & include)]
     errors += [f'--skip {p}: not a file upstream added since the recorded commit' for p in sorted(skip - set(new))]
     errors += [f'--include {p}: not an omitted upstream file at {target[:12]}' for p in sorted(include)
-               if protected(p) or p in files or p in new or p not in tt]
+               if not vendorable(p) or p in files or p in new or p not in tt]
     return sorted((files & tt.keys()) | (set(new) - skip) | include), errors
 
 
@@ -356,8 +362,8 @@ def main(argv, root=ROOT):
         p.add_argument('--source', help='local tinyusb clone to read objects from instead of fetching')
         if name != 'verify':
             p.add_argument('--ref', required=name == 'apply', default='master')
-            p.add_argument('--include', action='append', default=[], metavar='PATH')
-            p.add_argument('--skip', action='append', default=[], metavar='PATH')
+            p.add_argument('--include', action='extend', nargs='+', default=[], metavar='PATH')
+            p.add_argument('--skip', action='extend', nargs='+', default=[], metavar='PATH')
     args = ap.parse_args(argv)
     try:
         if not (root / 'src' / 'arduino').is_dir():
