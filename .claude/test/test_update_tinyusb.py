@@ -53,7 +53,8 @@ class Sync(unittest.TestCase):
         git(self.up, 'init', '-q', '-b', 'master')
         put(self.up, {'src/tusb.c': b'v1\n', 'src/tusb_option.h': OPTION, 'src/class/a.c': b'a1\n',
                       'src/class/crlf.h': b'x\r\ny\r\n', 'src/tool.py': b'#!py\n',
-                      'src/portable/omitted/dcd.c': b'o\n', 'src/CMakeLists.txt': b'cm\n'})
+                      'src/portable/omitted/dcd.c': b'o\n', 'src/portable/omitted/hcd.c': b'h\n',
+                      'src/CMakeLists.txt': b'cm\n'})
         os.chmod(self.up / 'src/tool.py', 0o755)
         self.base = commit(self.up)
         self.lib.mkdir()
@@ -157,12 +158,24 @@ class Sync(unittest.TestCase):
         flags = ['--skip', 'src/class/c.c', '--include', 'src/portable/omitted/dcd.c']
         code, plan = self.run_op('plan', '--ref', t, *flags)
         self.assertEqual((code, plan['added']), (0, ['src/class/b.c', 'src/portable/omitted/dcd.c']))
-        self.assertEqual(self.run_op('plan', '--ref', t, '--skip', 'src/class/b.c', 'src/class/c.c')[1]['added'], [])
+        code, both = self.run_op('plan', '--ref', t, '--skip', 'src/class/b.c', 'src/class/c.c')
+        self.assertEqual((code, both['added']), (0, []))
         bad = ['--skip', 'src/tusb.c']
         self.assertEqual(self.run_op('plan', '--ref', t, *bad)[1]['errors'],
                          self.run_op('apply', '--ref', t, *bad)[1]['errors'])
         code, out = self.run_op('apply', '--ref', t, *flags)
         self.assertEqual((code, out['added']), (0, plan['added']))
+
+    def test_include_takes_several_paths(self):
+        t = self.upstream_change({'src/tusb.c': b'v2\n'})
+        omitted = ['src/portable/omitted/dcd.c', 'src/portable/omitted/hcd.c']
+        code, plan = self.run_op('plan', '--ref', t, '--include', *omitted)
+        self.assertEqual((code, plan['added'], plan['included']), (0, omitted, omitted))
+        code, out = self.run_op('apply', '--ref', t, '--include', *omitted)
+        self.assertEqual((code, out['added']), (0, omitted))
+        for p in omitted:
+            self.assertIn(p, self.files())
+            self.assertTrue((self.lib / p).is_file())
 
     def test_refs_resolve_branch_tag_and_the_base_itself(self):
         t = self.upstream_change({'src/tusb.c': b'v2\n'})
