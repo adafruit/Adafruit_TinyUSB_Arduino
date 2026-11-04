@@ -200,6 +200,47 @@ class Installed(Env):
         self.assertEqual(run.call_args.kwargs['cwd'], agentrc_pin.ROOT)
         self.assertEqual(run.call_args.kwargs['env']['AGENTRC_DIR'], str(self.claude))
 
+    def test_a_hook_run_tests_git_init_leaves_the_hooks_repository_alone(self):
+        primary, target = self.tmp / 'primary', self.tmp / 'target'
+        primary.mkdir()
+        target.mkdir()
+        git(primary, 'init', '-q')
+        (primary / 'f').write_text('x')
+        commit_all(primary, 'primary')
+        git(primary, 'worktree', 'add', '-q', '--detach', str(self.tmp / 'wt'))
+        probe = agentrc_pin.ROOT / '.claude' / 'test' / 'test_probe.py'
+        probe.parent.mkdir(parents=True)
+        probe.write_text('import subprocess\nimport unittest\n\n\nclass Probe(unittest.TestCase):\n'
+                         '    def test_init(self):\n'
+                         f'        subprocess.run(["git", "-C", {str(target)!r}, "init", "-q"], check=True)\n')
+        config = (primary / '.git' / 'config').read_bytes()
+        hook_git_dir = primary / '.git' / 'worktrees' / 'wt'   # what git exports to a hook committing in wt
+        self.env(GIT_DIR=str(hook_git_dir), GIT_INDEX_FILE=str(hook_git_dir / 'index'))
+        run = subprocess.run
+        with mock.patch.object(agentrc_pin.subprocess, 'run', lambda *a, **k: run(*a, capture_output=True, **k)):
+            self.assertEqual(agentrc_pin.test(), 0)
+        self.assertTrue((target / '.git').is_dir())
+        self.assertEqual((primary / '.git' / 'config').read_bytes(), config)
+
+
+class Runner(Env):
+    """test()'s child environment, whichever agentrc is selected."""
+
+    def test_the_child_gets_no_git_variable_from_any_source(self):
+        self.env(GIT_DIR='/x/.git/worktrees/wt', GIT_INDEX_FILE='/x/.git/worktrees/wt/index', GIT_CONFIG_COUNT='1')
+        before = dict(os.environ)
+        for src in ('installed', 'pin', 'staged'):
+            with self.subTest(src=src), mock.patch.object(agentrc_pin, 'source', return_value=src), \
+                    mock.patch.object(agentrc_pin, 'selected', return_value=(src, self.tmp, [])), \
+                    mock.patch.object(agentrc_pin, 'fetch'), \
+                    mock.patch.object(agentrc_pin.subprocess, 'run', return_value=mock.Mock(returncode=0)) as run:
+                self.assertEqual(agentrc_pin.test(), 0)
+                env = run.call_args.kwargs['env']
+                self.assertEqual([k for k in env if k.startswith('GIT_')], [])
+                self.assertEqual(env['PATH'], os.environ['PATH'])
+                self.assertEqual(env.get('AGENTRC_DIR'), str(self.tmp) if src == 'installed' else None)
+        self.assertEqual(dict(os.environ), before)
+
 
 class Staged(Env):
     def stage(self, manifest, hil_load=''):

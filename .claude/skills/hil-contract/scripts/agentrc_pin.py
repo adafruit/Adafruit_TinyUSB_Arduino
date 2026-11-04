@@ -254,8 +254,11 @@ def test():
     if source() == 'pin':
         fetch()
     src, r, _ = selected()
-    # the child runs in ROOT: a relative AGENTRC_DIR must still name the agentrc validated here
-    env = {**os.environ, 'AGENTRC_DIR': str(r)} if src == 'installed' else None
+    # a git hook exports GIT_DIR and GIT_INDEX_FILE: a test's git in a scratch repository would act on this one
+    env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+    if src == 'installed':
+        # the child runs in ROOT: a relative AGENTRC_DIR must still name the agentrc validated here
+        env['AGENTRC_DIR'] = str(r)
     return subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s', '.claude/test', '-p', 'test_*.py'],
                           cwd=ROOT, env=env).returncode
 
