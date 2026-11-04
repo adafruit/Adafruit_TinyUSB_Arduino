@@ -17,9 +17,9 @@
 - `.pre-commit-config.yaml` is authoritative: clang-format v15 on the library's own C/C++ (never `examples/` or the
   vendored TinyUSB paths), codespell with `-w`.
 - Keep each file's line endings; some are CRLF (`src/tusb_config.h`, several `tusb_config_<mcu>.h`).
-- Vendored TinyUSB is copied from hathach/tinyusb as-is, then `src/tusb_option.h`'s ESP32 branch is re-added
-  (`#elif defined(ARDUINO_ARCH_ESP32)` including `arduino/ports/esp32/tusb_config_esp32.h`): the ESP32 core's own
-  TinyUSB headers come first on the include path (`tusb_config_esp32.h:32`).
+- Vendored TinyUSB is hathach/tinyusb's bytes, except `src/tusb_option.h`'s ESP32 branch (the ESP32 core's own
+  TinyUSB headers come first on the include path, `tusb_config_esp32.h:32`). Sync and verify it only with the
+  `update-tinyusb` skill (`.claude/skills/update-tinyusb/SKILL.md`).
 - Ports implement the `TinyUSB_Port_*` hooks of `src/arduino/Adafruit_TinyUSB_API.h`. On cores with built-in support
   (SAMD, nRF, RP2040, CH32) the core initialises and services the stack through that header's `TinyUSB_Device_*`
   functions (nRF from the library's own RTOS task); elsewhere (STM32, mbed RP2040) `TINYUSB_NEED_POLLING_TASK` is set
