@@ -53,8 +53,15 @@ def ci():
 
 
 def pin():
-    data = json.loads(PIN_FILE.read_text())
-    return data['url'], data['commit']
+    """test/hil/agentrc.json's (url, commit), refusing an unreadable pin or one naming no url and full commit hash."""
+    try:
+        data = json.loads(PIN_FILE.read_text())
+    except (OSError, ValueError, RecursionError) as e:
+        raise PinError(f'{PIN_FILE} is not readable JSON ({e})') from None
+    url, commit = (data.get('url'), data.get('commit')) if isinstance(data, dict) else (None, None)
+    if not isinstance(url, str) or not url or not isinstance(commit, str) or not re.fullmatch(r'[0-9a-f]{40}', commit):
+        raise PinError(f'{PIN_FILE} names no {{url, commit}} with a 40-hex commit ({data!r})')
+    return url, commit
 
 
 def cache_dir(commit):

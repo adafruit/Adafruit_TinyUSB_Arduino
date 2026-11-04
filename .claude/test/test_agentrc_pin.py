@@ -6,6 +6,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -308,6 +309,31 @@ class Selected(unittest.TestCase):
             (Path(d) / 'b.py').unlink()
             with self.assertRaisesRegex(agentrc_pin.PinError, r"lacks \['b.py'\]"):
                 agentrc_pin.closure(d, ['a.py'])
+
+
+class PinFile(Env):
+    def test_the_repository_pin_is_valid(self):
+        url, commit = agentrc_pin.pin()
+        self.assertTrue(url)
+        self.assertRegex(commit, r'^[0-9a-f]{40}$')
+
+    def test_a_missing_or_malformed_pin_is_refused_by_pin_and_check(self):
+        good = {'url': 'https://example.invalid/agentrc.git', 'commit': '0' * 40}
+        cases = {'missing': None, 'not json': '{', 'a list': '[]', 'no commit': {'url': good['url']},
+                 'no url': {'commit': good['commit']}, 'a short commit': {**good, 'commit': 'abc123'},
+                 'a non-hex commit': {**good, 'commit': 'g' * 40}, 'a numeric commit': {**good, 'commit': 1}}
+        self.env(CI='true')
+        for name, content in cases.items():
+            pin_file = self.tmp / f'{name}.json'
+            if content is not None:
+                pin_file.write_text(content if isinstance(content, str) else json.dumps(content))
+            with self.subTest(name), mock.patch.object(agentrc_pin, 'PIN_FILE', pin_file), \
+                    mock.patch.object(agentrc_pin, 'ROOT', self.tmp / 'lib'):
+                with self.assertRaisesRegex(agentrc_pin.PinError, re.escape(str(pin_file))):
+                    agentrc_pin.pin()
+                with contextlib.redirect_stderr(io.StringIO()) as err, contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(agentrc_pin.main(['check']), 1)
+                self.assertIn(f'error: {pin_file}', err.getvalue())
 
 
 class PinFetch(Env):
