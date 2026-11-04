@@ -58,12 +58,20 @@ void Adafruit_USBH_MSC_BlockDevice::setWriteCompleteCallback(
 
 void Adafruit_USBH_MSC_BlockDevice::end(void) { _daddr = _lun = 0; }
 
-bool Adafruit_USBH_MSC_BlockDevice::mounted(void) { return _daddr > 0; }
+bool Adafruit_USBH_MSC_BlockDevice::mounted(void) {
+  return _daddr > 0 && tuh_msc_mounted(_daddr);
+}
 
 bool Adafruit_USBH_MSC_BlockDevice::isBusy(void) { return _busy; }
 
 bool Adafruit_USBH_MSC_BlockDevice::wait_for_io(void) {
   while (_busy) {
+    // Removal closes the MSC interface without completing the pending command.
+    // Release the synchronous caller instead of waiting for a missing callback.
+    if (!mounted()) {
+      _busy = false;
+      return false;
+    }
     if (tuh_task_event_ready()) {
       tuh_task();
     }
@@ -113,11 +121,13 @@ bool Adafruit_USBH_MSC_BlockDevice::syncDevice(void) {
 
 bool Adafruit_USBH_MSC_BlockDevice::readSectors(uint32_t block, uint8_t *dst,
                                                 size_t ns) {
+  if (!mounted()) {
+    return false;
+  }
   _busy = true;
   if (tuh_msc_read10(_daddr, _lun, dst, block, (uint16_t)ns,
                      _msc_io_complete_cb, (uintptr_t)this)) {
-    wait_for_io();
-    return true;
+    return wait_for_io();
   } else {
     _busy = false;
     return false;
@@ -127,11 +137,13 @@ bool Adafruit_USBH_MSC_BlockDevice::readSectors(uint32_t block, uint8_t *dst,
 bool Adafruit_USBH_MSC_BlockDevice::writeSectors(uint32_t block,
                                                  const uint8_t *src,
                                                  size_t ns) {
+  if (!mounted()) {
+    return false;
+  }
   _busy = true;
   if (tuh_msc_write10(_daddr, _lun, src, block, (uint16_t)ns,
                       _msc_io_complete_cb, (uintptr_t)this)) {
-    wait_for_io();
-    return true;
+    return wait_for_io();
   } else {
     _busy = false;
     return false;
