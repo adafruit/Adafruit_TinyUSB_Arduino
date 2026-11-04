@@ -53,8 +53,7 @@ class Sync(unittest.TestCase):
         git(self.up, 'init', '-q', '-b', 'master')
         put(self.up, {'src/tusb.c': b'v1\n', 'src/tusb_option.h': OPTION, 'src/class/a.c': b'a1\n',
                       'src/class/crlf.h': b'x\r\ny\r\n', 'src/tool.py': b'#!py\n',
-                      'src/portable/omitted/dcd.c': b'o\n', 'src/portable/omitted/hcd.c': b'h\n',
-                      'src/CMakeLists.txt': b'cm\n'})
+                      'src/portable/omitted/dcd.c': b'o\n', 'src/CMakeLists.txt': b'cm\n'})
         os.chmod(self.up / 'src/tool.py', 0o755)
         self.base = commit(self.up)
         self.lib.mkdir()
@@ -168,7 +167,7 @@ class Sync(unittest.TestCase):
 
     def test_include_takes_several_paths(self):
         t = self.upstream_change({'src/tusb.c': b'v2\n'})
-        omitted = ['src/portable/omitted/dcd.c', 'src/portable/omitted/hcd.c']
+        omitted = ['src/CMakeLists.txt', 'src/portable/omitted/dcd.c']
         code, plan = self.run_op('plan', '--ref', t, '--include', *omitted)
         self.assertEqual((code, plan['added'], plan['included']), (0, omitted, omitted))
         code, out = self.run_op('apply', '--ref', t, '--include', *omitted)
