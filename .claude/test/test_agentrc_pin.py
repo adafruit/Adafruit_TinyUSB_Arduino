@@ -203,16 +203,19 @@ class Installed(Env):
     def test_a_hook_run_tests_git_init_leaves_the_hooks_repository_alone(self):
         primary, target = self.tmp / 'primary', self.tmp / 'target'
         primary.mkdir()
-        target.mkdir()
         git(primary, 'init', '-q')
         (primary / 'f').write_text('x')
         commit_all(primary, 'primary')
         git(primary, 'worktree', 'add', '-q', '--detach', str(self.tmp / 'wt'))
         probe = agentrc_pin.ROOT / '.claude' / 'test' / 'test_probe.py'
         probe.parent.mkdir(parents=True)
-        probe.write_text('import subprocess\nimport unittest\n\n\nclass Probe(unittest.TestCase):\n'
-                         '    def test_init(self):\n'
-                         f'        subprocess.run(["git", "-C", {str(target)!r}, "init", "-q"], check=True)\n')
+        probe.write_text(f'''if True:
+            import subprocess, unittest
+
+            class Probe(unittest.TestCase):
+                def test_init(self):
+                    subprocess.run(['git', 'init', '-q', {str(target)!r}], check=True)
+            ''')
         config = (primary / '.git' / 'config').read_bytes()
         hook_git_dir = primary / '.git' / 'worktrees' / 'wt'   # what git exports to a hook committing in wt
         self.env(GIT_DIR=str(hook_git_dir), GIT_INDEX_FILE=str(hook_git_dir / 'index'))
@@ -227,12 +230,10 @@ class Runner(Env):
     """test()'s child environment, whichever agentrc is selected."""
 
     def test_the_child_gets_no_git_variable_from_any_source(self):
-        self.env(GIT_DIR='/x/.git/worktrees/wt', GIT_INDEX_FILE='/x/.git/worktrees/wt/index', GIT_CONFIG_COUNT='1')
+        self.env(GIT_DIR='x', GIT_INDEX_FILE='x', GIT_CONFIG_COUNT='1')
         before = dict(os.environ)
         for src in ('installed', 'pin', 'staged'):
-            with self.subTest(src=src), mock.patch.object(agentrc_pin, 'source', return_value=src), \
-                    mock.patch.object(agentrc_pin, 'selected', return_value=(src, self.tmp, [])), \
-                    mock.patch.object(agentrc_pin, 'fetch'), \
+            with self.subTest(src=src), mock.patch.object(agentrc_pin, 'selected', return_value=(src, self.tmp, [])), \
                     mock.patch.object(agentrc_pin.subprocess, 'run', return_value=mock.Mock(returncode=0)) as run:
                 self.assertEqual(agentrc_pin.test(), 0)
                 env = run.call_args.kwargs['env']
