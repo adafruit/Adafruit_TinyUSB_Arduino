@@ -201,11 +201,7 @@ class Installed(Env):
         self.assertEqual(run.call_args.kwargs['env']['AGENTRC_DIR'], str(self.claude))
 
     def test_a_hook_run_tests_git_init_leaves_the_hooks_repository_alone(self):
-        primary, target = self.tmp / 'primary', self.tmp / 'target'
-        primary.mkdir()
-        git(primary, 'init', '-q')
-        (primary / 'f').write_text('x')
-        commit_all(primary, 'primary')
+        primary, target = self.repo, self.tmp / 'target'
         git(primary, 'worktree', 'add', '-q', '--detach', str(self.tmp / 'wt'))
         probe = agentrc_pin.ROOT / '.claude' / 'test' / 'test_probe.py'
         probe.parent.mkdir(parents=True)
