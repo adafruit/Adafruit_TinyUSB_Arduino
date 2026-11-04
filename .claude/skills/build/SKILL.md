@@ -6,7 +6,11 @@ description: The Adafruit TinyUSB Arduino build contract. Use when a change must
 # Build contract
 
 `scripts/check_build.py` is the entry point for verifying a change; agents and workflows call it rather than composing
-`arduino-cli compile` lines.
+`arduino-cli compile` lines. It is this library's profile for agentrc's `arduino` skill (`arduino_build.py`), loaded
+from the installed agentrc (`${AGENTRC_DIR:-$HOME/.claude}`), never fetched; CI fetches the commit
+`test/hil/agentrc.json` pins. `.claude/skills/hil-contract/scripts/agentrc_pin.py check` names the one in use. A record
+binds that agentrc's commit and file digests: after its files change, build again. That skill's page has the mechanics
+this library shares with Adafruit SPIFlash.
 
 ```bash
 B=.claude/skills/build/scripts/check_build.py
@@ -23,9 +27,9 @@ python3 $B --board raspberry_pi_pico --shared --record build/hil/raspberry_pi_pi
 The last stdout line is JSON: `pass`; `firstError`, and `error` on exit 2 naming the cause or remedy; `boards[]` (one
 row per board and sketch: `status` `ok`, `failed` or `error`, `log`, `artifacts`, `vidPid`, `platform`,
 `foreignHeaders`, `removed`); `tests[]`; `paths[]` (each changed path's `rule` and `reason`); `uncovered`;
-`nothingToBuild`; `warnings`; `input` (HEAD, dirty); `record` when one was written. Exit 0 pass, 1 a build, test or
-record check failed, 2 usage or a missing prerequisite, 3 an uncovered path; 2 outranks 1, and 1 outranks 3. Each
-build's log is `<buildDir>/check_build.log`.
+`nothingToBuild`; `warnings`; `input` (HEAD, dirty); `narrowed`; `record` when one was written. Exit 0 pass, 1 a build,
+test or record check failed, 2 usage or a missing prerequisite, 3 an uncovered path; 2 outranks 1, and 1 outranks 3.
+Each build's log is `<buildDir>/check_build.log`.
 
 `--select-only` prints the selection (`build.{builds,tests,paths,uncovered}`) and stops before any compile. With
 `--hil-config <the host's roster>` it adds `hil.{boards,full,uncovered}`: the roster boards the change puts under the
@@ -43,14 +47,16 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
 - **Selection is the script's**, first match per path, and `paths[].reason` says why:
   - `src/arduino/ports/<mcu>/` and `src/portable/<vendor>/<driver>/` build that MCU family's representatives
     (`REPRESENTATIVES`: rig boards first, then each distinct stack: RP2350 beside RP2040, SAMD21 beside SAMD51, the
-    RP2040 native-host build, the ESP32-P4's high-speed OTG), every example each one may build. `analog/max3421`
-    and all other `src/` code build every family's representatives.
+    RP2040 native-host build, the ESP32-P4's high-speed OTG), every example each one may build. `analog/max3421`,
+    all other `src/` code and `library.properties` build every family's representatives.
   - A port or driver no CI platform builds (`ports/stm32`, `st/stm32_fsdev`, `renesas/rusb2`) is uncovered.
   - The headers the cores compile their own sources against (`CORE_CONSUMED`: `Adafruit_TinyUSB_API.h`,
     `Adafruit_USBD_CDC.h`, `Adafruit_USBD_Interface.h` under `src/arduino/`) are uncovered: both cores include
     those three from their bundled copy of this library, never from this checkout (`-I` to it in the rp2040
     core's usbstack flags), so no build here shows a change to them working.
   - A sketch dir under `examples/` builds on every board in the table whose ci-arduino filters allow it.
+    `MassStorage/msc_esp32_file_browser` builds on none (its `.test.only` names funhouse, magtag and metroesp32s2,
+    in neither this table nor CI's matrix): no build here compiles it, and `test_build.py` pins that list.
   - This script builds its tests plus a `serial_echo` smoke build per image kind (`raspberry_pi_pico`,
     `metro_m4_express`, `espressif_s3_devkitm`); a HIL fixture (`test/hil/esp32_ts3usb30.cpp`) builds the HIL
     sketches of its boards; the HIL harness and rosters (`.claude/skills/hil-contract/scripts/`, `test/hil/`) run
@@ -65,8 +71,11 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
   dir for `flash_args`. Example eligibility mirrors ci-arduino `build_platform.py`: `.<platform>.test.skip`,
   a `.skip.txt` line equal to the platform, and `.<platform>.test.only` when any `.*.test.only` exists; a rig board
   takes its CI platform's files (`filters`). A board whose core is not installed is exit 2 naming
-  `arduino-cli core install`; a missing library dependency fails that sketch, the README's `arduino-cli lib install`
-  line installs them. Local cores need not be CI's versions; the record names what built.
+  `arduino-cli core install`. Local cores need not be CI's versions; the record names what built.
+- **Dependencies** (`arduino` skill): `library.properties` `depends=` plus `EXTRA_DEPENDENCIES` (CI's `ARDUINO_LIBS`
+  beyond it), and theirs, transitively, must be installed before a build: a missing one is exit 2 naming the
+  `arduino-cli lib install` line. A compile that takes any other library, outside the core, fails its sketch; the
+  JSON's `dependencies` and each row's `libraries` say what was used.
 - **Every compile** is `arduino-cli compile --clean --format json --warnings all --fqbn <F> --library <this checkout>
   --build-path <dir>`, so the core and every library rebuild from scratch and this library comes from this checkout
   whatever else is installed (the primary checkout under `~/Arduino/libraries`, a core's bundled copy). The build
@@ -90,10 +99,11 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
   not checked, since the SAMD ELF's first starts at 0x0. For an esptool board it is the core's `flash_args`: a line of
   options, then each image at its offset, every file in the build dir, ascending, not overlapping, inside the span.
   A device sketch needs its VID:PID: a `-D` define, on ESP32 the variant's `pins_arduino.h` (the S3's 303a:1001),
-  else the library's fallback. It also refuses a foreign header that differs. It records HEAD, the FQBN, the platform
-  (id, version, install dir, and commit and dirty state when the core is a git checkout), the arduino-cli version, the
-  roster's and harness's sha256, the board's role, ESP `chip` and `fixture` (path and sha256), and per sketch its
-  images with sha256, load spans, VID:PID, foreign headers and, for esptool, `segments` (the build's `flash_args`
+  else the library's fallback. It also refuses a foreign header that differs. It records (schema 2, the `arduino`
+  skill's The HIL build record) HEAD, the FQBN, the platform (id, version, install dir, and commit and dirty state
+  when the core is a git checkout), the arduino-cli version, the resolved dependencies with their contents' sha256,
+  the roster's sha256, the contract files' and the agentrc engines' sha256, the board's role, ESP `chip` and `fixture` (path and sha256), and per sketch its
+  images with sha256, load spans, VID:PID, foreign headers, used libraries and, for esptool, `segments` (the build's `flash_args`
   hashed beside them); paths are checkout-relative so the record stages to a rig unchanged.
 - **Experimental records** (`--experimental`, with `--record`) are for debug and instrumentation: a dirty tree and
   `--build-property` are allowed, untracked files under `src/`, `examples/` or `test/hil/` are refused (put

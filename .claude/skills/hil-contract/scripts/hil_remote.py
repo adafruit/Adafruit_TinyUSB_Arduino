@@ -10,331 +10,40 @@ attempt dir <base>/<run-id> (agentrc hil_remote_core). Local records and collect
   hil_remote.py wait ID [--timeout S]      until done (collected into .hil-remote/ID), or the timeout
   hil_remote.py collect ID                 fetch whatever the attempt has now, whatever its state
   hil_remote.py session open --run-id ID -b BOARD [--host H] [--roster R]
-      stage the board's clean record and take a hold on the board under the reason `arduino-hil session ID`
+      stage the board's clean record and take a hold on the board under a reason unique to the attempt
+      (`arduino-hil session DIR TOKEN`, kept in .hil-remote/ID.session.json)
   hil_remote.py session stage ID RECORD...    stage records (experimental too) into a new bundle; prints its options
   hil_remote.py session exec ID flash|gdb|restore|console|check OPTS...  hil_test.py's command under the hold
   hil_remote.py session exec ID exec [--timeout S] -- ARGV...
   hil_remote.py session close ID           restore the board's restoration sketch, check it, release the hold (one
-                                           rig command)
+                                           rig command); after an open whose hold was not taken, release one
+                                           the rig took anyway under the session's reason, restoring nothing
 
-Exits: run, session open/stage 0 launched/held/staged, 1 refused or failed (an `error:` line names why), 2 the agentrc
-pin is missing; wait 0 done, 3 running, 4 dead, 5 inconclusive (hil_remote_core); collect 0 complete (a session's:
-fetched); session exec/close pass the rig command's exit through.
+Exits: run, session open/stage 0 launched/held/staged, 1 refused or failed (an `error:` line names why), 2 no usable
+agentrc (agentrc_pin.py; the line names the remedy); wait 0 done, 3 running, 4 dead, 5 inconclusive (hil_remote_core);
+collect 0 complete (a session's: fetched); session exec passes the rig command's exit through, 3 for a session whose
+hold the rig no longer shows; session close passes it through too, except that 3 closes the session and
+exits 0: `restoreExit: 3` in its JSON, the restore unconfirmed, or after an open whose hold was not taken
+`releaseExit: 3`, nothing having run.
 """
 
-import argparse
-import json
-import secrets
 import sys
-import tempfile
-import time
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import agentrc_pin  # noqa: E402
 import hil_test  # noqa: E402
 
-RUNS = ROOT / '.hil-remote'
-BASE = '~/hil-remote/adafruit-tinyusb-arduino'
-ROSTER = 'test/hil/ci.json'
-HIL = '.claude/skills/hil-contract/scripts/hil_test.py'
-HARNESS = (HIL, '.claude/skills/hil-contract/scripts/agentrc_pin.py', '.claude/skills/build/scripts/check_build.py',
-           'test/hil/agentrc.json')
-RUN_DIR = 'hil-run'
-MANIFEST = 'manifest.json'
-RESTORE_BUNDLE = 'bundles/restore'   # the clean record session close restores from, staged at open
-SESSION_CMDS = ('flash', 'gdb', 'restore', 'exec', 'console', 'check')
-OWN_OPTS = ('-b', '--board', '--under-hold', '--staged')
-
-core = None
-
-
-def load_core():
-    global core
-    core = agentrc_pin.loader(agentrc_pin.checkout()).load_file('skills/hil/scripts/hil_remote_core.py')
-    return core
-
-
-def rel(path):
-    p = Path(path).resolve()
-    try:
-        return p.relative_to(ROOT).as_posix()
-    except ValueError:
-        core.fail(f'{path} is not inside the checkout {ROOT}')
-
-
-def head_of_clean_tree():
-    head = core.git(ROOT, 'rev-parse', 'HEAD')
-    dirty = core.git(ROOT, 'status', '--porcelain', '--untracked-files=normal')
-    if dirty:
-        core.fail(f'the tree is not clean, so the staged harness would not be HEAD\'s:\n{dirty}')
-    return head
-
-
-def record_files(path, head, board, clean=True):
-    """The checkout-relative files a build record stages (itself, its images, an experimental record's patch),
-    refusing one the rig would refuse (hil_test.record_problems)."""
-    try:
-        rec = json.loads(Path(path).read_text())
-        why = hil_test.record_problems(rec, board, head, not clean, 'HEAD')
-        files = [rel(path), *(f for s in rec['sketches'].values() for f in s['sha256'])]
-    except (OSError, ValueError, KeyError, TypeError) as e:
-        core.fail(f'build record {path}: {e!r}')
-    if why:
-        core.fail(f'build record {path}: {"; ".join(why)}; rebuild with the build skill\'s --record')
-    if rec.get('patch'):
-        files.append(rec['patch']['path'])
-    return rec, files
-
-
-def snapshot(into, files, with_agentrc=False, bundle=None):
-    """Copy files (checkout-relative) into `into`, under `bundle` when given, and, when asked, the agentrc closure
-    the harness loads (under agentrc/); {tree-relative path: sha256} of the copies, which is what gets staged."""
-    digests = {f'{bundle}/{k}' if bundle else k: v
-               for k, v in core.snapshot(ROOT, [ROOT / f for f in files], Path(into) / (bundle or '')).items()}
-    if with_agentrc:
-        ag = agentrc_pin.checkout()
-        closure = agentrc_pin.closure(ag, hil_test.SCRIPTS)
-        digests.update({f'agentrc/{k}': v for k, v in
-                        core.snapshot(ag, [ag / f for f in closure], Path(into) / 'agentrc').items()})
-    return digests
-
-
-def snapshot_records(into, records, bundle=None):
-    """snapshot() of the records' files, refusing any whose copy no longer hashes as its record pins."""
-    digests = snapshot(into, [f for _, fs in records for f in fs], bundle=bundle)
-    for rec, _ in records:
-        pinned = {f: d for s in rec['sketches'].values() for f, d in s['sha256'].items()}
-        if rec.get('patch'):
-            pinned[rec['patch']['path']] = rec['patch']['sha256']
-        bad = [f for f, d in pinned.items() if digests.get(f'{bundle}/{f}' if bundle else f) != d]
-        if bad:
-            core.fail(f'{rec["board"]}: {", ".join(bad[:3])} changed since the build record; rebuild')
-    return digests
-
-
-def stage(tree, into, digests):
-    core.stage_tree(tree, into)
-    bad = core.verify_remote(tree, digests)
-    if bad:
-        core.fail(f'staged files differ on {tree.host}: {", ".join(bad[:5])}')
-
-
-def staged_tree(run_id, host, roster, records, head, bundle=None):
-    """Create attempt run_id on host holding the harness, roster, agentrc closure and records (record_files
-    already checked; under `bundle` when given), the snapshot pinned by manifest.json; its Tree."""
-    with tempfile.TemporaryDirectory(prefix='hil-remote-') as tmp:
-        into = Path(tmp)
-        digests = snapshot(into, [*HARNESS, roster], True)
-        digests.update(snapshot_records(into, records, bundle))
-        drift = core.checkout_drift(ROOT, head)
-        if drift:
-            core.fail(f'the checkout moved while it was copied: {"; ".join(drift)}')
-        core.write_json(into / MANIFEST, {'head': head, 'files': digests})
-        tree = core.create_attempt(ROOT, RUNS, run_id, host, BASE)
-        stage(tree, into, {**digests, MANIFEST: core.digest(into / MANIFEST)})
-    return tree
-
-
-def roster_boards(roster):
-    try:
-        return hil_test.load_roster(ROOT / roster)
-    except hil_test.Refused as e:
-        core.fail(str(e))
-
-
-def cmd_run(a):
-    roster = rel(a.roster)
-    try:
-        names = list(hil_test.selection(roster_boards(roster), a.board, a.test))
-    except hil_test.Refused as e:
-        core.fail(f'{roster}: {e}')
-    head = head_of_clean_tree()
-    records = [record_files(ROOT / 'build' / 'hil' / f'{b}.build.json', head, b) for b in names]
-    tree = staged_tree(a.run_id, a.host, roster, records, head)
-    argv = ['python3', '-u', HIL, 'run', '--staged', MANIFEST, '--run-dir', RUN_DIR,
-            *(w for b in names for w in ('-b', b)), *(w for t in a.test or [] for w in ('-t', t)), roster]
-    launch = core.launch(tree, argv)
-    print(json.dumps({'runId': a.run_id, 'host': tree.host, 'dir': tree.dir, 'boards': names, 'launch': launch,
-                      'next': f'hil_remote.py wait {a.run_id}'}))
-    return 0
-
-
-def report_present(path):
-    return [] if (Path(path) / RUN_DIR / 'hil_report.json').is_file() else [f'{RUN_DIR}/hil_report.json']
-
-
-def summary(run_id, st, dest):
-    done = Path(dest) / core.RECORDS / 'done.json'
-    out = {'runId': run_id, 'state': st.get('state'), 'dest': str(dest)}
-    if done.is_file():
-        out['rigExit'] = json.loads(done.read_text()).get('exit')
-    if (Path(dest) / RUN_DIR / 'hil_report.json').is_file():
-        out['report'] = f'python3 {HIL} report {Path(dest) / RUN_DIR}'
-    return out
-
-
-def cmd_wait(a):
-    tree = core.load_attempt(ROOT, RUNS, a.run_id)
-    dest = RUNS / a.run_id
-    rc, st = core.wait_attempt(tree, a.timeout, dest=dest, groups=[[f'{RUN_DIR}/']], accept=report_present)
-    out = summary(a.run_id, st, dest)
-    if 'collection' in st:
-        out['collection'] = st['collection']['state']
-    print(json.dumps(out))
-    return rc
-
-
-def cmd_collect(a):
-    tree = core.load_attempt(ROOT, RUNS, a.run_id)
-    dest = RUNS / a.run_id
-    session = session_record(a.run_id, required=False)
-    if session:
-        record = core.collect(tree, dest, optional=['build/hil-manual/'])
-    else:
-        record = core.collect(tree, dest, groups=[[f'{RUN_DIR}/']], accept=report_present)
-    print(json.dumps({**summary(a.run_id, {'state': record['remoteState']}, dest), 'collection': record['state']}))
-    return 0 if record['state'] == 'complete' or session else 1
-
-
-# ---- sessions
-
-def session_path(run_id):
-    core.check_run_id(run_id)
-    return RUNS / f'{run_id}.session.json'
-
-
-def session_record(run_id, required=True):
-    p = session_path(run_id)
-    if not p.is_file():
-        if required:
-            core.fail(f'no session {run_id} was opened from this checkout')
-        return None
-    return json.loads(p.read_text())
-
-
-def rig(tree, argv):
-    return core.run_remote(tree, ['python3', '-u', *argv])
-
-
-def cmd_session_open(a):
-    roster = rel(a.roster)
-    if a.board not in roster_boards(roster):
-        core.fail(f'{a.board} is not in {roster}')
-    head = head_of_clean_tree()
-    record = record_files(ROOT / 'build' / 'hil' / f'{a.board}.build.json', head, a.board)
-    tree = staged_tree(a.run_id, a.host, roster, [record], head, RESTORE_BUNDLE)
-    reason = f'arduino-hil session {a.run_id}'
-    data = {'runId': a.run_id, 'board': a.board, 'reason': reason, 'roster': roster, 'head': head,
-            'restoreRecord': record[1][0], 'held': False}
-    core.write_json(session_path(a.run_id), data)
-    rc = rig(tree, [HIL, 'lock', 'hold', a.board, '--reason', reason])
-    if rc:
-        print(json.dumps({**data, 'error': f'the hold was not taken (exit {rc})'}))
-        return 1
-    data['held'] = True
-    core.write_json(session_path(a.run_id), data)
-    print(json.dumps({**data, 'dir': tree.dir, 'next': f'hil_remote.py session exec {a.run_id} ...; '
-                                                      f'hil_remote.py session close {a.run_id}'}))
-    return 0
-
-
-def cmd_session_stage(a):
-    """Stage the records into a new bundle dir of their own: records share build/hil/<board>/<sketch>/, so one
-    staged over another would replace the images an earlier record, the restore's included, pins."""
-    s = session_record(a.run_id)
-    tree = core.load_attempt(ROOT, RUNS, a.run_id)
-    records = [record_files(r, s['head'], s['board'], clean=False) for r in a.records]
-    bundle = f'bundles/{time.strftime("%Y%m%d-%H%M%S")}-{secrets.token_hex(4)}'   # unique: stages may run at once
-    with tempfile.TemporaryDirectory(prefix='hil-remote-') as tmp:
-        digests = snapshot_records(Path(tmp), records, bundle)
-        stage(tree, Path(tmp), digests)
-    print(json.dumps({'runId': a.run_id, 'bundle': bundle,
-                      'use': [f'--bundle {bundle} --build-record {fs[0]}' for _, fs in records]}))
-    return 0
-
-
-def session_argv(s, cmd, opts, argv):
-    clash = [o for o in opts if o.split('=')[0] in OWN_OPTS]
-    if clash:
-        core.fail(f'{", ".join(clash)} come from the session; leave them out')
-    if cmd == 'exec' and not argv:
-        core.fail('session exec ID exec needs `-- ARGV...`')
-    return [HIL, cmd, '-b', s['board'], '--under-hold', s['reason'], '--staged', MANIFEST, *opts, s['roster'],
-            *(['--', *argv] if cmd == 'exec' else [])]
-
-
-def cmd_session_exec(run_id, rest):
-    s = session_record(run_id)
-    if not rest or rest[0] not in SESSION_CMDS:
-        core.fail(f'session exec ID takes one of {", ".join(SESSION_CMDS)}, then its options')
-    cmd, rest = rest[0], rest[1:]
-    opts, argv = (rest[:rest.index('--')], rest[rest.index('--') + 1:]) if '--' in rest else (rest, [])
-    tree = core.load_attempt(ROOT, RUNS, run_id)
-    return rig(tree, session_argv(s, cmd, opts, argv))
-
-
-def cmd_session_close(a):
-    s = session_record(a.run_id)
-    tree = core.load_attempt(ROOT, RUNS, a.run_id)
-    rc = rig(tree, session_argv(s, 'restore', ['--bundle', RESTORE_BUNDLE, '--build-record', s['restoreRecord'],
-                                               '--release'], []))
-    core.write_json(session_path(a.run_id), {**s, 'held': rc != 0, 'closed': rc == 0})
-    out = {'runId': a.run_id, 'board': s['board'], 'closed': rc == 0, 'restoreExit': rc}
-    if rc:
-        out['note'] = 'not released: the restore or the release failed (its JSON above); recover under the hold'
-    print(json.dumps(out))
-    return rc
-
-
-def parse(argv):
-    ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    sub = ap.add_subparsers(dest='cmd', required=True)
-    r = sub.add_parser('run')
-    r.add_argument('--run-id', required=True)
-    r.add_argument('--host', default='ci.lan')
-    r.add_argument('--roster', default=str(ROOT / ROSTER))
-    r.add_argument('-b', '--board', action='append')
-    r.add_argument('-t', '--test', action='append', choices=sorted(hil_test.TESTS))
-    w = sub.add_parser('wait')
-    w.add_argument('run_id')
-    w.add_argument('--timeout', type=lambda t: core.wait_secs(t), default=570)
-    c = sub.add_parser('collect')
-    c.add_argument('run_id')
-    s = sub.add_parser('session').add_subparsers(dest='session', required=True)
-    o = s.add_parser('open')
-    o.add_argument('--run-id', required=True)
-    o.add_argument('-b', '--board', required=True)
-    o.add_argument('--host', default='ci.lan')
-    o.add_argument('--roster', default=str(ROOT / ROSTER))
-    st = s.add_parser('stage')
-    st.add_argument('run_id')
-    st.add_argument('records', nargs='+')
-    s.add_parser('exec', help='session exec ID flash|gdb|restore|exec|console|check ... (hil_test.py parses it on '
-                              'the rig)')
-    cl = s.add_parser('close')
-    cl.add_argument('run_id')
-    return ap.parse_args(argv)
-
 
 def main(argv=None):
-    argv = sys.argv[1:] if argv is None else argv
+    """hil_test's profile, run by agentrc's arduino_remote.py."""
     try:
-        core or load_core()
+        hil_test.engine()
+        remote = agentrc_pin.load('skills/arduino/scripts/arduino_remote.py')
     except agentrc_pin.PinError as e:
-        print(f'error: {e}', file=sys.stderr)
+        print(f'error: {e}' + (f' ({e.remedy})' if e.remedy else ''), file=sys.stderr)
         return 2
-    if argv[:2] == ['session', 'exec']:   # its options are hil_test.py's, `--` included: not ours to parse
-        if len(argv) < 3:
-            core.fail('session exec needs a session id')
-        return cmd_session_exec(argv[2], argv[3:])
-    a = parse(argv)
-    core.check_run_id(a.run_id)
-    if a.cmd == 'session':
-        return {'open': cmd_session_open, 'stage': cmd_session_stage, 'close': cmd_session_close}[a.session](a)
-    return {'run': cmd_run, 'wait': cmd_wait, 'collect': cmd_collect}[a.cmd](a)
+    return remote.run(hil_test, argv)
 
 
 if __name__ == '__main__':
