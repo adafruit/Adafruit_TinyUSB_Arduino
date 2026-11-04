@@ -320,7 +320,8 @@ class PinFile(Env):
     def test_a_missing_or_malformed_pin_is_refused_by_pin_and_check(self):
         good = {'url': 'https://example.invalid/agentrc.git', 'commit': '0' * 40}
         cases = {'missing': None, 'not json': '{', 'a list': '[]', 'no commit': {'url': good['url']},
-                 'no url': {'commit': good['commit']}, 'a short commit': {**good, 'commit': 'abc123'},
+                 'no url': {'commit': good['commit']}, 'a blank url': {**good, 'url': '   '},
+                 'a short commit': {**good, 'commit': 'abc123'},
                  'a non-hex commit': {**good, 'commit': 'g' * 40}, 'a numeric commit': {**good, 'commit': 1}}
         self.env(CI='true')
         for name, content in cases.items():

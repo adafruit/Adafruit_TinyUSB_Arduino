@@ -59,7 +59,8 @@ def pin():
     except (OSError, ValueError, RecursionError) as e:
         raise PinError(f'{PIN_FILE} is not readable JSON ({e})') from None
     url, commit = (data.get('url'), data.get('commit')) if isinstance(data, dict) else (None, None)
-    if not isinstance(url, str) or not url or not isinstance(commit, str) or not re.fullmatch(r'[0-9a-f]{40}', commit):
+    if (not isinstance(url, str) or not url.strip()
+            or not isinstance(commit, str) or not re.fullmatch(r'[0-9a-f]{40}', commit)):
         raise PinError(f'{PIN_FILE} names no {{url, commit}} with a 40-hex commit ({data!r})')
     return url, commit
 
