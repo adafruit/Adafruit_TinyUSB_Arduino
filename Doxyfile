@@ -1,0 +1,8 @@
+@INCLUDE = ci/Doxyfile.default
+
+PROJECT_NAME = "Adafruit TinyUSB Library"
+INPUT = src
+
+# Doxygen 1.8.13 cannot evaluate TinyUSB's variadic MCU-selection macros.
+# Documentation is board-independent; retain the normal compiler definition.
+PREDEFINED += "TU_CHECK_MCU(...)=0"
