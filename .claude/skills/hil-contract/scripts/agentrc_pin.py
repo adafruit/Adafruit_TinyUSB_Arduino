@@ -218,7 +218,11 @@ def identity():
     (agentrc-relative) and each file's digest now, the commit it is from and whether the closure differs from it."""
     src, r, files = selected()
     if src == 'staged':
-        staged_from = json.loads((ROOT / MANIFEST).read_text()).get('agentrc')
+        try:
+            manifest = json.loads((ROOT / MANIFEST).read_text())
+        except (OSError, ValueError) as e:
+            raise PinError(f'{ROOT / MANIFEST} is not readable JSON ({e}): stage it again with hil_remote.py')
+        staged_from = manifest.get('agentrc') if isinstance(manifest, dict) else None
         if (not isinstance(staged_from, dict) or not isinstance(staged_from.get('commit'), str)
                 or not re.fullmatch(r'[0-9a-f]{40}', staged_from['commit'])
                 or not isinstance(staged_from.get('dirty'), bool)):
@@ -241,9 +245,11 @@ def test():
     """The contract tests against the selected agentrc, CI fetching the pin first; their exit."""
     if source() == 'pin':
         fetch()
-    selected()
+    src, r, _ = selected()
+    # the child runs in ROOT: a relative AGENTRC_DIR must still name the agentrc validated here
+    env = {**os.environ, 'AGENTRC_DIR': str(Path(r).absolute())} if src == 'installed' else None
     return subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s', '.claude/test', '-p', 'test_*.py'],
-                          cwd=ROOT).returncode
+                          cwd=ROOT, env=env).returncode
 
 
 def main(argv):

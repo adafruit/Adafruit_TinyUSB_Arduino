@@ -189,6 +189,15 @@ class Installed(Env):
                 self.assertEqual(agentrc_pin.test(), 5)
         self.assertIn('discover', run.call_args.args[0])
 
+    def test_test_hands_the_child_the_agentrc_a_relative_dir_named_here(self):
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(self.tmp)
+        self.env(AGENTRC_DIR=str(self.claude.relative_to(self.tmp)))
+        with mock.patch.object(agentrc_pin.subprocess, 'run', return_value=mock.Mock(returncode=0)) as run:
+            self.assertEqual(agentrc_pin.test(), 0)
+        self.assertEqual(run.call_args.kwargs['cwd'], agentrc_pin.ROOT)
+        self.assertEqual(run.call_args.kwargs['env']['AGENTRC_DIR'], str(self.claude))
+
 
 class Staged(Env):
     def stage(self, manifest, hil_load=''):
@@ -216,6 +225,16 @@ class Staged(Env):
             with self.subTest(agentrc=bad):
                 (self.tmp / 'manifest.json').write_text(json.dumps({'agentrc': bad}))
                 with self.assertRaisesRegex(agentrc_pin.PinError, 'names no agentrc commit and dirty flag'):
+                    agentrc_pin.identity()
+        for bad in ('[]', '"agentrc"'):   # JSON, but not an object
+            with self.subTest(manifest=bad):
+                (self.tmp / 'manifest.json').write_text(bad)
+                with self.assertRaisesRegex(agentrc_pin.PinError, 'names no agentrc commit and dirty flag'):
+                    agentrc_pin.identity()
+        for bad in (b'{not json', b'\xff'):
+            with self.subTest(manifest=bad):
+                (self.tmp / 'manifest.json').write_bytes(bad)
+                with self.assertRaisesRegex(agentrc_pin.PinError, 'is not readable JSON.*stage it again'):
                     agentrc_pin.identity()
 
     def test_a_staged_tree_without_the_engines_is_refused(self):
