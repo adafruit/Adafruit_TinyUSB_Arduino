@@ -105,7 +105,7 @@ EXTRA_DEPENDENCIES = ('Adafruit seesaw Library', 'Adafruit NeoPixel', 'Adafruit 
 CONTRACT_FILES = ('.claude/skills/build/scripts/check_build.py', '.claude/skills/hil-contract/scripts/hil_test.py',
                   '.claude/skills/hil-contract/scripts/hil_remote.py',
                   '.claude/skills/hil-contract/scripts/agentrc_pin.py', 'test/hil/agentrc.json')
-AGENTRC = None   # set by engine() from the pin
+AGENTRC = None   # set by engine(): agentrc_pin.identity()
 
 
 def classify_source(path):
@@ -183,7 +183,7 @@ def main(argv=None):
     try:
         eng = engine()
     except agentrc_pin.PinError as e:
-        print(json.dumps({'version': 2, 'pass': False, 'error': str(e), 'remedy': agentrc_pin.FETCH_HINT}))
+        print(json.dumps({'version': 2, 'pass': False, 'error': str(e), 'remedy': e.remedy}))
         return 2
     return eng.main(argv)
 

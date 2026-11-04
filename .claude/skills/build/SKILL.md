@@ -7,8 +7,10 @@ description: The Adafruit TinyUSB Arduino build contract. Use when a change must
 
 `scripts/check_build.py` is the entry point for verifying a change; agents and workflows call it rather than composing
 `arduino-cli compile` lines. It is this library's profile for agentrc's `arduino` skill (`arduino_build.py`), loaded
-from the agentrc commit `test/hil/agentrc.json` pins: run `python3 .claude/skills/hil-contract/scripts/agentrc_pin.py
-fetch` once per pin. That skill's page has the mechanics this library shares with Adafruit SPIFlash.
+from the installed agentrc (`${AGENTRC_DIR:-$HOME/.claude}`), never fetched; CI fetches the commit
+`test/hil/agentrc.json` pins. `.claude/skills/hil-contract/scripts/agentrc_pin.py check` names the one in use. A record
+binds that agentrc's commit and file digests: after its files change, build again. That skill's page has the mechanics
+this library shares with Adafruit SPIFlash.
 
 ```bash
 B=.claude/skills/build/scripts/check_build.py

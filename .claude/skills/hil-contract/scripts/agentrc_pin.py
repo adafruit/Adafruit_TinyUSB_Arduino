@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
-"""The agentrc commit the build and HIL contracts load their shared scripts from (agentrc `arduino` and `hil` skills).
+"""Where the build and HIL contracts load agentrc's shared scripts from (agentrc `arduino` and `hil` skills):
 
-  agentrc_pin.py fetch    fetch the pinned commit into the user cache (never touches another agentrc checkout)
-  agentrc_pin.py check    exit 0 when the cached checkout is the pin and clean, else 1 naming why
-  agentrc_pin.py path     print the cached checkout's path
+  staged     a rig tree hil_remote.py staged (manifest.json and agentrc/, no .git): its copy, the manifest's identity
+  pin        CI (GITHUB_ACTIONS or CI true): test/hil/agentrc.json's {url, commit}, fetched into
+             ${XDG_CACHE_HOME:-~/.cache}/adafruit-tinyusb-arduino/agentrc-<commit>, outside this library
+  installed  otherwise: ${AGENTRC_DIR:-$HOME/.claude}, the agentrc install every skill uses; never fetched
 
-The pin is test/hil/agentrc.json ({url, commit}). The checkout lives outside this library, in
-${XDG_CACHE_HOME:-~/.cache}/adafruit-tinyusb-arduino/agentrc-<commit>, so Library Manager never ships it.
+  agentrc_pin.py test     run .claude/test against the selected agentrc (CI fetches the pin first); its exit
+  agentrc_pin.py fetch    CI only: fetch the pin into the cache
+  agentrc_pin.py check    validate the selected agentrc as a record would bind it, fetching nothing; print its root
 """
 
 import ast
+import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -21,13 +25,31 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 PIN_FILE = ROOT / 'test' / 'hil' / 'agentrc.json'
 FETCH_HINT = 'python3 .claude/skills/hil-contract/scripts/agentrc_pin.py fetch'
+INSTALL_HINT = ('install agentrc with its arduino skill (python3 <agentrc checkout>/install.py install --skill), '
+                'or set AGENTRC_DIR to such a checkout')
+MANIFEST = 'manifest.json'
+PROFILE_API = 1   # arduino_build.py's PROFILE_API: the engines' profile interface these profiles implement
 # the agentrc engines the contracts run; their FILES closures are what a staged rig tree carries and a record binds
 ENGINES = ('skills/arduino/scripts/arduino_build.py', 'skills/arduino/scripts/arduino_hil.py',
            'skills/arduino/scripts/arduino_remote.py')
 
 
 class PinError(Exception):
-    pass
+    def __init__(self, msg, remedy=''):
+        super().__init__(msg)
+        self.remedy = remedy
+
+
+def ci():
+    """True in CI: GITHUB_ACTIONS or CI set true; an unset or empty one counts as false, any other value refused."""
+    on = False
+    for var in ('GITHUB_ACTIONS', 'CI'):
+        value = os.environ.get(var, '').strip().lower()
+        if value in ('1', 'true', 'yes'):
+            on = True
+        elif value not in ('', '0', 'false', 'no'):
+            raise PinError(f'{var}={os.environ[var]!r} is neither true nor false')
+    return on
 
 
 def pin():
@@ -59,6 +81,8 @@ def problem(root, commit):
 
 
 def fetch():
+    if not ci():
+        raise PinError('fetch runs in CI only: a dev PC loads the installed agentrc', INSTALL_HINT)
     url, commit = pin()
     dest = cache_dir(commit)
     if dest.exists():
@@ -93,17 +117,21 @@ def checkout():
     dest = cache_dir(commit)
     why = problem(dest, commit)
     if why:
-        raise PinError(f'agentrc pin: {why}; run `{FETCH_HINT}`')
+        raise PinError(f'agentrc pin: {why}', FETCH_HINT)
     return dest
 
 
+def literal(root, rel, name, default=None):
+    """The literal a script assigns to `name` at module level, read without importing it."""
+    for node in ast.parse((Path(root) / rel).read_text()).body:
+        if isinstance(node, ast.Assign) and any(getattr(t, 'id', None) == name for t in node.targets):
+            return ast.literal_eval(node.value)
+    return default
+
+
 def files_of(root, rel):
-    """A script's FILES literal (agentrc hil_load.py), read without importing it."""
-    tree = ast.parse((Path(root) / rel).read_text())
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and any(getattr(t, 'id', None) == 'FILES' for t in node.targets):
-            return tuple(ast.literal_eval(node.value))
-    return ()
+    """A script's FILES literal (agentrc hil_load.py)."""
+    return tuple(literal(root, rel, 'FILES', ()))
 
 
 def closure(root, scripts):
@@ -131,42 +159,107 @@ def loader(root):
 
 
 def staged():
-    """A rig tree hil_remote.py staged: no .git, its agentrc files under agentrc/."""
-    return not (ROOT / '.git').exists() and (ROOT / 'agentrc').is_dir()
+    """A rig tree hil_remote.py staged: no .git, and both its manifest and its agentrc copy; one without the other is
+    refused, never taken for a checkout."""
+    if (ROOT / '.git').exists():
+        return False
+    marks = {MANIFEST: (ROOT / MANIFEST).is_file(), 'agentrc/': (ROOT / 'agentrc').is_dir()}
+    if any(marks.values()) and not all(marks.values()):
+        raise PinError(f'{ROOT} is a partial staged tree: {[m for m, ok in marks.items() if not ok]} missing')
+    return all(marks.values())
 
 
-def root():
-    """The agentrc this process loads from: the staged copy on a rig, else the pinned checkout."""
-    return ROOT / 'agentrc' if staged() else checkout()
+def source():
+    return 'staged' if staged() else 'pin' if ci() else 'installed'
+
+
+def installed():
+    """${AGENTRC_DIR:-$HOME/.claude} holding the arduino skill: never fetched, never another location."""
+    r = Path(os.environ.get('AGENTRC_DIR') or Path.home() / '.claude')
+    if not (r / ENGINES[0]).is_file():
+        raise PinError(f'{r} has no agentrc arduino skill ({ENGINES[0]})', INSTALL_HINT)
+    return r
+
+
+def checkout_of(r, files):
+    """The one git checkout every closure file under r resolves into, at its own path there (a mix of installs,
+    say skills/hil from another checkout than skills/arduino, is refused)."""
+    top = _git((Path(r) / ENGINES[0]).resolve().parent, 'rev-parse', '--show-toplevel')
+    if top.returncode:
+        raise PinError(f'{(Path(r) / ENGINES[0]).resolve()} is in no git checkout: its commit is unknown', INSTALL_HINT)
+    co = Path(top.stdout.strip()).resolve()
+    stray = [f for f in files if (Path(r) / f).resolve() != (co / f).resolve()]
+    if stray:
+        raise PinError(f'{stray[:3]} under {r} resolve outside {co}: one agentrc checkout must hold them all',
+                       INSTALL_HINT)
+    return co
+
+
+def selected():
+    """(source, root, closure) of the selected agentrc, refusing a missing closure file or engines implementing
+    another profile API than PROFILE_API before any is loaded."""
+    src = source()
+    r = {'staged': lambda: ROOT / 'agentrc', 'pin': checkout, 'installed': installed}[src]()
+    files = closure(r, ENGINES)
+    api = literal(r, ENGINES[0], 'PROFILE_API')
+    if api != PROFILE_API:
+        raise PinError(f'agentrc at {r} implements profile API {api}, this library needs {PROFILE_API}: use an '
+                       f'agentrc that does, or move this library to the API it has', INSTALL_HINT)
+    return src, r, files
 
 
 def load(rel):
-    """agentrc's `rel`, loaded through its hil_load once the engines' closure is all present."""
-    r = root()
-    closure(r, ENGINES)
-    return loader(r).load_file(rel)
+    """agentrc's `rel`, loaded through its hil_load from the selected agentrc."""
+    return loader(selected()[1]).load_file(rel)
 
 
 def identity():
-    """{commit, root, files}: the pin, where it is loaded from, and the engines' closure (agentrc-relative)."""
-    r = root()
-    return {'commit': pin()[1], 'root': r, 'files': closure(r, ENGINES)}
+    """{commit, root, files, sha256, dirty, source}: where agentrc is loaded from, the engines' closure
+    (agentrc-relative) and each file's digest now, the commit it is from and whether the closure differs from it."""
+    src, r, files = selected()
+    if src == 'staged':
+        staged_from = json.loads((ROOT / MANIFEST).read_text()).get('agentrc')
+        if (not isinstance(staged_from, dict) or not isinstance(staged_from.get('commit'), str)
+                or not re.fullmatch(r'[0-9a-f]{40}', staged_from['commit'])
+                or not isinstance(staged_from.get('dirty'), bool)):
+            raise PinError(f'{ROOT / MANIFEST} names no agentrc commit and dirty flag ({staged_from!r}): stage it '
+                           'again with hil_remote.py')
+        commit, dirty = staged_from['commit'], staged_from['dirty']
+    elif src == 'pin':
+        commit, dirty = pin()[1], False   # checkout() refused a moved or modified cache
+    else:
+        co = checkout_of(r, files)
+        head, status = _git(co, 'rev-parse', 'HEAD'), _git(co, 'status', '--porcelain', '--', *files)
+        if head.returncode or status.returncode:
+            raise PinError(f'git in {co}: {(head.stderr or status.stderr).strip()}')
+        commit, dirty = head.stdout.strip(), bool(status.stdout.strip())
+    return {'commit': commit, 'root': r, 'files': files, 'dirty': dirty, 'source': src,
+            'sha256': {f: hashlib.sha256((r / f).read_bytes()).hexdigest() for f in files}}
+
+
+def test():
+    """The contract tests against the selected agentrc, CI fetching the pin first; their exit."""
+    if source() == 'pin':
+        fetch()
+    selected()
+    return subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s', '.claude/test', '-p', 'test_*.py'],
+                          cwd=ROOT).returncode
 
 
 def main(argv):
     cmd = argv[0] if argv else ''
     try:
+        if cmd == 'test':
+            return test()
         if cmd == 'fetch':
             print(fetch())
         elif cmd == 'check':
-            print(checkout())
-        elif cmd == 'path':
-            print(cache_dir(pin()[1]))
+            print(identity()['root'])
         else:
             print(__doc__, file=sys.stderr)
             return 2
     except PinError as e:
-        print(f'error: {e}', file=sys.stderr)
+        print(f'error: {e}' + (f' ({e.remedy})' if e.remedy else ''), file=sys.stderr)
         return 1
     return 0
 

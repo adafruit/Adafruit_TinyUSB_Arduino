@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The HIL harness's profile: hil_test.py's battery (the CDC, HID and MSC host checks, the host board's console step,
-read-block), its tables against the sketches they run, its roster checks and the rosters themselves through the pinned
-agentrc arduino_hil.py. The harness mechanics (admission, locks, flashing, sessions, the report) are agentrc's and
+read-block), its tables against the sketches they run, its roster checks and the rosters themselves through agentrc's
+arduino_hil.py. The harness mechanics (admission, locks, flashing, sessions, the report) are agentrc's and
 tested there. agentrc's flash and USB modules and the serial port are stubbed: stubs prove the plumbing only, hardware
 behaviour is a real run's."""
 import argparse
@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / '.claude' / 'skills' / 'hil-contract' / 'scripts'))
 import hil_test as ht  # noqa: E402
 
-E = ht.engine()   # the pinned agentrc's arduino_hil bound to this profile: a missing pin fails here
+E = ht.engine()   # agentrc's arduino_hil bound to this profile: a missing agentrc fails here
 
 
 def roster(name):

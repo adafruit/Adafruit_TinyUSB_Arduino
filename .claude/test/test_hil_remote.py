@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
-"""hil_remote.py, a wrapper running the pinned agentrc arduino_remote.py with hil_test.py's profile, and agentrc_pin.py,
-which fetches and loads that pin. The staging and session mechanics are agentrc's and tested there; nothing here
-reaches a rig. Stubs prove the plumbing only; the transport is verified by a real run."""
+"""hil_remote.py, a wrapper running agentrc's arduino_remote.py (the agentrc agentrc_pin.py selects) with hil_test.py's
+profile. The staging and session mechanics are agentrc's and tested there; nothing here reaches a rig. Stubs prove the
+plumbing only; the transport is verified by a real run."""
 import contextlib
 import io
-import json
-import os
-import shutil
-import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -20,15 +15,11 @@ import agentrc_pin  # noqa: E402
 import hil_remote  # noqa: E402
 import hil_test  # noqa: E402
 
-hil_test.engine()   # the pinned checkout: a missing pin fails here, naming the fetch
-
-
-def git(root, *a):
-    subprocess.run(['git', '-C', str(root), *a], check=True, capture_output=True)
+hil_test.engine()   # the selected agentrc: a missing one fails here, naming the remedy
 
 
 class Wrapper(unittest.TestCase):
-    def test_runs_the_pinned_remote_engine_with_the_hil_profile(self):
+    def test_runs_the_remote_engine_with_the_hil_profile(self):
         remote = mock.Mock()
         remote.run.return_value = 3
         with mock.patch.object(agentrc_pin, 'load', return_value=remote) as load:
@@ -36,11 +27,11 @@ class Wrapper(unittest.TestCase):
         load.assert_called_once_with('skills/arduino/scripts/arduino_remote.py')
         remote.run.assert_called_once_with(hil_test, ['wait', 'r1'])
 
-    def test_a_missing_pin_exits_2_naming_why(self):
-        with mock.patch.object(hil_test, 'engine', side_effect=agentrc_pin.PinError('agentrc pin: gone')), \
+    def test_an_unavailable_agentrc_exits_2_naming_why_and_the_remedy(self):
+        with mock.patch.object(hil_test, 'engine', side_effect=agentrc_pin.PinError('agentrc gone', 'install it')), \
                 contextlib.redirect_stderr(io.StringIO()) as err:
             self.assertEqual(hil_remote.main(['wait', 'r1']), 2)
-        self.assertEqual(err.getvalue(), 'error: agentrc pin: gone\n')
+        self.assertEqual(err.getvalue(), 'error: agentrc gone (install it)\n')
 
     def test_the_real_engine_parses_the_profiles_tests(self):
         with contextlib.redirect_stderr(io.StringIO()) as err, self.assertRaises(SystemExit) as e:
@@ -54,150 +45,6 @@ class Wrapper(unittest.TestCase):
             self.assertTrue((ROOT / f).is_file(), f)
         self.assertIn('.claude/skills/hil-contract/scripts/hil_remote.py', hil_test.BUILD.CONTRACT_FILES)
         self.assertIn('.claude/skills/hil-contract/scripts/agentrc_pin.py', hil_test.BUILD.CONTRACT_FILES)
-
-
-class Pin(unittest.TestCase):
-    def test_identity_is_the_pin_and_the_engines_closure(self):
-        ident = agentrc_pin.identity()
-        self.assertEqual(ident['commit'], agentrc_pin.pin()[1])
-        self.assertEqual(ident['root'], agentrc_pin.cache_dir(ident['commit']))
-        self.assertLessEqual({*agentrc_pin.ENGINES, 'skills/hil/scripts/hil_load.py',
-                              'skills/hil/scripts/hil_remote_core.py'}, set(ident['files']))
-        self.assertEqual(hil_test.BUILD.AGENTRC, ident)
-
-    def test_a_staged_tree_loads_its_own_copy(self):
-        rel = 'skills/arduino/scripts/arduino_build.py'
-        with tempfile.TemporaryDirectory() as d, mock.patch.dict(sys.modules), \
-                mock.patch.object(agentrc_pin, 'ROOT', Path(d)), \
-                mock.patch.object(agentrc_pin, 'checkout', side_effect=AssertionError('a rig has no cache')):
-            sys.modules.pop('agentrc_hil_load', None)
-            staged = Path(d) / 'agentrc'
-            staged.mkdir()
-            self.assertTrue(agentrc_pin.staged())
-            self.assertEqual(agentrc_pin.root(), staged)
-            for f in agentrc_pin.ENGINES:
-                (staged / f).parent.mkdir(parents=True, exist_ok=True)
-                (staged / f).write_text('')
-            (staged / 'skills/hil/scripts/hil_load.py').parent.mkdir(parents=True, exist_ok=True)
-            (staged / 'skills/hil/scripts/hil_load.py').write_text(
-                'class _L:\n    def load_file(self, rel):\n        return "STAGED:" + rel\n\n\n'
-                'def load(name, origin):\n    return _L()\n')
-            self.assertEqual(agentrc_pin.load(rel), 'STAGED:' + rel)
-        self.assertFalse(agentrc_pin.staged())
-
-    def test_the_real_engines_load_from_their_staged_closure_alone(self):
-        # a fresh interpreter, so the staged modules never replace the cached engine the other tests load
-        code = '''if True:
-            import json, shutil, sys, sysconfig
-            from pathlib import Path
-            from unittest import mock
-            sys.path.insert(0, sys.argv[1])
-            import agentrc_pin
-            ident = agentrc_pin.identity()
-            src, d = ident['root'], Path(sys.argv[2])
-            for f in ident['files']:
-                (d / 'agentrc' / f).parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src / f, d / 'agentrc' / f)
-            before = set(sys.modules)
-            with mock.patch.object(agentrc_pin, 'ROOT', d), \\
-                    mock.patch.object(agentrc_pin, 'checkout', side_effect=AssertionError('a rig has no cache')):
-                assert agentrc_pin.staged()
-                engines = [agentrc_pin.load(e).__file__ for e in agentrc_pin.ENGINES]
-            lib = tuple(sysconfig.get_paths()[k] for k in ('stdlib', 'platstdlib', 'purelib', 'platlib'))
-            new = sorted(f for n in set(sys.modules) - before
-                         if (f := getattr(sys.modules[n], '__file__', None)) and not f.startswith(lib))
-            print(json.dumps({'engines': engines, 'modules': new}))
-        '''
-        with tempfile.TemporaryDirectory() as d:
-            p = subprocess.run([sys.executable, '-I', '-c', code, str(Path(agentrc_pin.__file__).parent), d],
-                               capture_output=True, text=True)
-            self.assertEqual(p.returncode, 0, p.stderr)
-            got = json.loads(p.stdout)
-            staged = Path(d, 'agentrc').resolve()
-            self.assertEqual(got['engines'], [str(Path(d, 'agentrc', e)) for e in agentrc_pin.ENGINES])
-            for f in got['modules']:
-                self.assertTrue(Path(f).resolve().is_relative_to(staged), f)
-
-    def test_a_plain_copy_without_agentrc_uses_the_pinned_checkout(self):
-        with tempfile.TemporaryDirectory() as d, mock.patch.object(agentrc_pin, 'ROOT', Path(d)), \
-                mock.patch.object(agentrc_pin, 'checkout', return_value=Path('/pinned')):
-            self.assertFalse(agentrc_pin.staged())
-            self.assertEqual(agentrc_pin.root(), Path('/pinned'))
-
-    def test_a_staged_tree_without_the_engines_is_a_pin_error(self):
-        with tempfile.TemporaryDirectory() as d, mock.patch.object(agentrc_pin, 'ROOT', Path(d)), \
-                self.assertRaisesRegex(agentrc_pin.PinError, 'lacks'):
-            (Path(d) / 'agentrc').mkdir()
-            agentrc_pin.load('skills/arduino/scripts/arduino_build.py')
-
-    def test_closure_reads_files_without_importing(self):
-        with tempfile.TemporaryDirectory() as d:
-            (Path(d) / 'a.py').write_text("import nothing_here\nFILES = ('b.py',)\n")
-            (Path(d) / 'b.py').write_text('')
-            self.assertEqual(agentrc_pin.closure(d, ['a.py']), ['a.py', 'b.py'])
-            (Path(d) / 'b.py').unlink()
-            with self.assertRaisesRegex(agentrc_pin.PinError, r"lacks \['b.py'\]"):
-                agentrc_pin.closure(d, ['a.py'])
-
-
-class PinFetch(unittest.TestCase):
-    """agentrc_pin.fetch against a local repository standing in for the pinned agentrc."""
-
-    def setUp(self):
-        self.stack = contextlib.ExitStack()
-        self.tmp = Path(self.stack.enter_context(tempfile.TemporaryDirectory()))
-        self.stack.enter_context(mock.patch.dict(os.environ, {
-            **{k: v for k, v in os.environ.items() if not k.startswith('GIT_')}, 'XDG_CACHE_HOME': str(self.tmp)},
-            clear=True))
-        repo = self.tmp / 'upstream'
-        repo.mkdir()
-        git(repo, 'init', '-q')
-        (repo / 'f').write_text('x')
-        git(repo, 'add', '-A')
-        git(repo, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'pin')
-        self.commit = subprocess.run(['git', '-C', str(repo), 'rev-parse', 'HEAD'], capture_output=True,
-                                     text=True).stdout.strip()
-        self.stack.enter_context(mock.patch.object(agentrc_pin, 'pin', lambda: (str(repo), self.commit)))
-        self.dest = agentrc_pin.cache_dir(self.commit)
-
-    def tearDown(self):
-        self.stack.close()
-
-    def race(self, winner):
-        """fetch() with `winner` put at the cache dir by a concurrent fetch while this one checks out."""
-        real = agentrc_pin._git
-
-        def git_then_win(root, *args):
-            p = real(root, *args)
-            if args[0] == 'checkout':
-                winner()
-            return p
-        with mock.patch.object(agentrc_pin, '_git', git_then_win):
-            return agentrc_pin.fetch()
-
-    def test_a_concurrent_first_fetch_reuses_the_winner(self):
-        won = self.tmp / 'won'
-        shutil.copytree(agentrc_pin.fetch(), won, symlinks=True)
-        shutil.rmtree(self.dest)
-        self.assertEqual(self.race(lambda: shutil.copytree(won, self.dest, symlinks=True)), self.dest)
-        self.assertEqual(agentrc_pin.problem(self.dest, self.commit), '')
-        self.assertEqual([p.name for p in self.dest.parent.iterdir()], [self.dest.name])
-
-    def test_a_bad_winner_is_refused(self):
-        def bad():
-            self.dest.mkdir(parents=True)
-            (self.dest / 'junk').write_text('x')
-        with self.assertRaisesRegex(agentrc_pin.PinError, 'not a git checkout'):
-            self.race(bad)
-
-    def test_a_moved_or_modified_cache_is_refused(self):
-        agentrc_pin.fetch()
-        self.assertEqual(agentrc_pin.checkout(), self.dest)
-        (self.dest / 'f').write_text('edited')
-        with self.assertRaisesRegex(agentrc_pin.PinError, 'local changes.*agentrc_pin.py fetch'):
-            agentrc_pin.checkout()
-        self.assertIn('is not a git checkout', agentrc_pin.problem(self.dest.parent, self.commit))
-        self.assertIn(f'not the pin {"0" * 40}', agentrc_pin.problem(self.dest, '0' * 40))
 
 
 if __name__ == '__main__':

@@ -19,9 +19,12 @@ attempt dir <base>/<run-id> (agentrc hil_remote_core). Local records and collect
                                            rig command); after an open whose hold was not taken, release one
                                            the rig took anyway under the session's reason, restoring nothing
 
-Exits: run, session open/stage 0 launched/held/staged, 1 refused or failed (an `error:` line names why), 2 the agentrc
-pin is missing; wait 0 done, 3 running, 4 dead, 5 inconclusive (hil_remote_core); collect 0 complete (a session's:
-fetched); session exec/close pass the rig command's exit through.
+Exits: run, session open/stage 0 launched/held/staged, 1 refused or failed (an `error:` line names why), 2 no usable
+agentrc (agentrc_pin.py; the line names the remedy); wait 0 done, 3 running, 4 dead, 5 inconclusive (hil_remote_core);
+collect 0 complete (a session's: fetched); session exec passes the rig command's exit through, 3 for a session whose
+hold the rig no longer shows; session close passes it through too, except that 3 closes the session and
+exits 0: `restoreExit: 3` in its JSON, the restore unconfirmed, or after an open whose hold was not taken
+`releaseExit: 3`, nothing having run.
 """
 
 import sys
@@ -38,7 +41,7 @@ def main(argv=None):
         hil_test.engine()
         remote = agentrc_pin.load('skills/arduino/scripts/arduino_remote.py')
     except agentrc_pin.PinError as e:
-        print(f'error: {e}', file=sys.stderr)
+        print(f'error: {e}' + (f' ({e.remedy})' if e.remedy else ''), file=sys.stderr)
         return 2
     return remote.run(hil_test, argv)
 

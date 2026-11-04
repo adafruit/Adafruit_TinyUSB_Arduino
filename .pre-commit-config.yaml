@@ -32,7 +32,8 @@ repos:
   hooks:
   - id: agent-contract-tests
     name: agent contract tests
-    entry: sh -c 'python3 .claude/skills/hil-contract/scripts/agentrc_pin.py fetch >/dev/null && python3 -m unittest discover -s .claude/test -p "test_*.py"'
+    # the installed agentrc on a dev PC; in CI the pinned one, fetched first
+    entry: python3 .claude/skills/hil-contract/scripts/agentrc_pin.py test
     language: python
     additional_dependencies: [pyserial==3.5]
     pass_filenames: false

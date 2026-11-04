@@ -11,13 +11,15 @@ checks are this library's (`hil_test.py`). Manual runs only: no CI job runs this
 
 - `hil_test.py`: the harness on the host with the boards.
 - `hil_remote.py`: drives the harness on ci.lan from the dev PC that built the firmware.
-- `agentrc_pin.py`: the agentrc commit both load their shared scripts from.
+- `agentrc_pin.py`: which agentrc both load their shared scripts from: the installed one
+  (`${AGENTRC_DIR:-$HOME/.claude}`) on a dev PC, never fetched; in CI the commit `test/hil/agentrc.json` pins; on the
+  rig, the copy `hil_remote.py` staged.
 
 Each script's docstring has its full usage.
 
 ```bash
 H=.claude/skills/hil-contract/scripts
-python3 $H/agentrc_pin.py fetch            # once per pin: test/hil/agentrc.json into ~/.cache/adafruit-tinyusb-arduino/
+python3 $H/agentrc_pin.py check            # the agentrc a run would load, validated; its root
 ```
 
 ## Hosts/rosters
@@ -183,7 +185,7 @@ python3 $H/hil_remote.py session close <id>                         # restore th
 
 ## Reservation
 
-The lock helper is `hil_test.py lock (hold|release|status) ...`, agentrc's `hil_lock.py` at the pin, with lock dir
+The lock helper is `hil_test.py lock (hold|release|status) ...`, agentrc's `hil_lock.py`, with lock dir
 `/tmp/tinyusb-hil-locks`.
 
 - `hil_test.py run` and `commission` lock each board themselves (protected, reason `hil_test.py`, `hil_test.py
@@ -196,8 +198,9 @@ The lock helper is `hil_test.py lock (hold|release|status) ...`, agentrc's `hil_
   boards: `host_device_info` reporting every attached device), every child proven ended, and the hold released.
 - The battery restores it after each board. `session close` restores, checks and releases in one command, and
   releases nothing when the restore fails. A session command exits 3 when the lock record shows no live holder under
-  the session's reason (an unreadable record exits 2); a `session close` that gets 3 closes the session, its restore
-  unconfirmed (an earlier close's answer lost to a dropped ssh, or a holder that died).
+  the session's reason; an unreadable record, or a pending-session record listing a child not proven ended, still
+  exits 2. After a 3, run `session close`: it closes the session, its restore unconfirmed (an earlier close's answer
+  lost to a dropped ssh, or a holder that died); the board's next run or session flashes its own image.
 
 ## Results
 
@@ -262,9 +265,9 @@ that as the blocker for the human rather than retrying.
 
 A failed `session close`: the session keeps its hold (its `reason` in `.hil-remote/<id>.session.json`). Once the
 session's pending children are proven ended (the next session command clears the record by itself), run
-`hil_remote.py session close <id>` again. It restores from the session's own `bundles/restore/` record, and its JSON is the last stdout line and
-`build/hil-manual/<board>-restore-<time>/result.json` in the attempt dir. If that close fails too, keep the hold and
-report.
+`hil_remote.py session close <id>` again. It restores from the session's own `bundles/restore/` record, and its JSON
+is the last stdout line and `build/hil-manual/<board>-restore-<time>/result.json` in the attempt dir. If that close
+fails too, keep the hold and report.
 
 A pending-session record clears itself on the next session command once every receipt rechecks done. One holding an
 unrecheckable session (its supervisor died) needs a reviewed clear this contract does not give: a blocker for the

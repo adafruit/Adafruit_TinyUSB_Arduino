@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The build contract's profile: check_build.py's board tables against CI's matrix and ci-arduino's filters, its
-source rules and the selections they make through the pinned agentrc arduino_build.py, its dependencies and its
+source rules and the selections they make through agentrc's arduino_build.py, its dependencies and its
 VID:PID adapter. The mechanics (compiles, provenance, images, the HIL record) are agentrc's and tested there. Nothing
 is compiled; a real build is evidence only from a run of the script itself."""
 import contextlib
@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / '.claude' / 'skills' / 'build' / 'scripts'))
 import check_build as cb  # noqa: E402
 
-eng = cb.engine()   # the pinned agentrc's arduino_build bound to this profile: a missing pin fails here
+eng = cb.engine()   # agentrc's arduino_build bound to this profile: a missing agentrc fails here
 
 
 def run_main(argv):
@@ -178,11 +178,12 @@ class Selection(unittest.TestCase):
                               str(ROOT / 'test/hil/ci.json')])
         self.assertEqual((code, out['hil']['full']), (0, True))
 
-    def test_a_missing_pin_names_the_fetch(self):
+    def test_an_unavailable_agentrc_names_its_remedy(self):
         with mock.patch.object(cb, 'E', None), \
-                mock.patch.object(cb.agentrc_pin, 'checkout', side_effect=cb.agentrc_pin.PinError('agentrc pin: gone')):
+                mock.patch.object(cb.agentrc_pin, 'identity',
+                                  side_effect=cb.agentrc_pin.PinError('gone', 'install it')):
             code, out = run_main(['--select-only', '--scope', 'README.md'])
-        self.assertEqual((code, out['error'], out['remedy']), (2, 'agentrc pin: gone', cb.agentrc_pin.FETCH_HINT))
+        self.assertEqual((code, out['error'], out['remedy']), (2, 'gone', 'install it'))
 
 
 class VidPid(unittest.TestCase):
