@@ -267,8 +267,9 @@ def check_local(root, raw, have, added, removed):
         errors.append(f'{MANIFEST} changed while preparing')
     errors += [f'{p}: {kind} against the recorded upstream commit' for kind, ps in mismatches(root, have).items()
                for p in ps]
+    removed_set = set(removed)
     return errors + [f'{p}: already exists' for p in added
-                     if os.path.lexists(root / p) and not cleared(root, p, set(removed))]
+                     if os.path.lexists(root / p) and not cleared(root, p, removed_set)]
 
 
 def write_file(f, data, exe):
