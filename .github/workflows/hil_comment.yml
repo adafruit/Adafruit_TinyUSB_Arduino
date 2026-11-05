@@ -1,0 +1,133 @@
+name: HIL Comment
+
+# The sticky HIL report on the PR a HIL run is for. It runs from the default branch, so a fork's PR gets it too:
+# the PR comes from the run's own metadata, the rig attempt from the jobs API, and every downloaded artifact is data
+# read by the default branch's hil_workflow.py, never executed.
+on:
+  workflow_run:
+    workflows: [HIL]
+    types: [completed]
+
+permissions:
+  contents: read
+
+env:
+  H: .claude/skills/hil-contract/scripts
+
+jobs:
+  pr_number:
+    if: github.event.workflow_run.event == 'pull_request' && github.repository == 'adafruit/Adafruit_TinyUSB_Arduino'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      number: ${{ steps.resolve.outputs.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Resolve the PR from the run's metadata
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          PRS_JSON: ${{ toJSON(github.event.workflow_run.pull_requests) }}
+        run: |
+          num=$(python3 "$H"/hil_workflow.py pr --repo "$GITHUB_REPOSITORY" --head-sha "$HEAD_SHA" \
+                  --head-branch "$HEAD_BRANCH" --head-repo "$HEAD_REPO" --prs "$PRS_JSON")
+          echo "number=$num" >> "$GITHUB_OUTPUT"
+
+  hil-comment:
+    needs: pr_number
+    if: github.event.workflow_run.conclusion != 'cancelled' && needs.pr_number.outputs.number != ''
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    # one writer per PR at a time, each checking freshness just before it posts
+    concurrency:
+      group: hil-comment-${{ needs.pr_number.outputs.number }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ needs.pr_number.outputs.number }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: The attempt the rig job ran in
+        id: rig
+        run: |
+          attempt=$(python3 "$H"/hil_workflow.py rig-attempt --repo "$GITHUB_REPOSITORY" --run-id "$RUN_ID" \
+                      --attempt "$RUN_ATTEMPT")
+          echo "attempt=$attempt" >> "$GITHUB_OUTPUT"
+
+      # each into its own dir outside the checkout
+      - name: Download the selection
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: hil-selection
+          path: ${{ runner.temp }}/hil/selection
+          run-id: ${{ env.RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Download the build statuses
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: hil-status-*
+          path: ${{ runner.temp }}/hil/status
+          run-id: ${{ env.RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Download the rig's summary
+        if: steps.rig.outputs.attempt != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: hil-run-${{ steps.rig.outputs.attempt }}
+          path: ${{ runner.temp }}/hil/run
+          run-id: ${{ env.RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Render the report
+        env:
+          RIG_ATTEMPT: ${{ steps.rig.outputs.attempt }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          IN=$RUNNER_TEMP/hil
+          python3 "$H"/hil_workflow.py render --selection "$IN/selection" --status "$IN/status" --run "$IN/run" \
+            --run-id "$RUN_ID" --rig-attempt "$RIG_ATTEMPT" --pr-head "$HEAD_SHA" --run-url "$RUN_URL" \
+            --conclusion "$CONCLUSION" --out "$RUNNER_TEMP/comment.md"
+
+      # stale: a newer push, run or attempt reports instead; unknown: no post, and this job fails
+      - name: Check this run is the newest for the PR head
+        id: fresh
+        run: |
+          if why=$(python3 "$H"/hil_workflow.py fresh --repo "$GITHUB_REPOSITORY" --pr "$PR" --run-id "$RUN_ID" \
+                     --attempt "$RUN_ATTEMPT" --head-sha "$HEAD_SHA"); then
+            echo "post=true" >> "$GITHUB_OUTPUT"
+          else
+            code=$?
+            [ "$code" = 1 ] || { echo "::error title=HIL report not posted::$why"; exit "$code"; }
+            echo "::notice title=HIL report not posted::$why"
+          fi
+
+      - name: Post the report
+        if: steps.fresh.outputs.post == 'true'
+        uses: marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405 # v2.9.4
+        with:
+          header: hil-report
+          path: ${{ runner.temp }}/comment.md
+          number: ${{ env.PR }}

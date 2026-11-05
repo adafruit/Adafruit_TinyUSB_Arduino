@@ -7,10 +7,14 @@ description: The Adafruit TinyUSB Arduino HIL contract, under agentrc's `hil` ru
 
 Read agentrc's `hil` skill first; this page supplies its contract sections. The mechanics are agentrc's `arduino`
 skill (`arduino_hil.py`, `arduino_remote.py`), shared with Adafruit SPIFlash; the battery, the host step and the roster
-checks are this library's (`hil_test.py`). Manual runs only: no CI job runs this battery. Scripts, all in `scripts/`:
+checks are this library's (`hil_test.py`). The battery runs by hand (Execution) and in CI on pull requests (CI).
+Scripts, all in `scripts/`:
 
 - `hil_test.py`: the harness on the host with the boards.
 - `hil_remote.py`: drives the harness on ci.lan from the dev PC that built the firmware.
+- `hil_ci.py`: CI's setup and packed tree per board on a hosted runner, and the battery over them on the rig (agentrc
+  `arduino_ci.py`).
+- `hil_workflow.py`: the CI workflows' selection, build status, and the PR report.
 - `agentrc_pin.py`: which agentrc both load their shared scripts from: the installed one
   (`${AGENTRC_DIR:-$HOME/.claude}`) on a dev PC, never fetched; in CI the commit `test/hil/agentrc.json` pins; on the
   rig, the copy `hil_remote.py` staged.
@@ -183,6 +187,28 @@ python3 $H/hil_remote.py session close <id>                         # restore th
   under
   `hil_test.py lock hold B --reason <reason>`.
 
+## CI
+
+`.github/workflows/hil.yml` runs the battery on every pull request, forks included as in tinyusb, and on a
+`workflow_dispatch` naming roster boards; `hil_comment.yml`, from the default branch, posts the sticky report.
+
+- `select` takes the PR-scoped selector's boards (Selection) against `HEAD^1`, the merge commit's base, keeping
+  `hil.uncovered` and `build.uncovered`; none outside adafruit/Adafruit_TinyUSB_Arduino.
+- `hil-build`, one hosted leg per board, sets up as adafruit/ci-arduino does (its `actions_install.sh`, `ARDUINO_LIBS`,
+  then `hil_ci.py setup`: its `install_library_deps()` and `install_platform()` for the board's CI platform): the
+  latest arduino-cli, cores and libraries, nothing pinned. It builds the clean record (Build) and packs it with the
+  harness (`hil_ci.py pack`, the tree `hil_remote.py` would stage), and uploads its outcome and versions.
+- `hil-run` on ci.lan's `arduino-tinyusb` runner admits each board's packed tree (this run, head and board; every file
+  pinned by its manifest; this checkout's roster) and runs the battery in it, one board at a time: a locked board is
+  admitted again every 30 s up to 600 s, a fail is retried once (a passing retry is flaky), and no attempt starts past
+  the 60 min deadline. Its state dir, `_work/Adafruit_TinyUSB_Arduino/hil-state/<run id>-<attempt>/` on ci.lan, keeps
+  each board's tree (`<board>/tree`, the attempt dir Recovery runs in) and every attempt's report and log
+  (`<board>/run-<n>`); `summary.json` there is what the report shows.
+- The admission checks consistency, not trust: a pull request's harness and firmware run on the rig as the runner's
+  user; the fork-PR approval setting of the repository is the gate.
+- `hil-comment` posts only the newest attempt of the PR head's newest run. A board's row shows its build, verdict, each
+  test, the restore, the time and the core that built it; uncovered families and paths are listed, never passed.
+
 ## Reservation
 
 The lock helper is `hil_test.py lock (hold|release|status) ...`, agentrc's `hil_lock.py`, with lock dir
@@ -227,7 +253,9 @@ The lock helper is `hil_test.py lock (hold|release|status) ...`, agentrc's `hil_
 
 ## Recovery
 
-Recovery needs a separate dispatch naming the board. It applies to:
+Recovery needs a separate dispatch naming the board. A CI run's board is recovered on ci.lan from its state dir: the
+run dir is `<board>/run-<n>`, the tree to run commands in `<board>/tree` (staged, so `--staged manifest.json`). It
+applies to:
 
 - a report row with `cleanup.holder` (exit 4), or a `commission` that exited 4: its
   `build/hil-manual/commission-<board>-<time>/result.json` carries the holder token and receipts and stands in

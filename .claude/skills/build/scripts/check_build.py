@@ -61,13 +61,13 @@ BOARDS = {
     'raspberry_pi_pico2': {'fqbn': 'rp2040:rp2040:rpipico2:flash=4194304_0,arch=arm,dbgport=Disabled,dbglvl=None,'
                                    'usbstack=tinyusb_host', 'family': 'rp2040', 'filters': 'pico_rp2040_tinyusb_host',
                            'span': (0x10000000, 0x10400000), 'role': 'host'},
-    # espressif:esp32 (arduino-esp32 3.3.x; CI's esp32:esp32 entries above stay as they are). `span` is the SPI flash
-    # (FlashSize), `chip` esptool's --chip, `fixture` a HIL file compiled into every sketch of the board.
-    'espressif_s3_devkitm': {'fqbn': 'espressif:esp32:esp32s3:USBMode=default,CDCOnBoot=cdc,FlashSize=4M,'
+    # esp32:esp32, what ci-arduino installs for their CI platforms. `span` is the SPI flash (FlashSize), `chip`
+    # esptool's --chip, `fixture` a HIL file compiled into every sketch of the board.
+    'espressif_s3_devkitm': {'fqbn': 'esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=cdc,FlashSize=4M,'
                                      'PSRAM=disabled', 'family': 'esp32', 'filters': 'feather_esp32s3',
                              'span': (0, 0x400000), 'chip': 'esp32s3', 'fixture': 'test/hil/esp32_ts3usb30.cpp'},
     # ChipVariant prev3: the farm's P4 is revision v0.1 (openocd-esp32's examination)
-    'espressif_p4_function_ev': {'fqbn': 'espressif:esp32:esp32p4:USBMode=default,CDCOnBoot=cdc,FlashSize=4M,'
+    'espressif_p4_function_ev': {'fqbn': 'esp32:esp32:esp32p4:USBMode=default,CDCOnBoot=cdc,FlashSize=4M,'
                                          'ChipVariant=prev3', 'family': 'esp32', 'filters': 'esp32p4',
                                  'span': (0, 0x400000), 'chip': 'esp32p4', 'fixture': 'test/hil/esp32_ts3usb30.cpp'},
 }
@@ -95,7 +95,8 @@ HIL_SKETCHES = {'device': ('examples/CDC/serial_echo', 'examples/HID/hid_generic
 CORE_CONSUMED = ('src/arduino/Adafruit_TinyUSB_API.h', 'src/arduino/Adafruit_USBD_CDC.h',
                  'src/arduino/Adafruit_USBD_Interface.h')
 CONTRACT_TESTS = {'build': '.claude/test/test_build.py', 'hil': '.claude/test/test_hil.py',
-                  'hil_remote': '.claude/test/test_hil_remote.py'}
+                  'hil_remote': '.claude/test/test_hil_remote.py', 'hil_ci': '.claude/test/test_hil_ci.py',
+                  'hil_workflow': '.claude/test/test_hil_workflow.py'}
 SMOKE_BOARDS = ('raspberry_pi_pico', 'metro_m4_express', 'espressif_s3_devkitm')   # one per image kind
 NOTHING = ('.claude/', '.github/', '.codespell/', 'docs/', 'tools/', '.agents', '.gitignore', '.codespellrc',
            '.coderabbit.yaml', '.pre-commit-config.yaml', 'library.json', 'LICENSE')
@@ -106,10 +107,13 @@ CONTRACT_FILES = ('.claude/skills/build/scripts/check_build.py', '.claude/skills
                   '.claude/skills/hil-contract/scripts/hil_remote.py',
                   '.claude/skills/hil-contract/scripts/agentrc_pin.py', 'test/hil/agentrc.json')
 AGENTRC = None   # set by engine(): agentrc_pin.identity()
+HIL_WORKFLOWS = ('.github/workflows/hil.yml', '.github/workflows/hil_comment.yml')
 
 
 def classify_source(path):
     """The library's own source rules (arduino_build.classify falls through to the common ones on None)."""
+    if path in HIL_WORKFLOWS:
+        return 'hil', None, 'the HIL workflow: its tests, and the battery on every roster board'
     if path in CORE_CONSUMED:
         return 'uncovered', None, 'the cores compile their own sources against their bundled copy of this header'
     if path.startswith('src/arduino/ports/'):

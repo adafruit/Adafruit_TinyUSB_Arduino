@@ -165,6 +165,14 @@ class Selection(unittest.TestCase):
         self.assertEqual(sel['builds'], {'espressif_p4_function_ev': sketches, 'espressif_s3_devkitm': sketches})
         self.assertEqual(sel['hil']['boards'], ['espressif_p4_function_ev'])
 
+    def test_hil_workflow_and_ci_scripts_run_the_battery_on_every_board(self):
+        roster = ['raspberry_pi_pico', 'metro_m4_express']
+        for path in (*cb.HIL_WORKFLOWS, '.claude/skills/hil-contract/scripts/hil_ci.py',
+                     '.claude/skills/hil-contract/scripts/hil_workflow.py'):
+            sel = eng.select([path], roster=roster)
+            self.assertEqual((sel['hil']['full'], sel['hil']['boards']), (True, sorted(roster)), path)
+        self.assertEqual(eng.select(['.github/workflows/githubci.yml'], roster=roster)['hil']['boards'], [])
+
     def test_build_contract_change_smoke_builds_each_image_kind(self):
         sel = eng.select(['.claude/skills/build/scripts/check_build.py'])
         self.assertEqual(sel['builds'], {b: ['examples/CDC/serial_echo'] for b in

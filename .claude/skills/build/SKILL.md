@@ -59,14 +59,14 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
     in neither this table nor CI's matrix): no build here compiles it, and `test_build.py` pins that list.
   - This script builds its tests plus a `serial_echo` smoke build per image kind (`raspberry_pi_pico`,
     `metro_m4_express`, `espressif_s3_devkitm`); a HIL fixture (`test/hil/esp32_ts3usb30.cpp`) builds the HIL
-    sketches of its boards; the HIL harness and rosters (`.claude/skills/hil-contract/scripts/`, `test/hil/`) run
-    their tests and select every roster board for HIL; docs, agent and repo metadata build nothing; anything else is
+    sketches of its boards; the HIL harness and rosters (`.claude/skills/hil-contract/scripts/`, `test/hil/`) and the
+    HIL workflows (`HIL_WORKFLOWS`) run their tests and select every roster board for HIL; docs, agent and repo metadata build nothing; anything else is
     uncovered.
 - **Boards** (`BOARDS`): CI's matrix (`.github/workflows/githubci.yml`) with adafruit/ci-arduino `all_platforms.py`'s
   FQBNs under the same names, plus the rig boards named as in tinyusb's HIL farm: `raspberry_pi_pico`,
   `adafruit_fruit_jam`, `metro_m4_express`, the native-host `raspberry_pi_pico_w` and `raspberry_pi_pico2` (`role`
-  host), and `espressif_s3_devkitm` and `espressif_p4_function_ev` on `espressif:esp32` (arduino-esp32 3.3; CI's
-  `esp32:esp32` boards keep their own core). An ESP32 rig board compiles a copy of each sketch beside its build dir
+  host), and `espressif_s3_devkitm` and `espressif_p4_function_ev`. Each rig board builds on the core ci-arduino
+  installs for its CI platform (`filters`), which the HIL CI sets up (the HIL contract's CI). An ESP32 rig board compiles a copy of each sketch beside its build dir
   with its `fixture` added, leaving `examples/` untouched, and snapshots the core's `boot_app0.bin` into the build
   dir for `flash_args`. Example eligibility mirrors ci-arduino `build_platform.py`: `.<platform>.test.skip`,
   a `.skip.txt` line equal to the platform, and `.<platform>.test.only` when any `.*.test.only` exists; a rig board
