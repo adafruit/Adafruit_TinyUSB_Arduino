@@ -22,6 +22,7 @@ from the default branch, every artifact read as untrusted data.
 
 import argparse
 import json
+import math
 import os
 import re
 import subprocess
@@ -234,7 +235,7 @@ def literal(v, table=False):
 
 
 def duration(s):
-    if not isinstance(s, (int, float)):
+    if not isinstance(s, (int, float)) or isinstance(s, float) and not math.isfinite(s):
         return '—'
     s = int(s)
     return f'{s}s' if s < 60 else f'{s // 60}m{s % 60:02d}s'

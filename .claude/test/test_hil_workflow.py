@@ -330,6 +330,14 @@ class Render(Tmp):
         self.selection(hil={'boards': 1, 'uncovered': 1}, build=[])
         self.assertIn('No farm board is reached by this change.', self.render())
 
+    def test_a_non_finite_duration_renders_as_unknown(self):
+        self.selection()
+        for run_s in ('1e309', 'NaN'):
+            self.summary([board('raspberry_pi_pico', runS='RUN_S')])
+            p = self.tmp / 'run' / 'summary.json'
+            p.write_text(p.read_text().replace('"RUN_S"', run_s))
+            self.assertIn('| ✅ | — | `rp2040:rp2040 5.4.4` |', self.render())
+
     def test_a_huge_report_is_truncated(self):
         self.selection(boards=tuple(f'b{i}' for i in range(400)))
         self.summary([board(f'b{i}', 'fail', detail='x' * 400) for i in range(400)])
