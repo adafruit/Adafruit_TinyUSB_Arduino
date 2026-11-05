@@ -258,9 +258,14 @@ def board_row(name, status, r):
     return [literal(name, True), build, verdict] + tests + [restore, duration(r.get('runS')), core_of(status, r)]
 
 
+def firmware_of(r):
+    fw = (r or {}).get('firmware')
+    return fw if isinstance(fw, dict) else {}
+
+
 def core_of(status, r):
-    fw = (r or {}).get('firmware') if isinstance((r or {}).get('firmware'), dict) else None
-    plat = fw.get('platform') if fw and isinstance(fw.get('platform'), dict) else (status or {}).get('platform')
+    fw = firmware_of(r)
+    plat = fw.get('platform') if isinstance(fw.get('platform'), dict) else (status or {}).get('platform')
     if not isinstance(plat, dict) or not plat.get('id'):
         return '—'
     return literal(f'{plat["id"]} {plat.get("version") or "?"}', True)
@@ -321,6 +326,10 @@ def render(sel, statuses, summary, a):
                 for t in listed(r.get('tests')):
                     if isinstance(t, dict) and t.get('pass') is False:
                         notes.append(f'  - {literal(t.get("test"))}: {literal(t.get("detail"))}')
+            drifted = [h for h in listed(firmware_of(r).get('driftedHeaders')) if isinstance(h, str)]
+            if drifted:
+                notes.append(f'- {literal(b)}: the core\'s bundled copy of this library differs from this checkout in '
+                             f'{", ".join(map(literal, drifted))}; the result covers that mix')
         if rows and set(rows) - set(boards):
             notes.append(f'- rows for boards not selected: {literal(" ".join(sorted(map(str, set(rows) - set(boards)))))}')
         if notes:

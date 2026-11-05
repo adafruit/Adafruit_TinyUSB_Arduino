@@ -83,7 +83,7 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
   whatever else is installed (the primary checkout under `~/Arduino/libraries`, a core's bundled copy). The build
   fails if arduino-cli's `used_libraries` names another directory for it. `foreignHeaders` lists every header the
   build's `.d` files took from another copy of this library, with `matches` against this checkout's copy; a
-  mismatch is a warning on a plain build and refuses a HIL record.
+  mismatch is a warning on a plain build.
 - **Private dirs for parallel agents.** Each build uses `build/agent-<pid>/<board>/<sketch>`, removed when it passes
   (its `artifacts` say what it produced); a failed one is kept for its log. `--shared` builds into
   `build/hil/<board>/<sketch>` and keeps it for flashing, holding `build/hil/.lock` while it builds (a second shared
@@ -101,7 +101,8 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
   not checked, since the SAMD ELF's first starts at 0x0. For an esptool board it is the core's `flash_args`: a line of
   options, then each image at its offset, every file in the build dir, ascending, not overlapping, inside the span.
   A device sketch needs its VID:PID: a `-D` define, on ESP32 the variant's `pins_arduino.h` (the S3's 303a:1001),
-  else the library's fallback. It also refuses a foreign header that differs. It records (schema 2, the `arduino`
+  else the library's fallback. A differing foreign header refuses unless the build's core bundles it, its
+  drift then noted in the HIL report. It records (schema 2, the `arduino`
   skill's The HIL build record) HEAD, the FQBN, the platform (id, version, install dir, and commit and dirty state
   when the core is a git checkout), the arduino-cli version, the resolved dependencies with their contents' sha256,
   the roster's sha256, the contract files' and the agentrc engines' sha256, the board's role, ESP `chip` and `fixture` (path and sha256), and per sketch its
@@ -110,7 +111,7 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
 - **Experimental records** (`--experimental`, with `--record`) are for debug and instrumentation: a dirty tree and
   `--build-property` are allowed, untracked files under `src/`, `examples/` or `test/hil/` are refused (put
   instrumentation in tracked files), the source must not change during the build, and `git diff HEAD` is saved beside
-  the record (its path with `.patch` for `.json`, named and hashed in `patch`). A drifted foreign header is allowed
+  the record (its path with `.patch` for `.json`, named and hashed in `patch`). Any drifted foreign header is allowed
   and listed. The HIL battery and the restore refuse them; a manual flash or GDB session under a hold accepts them.
 - **Debug builds**: both cores compile with `-g`, so the kept ELF (`build/hil/<board>/<sketch>/<sketch>.ino.elf`)
   carries symbols at the release optimisation (`-Os`). Other flags go through `--build-property` (each core's

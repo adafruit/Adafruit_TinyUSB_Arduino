@@ -241,6 +241,20 @@ class Render(Tmp):
         self.assertIn('✅ pass (flaky)', text)
         self.assertIn('passed on retry, waited 40s for the board', text)
 
+    def test_a_core_copy_that_drifted_is_noted_even_on_pass(self):
+        self.selection(boards=('metro_m4_express', 'raspberry_pi_pico'))
+        fw = {'platform': {'id': 'adafruit:samd', 'version': '1.7.17'},
+              'driftedHeaders': ['src/arduino/Adafruit_TinyUSB_API.h', 7, 'src/arduino/Adafruit_USBD_CDC.h']}
+        self.summary([board('metro_m4_express', firmware=fw), board('raspberry_pi_pico')])
+        text = self.render()
+        self.assertIn('**2** pass', text)
+        self.assertIn('- `metro_m4_express`: the core\'s bundled copy of this library differs from this checkout in '
+                      '`src/arduino/Adafruit_TinyUSB_API.h`, `src/arduino/Adafruit_USBD_CDC.h`; the result covers '
+                      'that mix', text)
+        self.assertNotIn('`raspberry_pi_pico`: the core', text)
+        self.summary([board('metro_m4_express', firmware={'driftedHeaders': 'x'}), board('raspberry_pi_pico')])
+        self.assertNotIn('bundled copy', self.render())
+
     def test_hostile_report_text_renders_inert(self):
         self.selection()
         self.summary([board('raspberry_pi_pico', 'fail', detail='@hathach | <img src=x> `code` [x](http://e)\n## h',
