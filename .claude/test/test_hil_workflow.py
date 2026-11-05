@@ -123,6 +123,11 @@ class Api(unittest.TestCase):
             out = run('pr', '--repo', W.UPSTREAM, '--head-sha', HEAD, '--head-branch', 'fix', '--head-repo', 'u/fork',
                       '--prs', '[]')[1]
         self.assertEqual(out, '5\n')
+        with mock.patch.object(W, 'gh', return_value=pulls) as gh:   # the head selector is one query value
+            out = run('pr', '--repo', W.UPSTREAM, '--head-sha', HEAD, '--head-branch', 'a#b+c&d', '--head-repo',
+                      'u/fork', '--prs', '[]')[1]
+        self.assertEqual(out, '5\n')
+        self.assertEqual(gh.call_args[0][0], f'repos/{W.UPSTREAM}/pulls?state=open&per_page=100&head=u%3Aa%23b%2Bc%26d')
 
     def test_an_ambiguous_or_missing_pr_gets_no_comment(self):
         pulls = [{'number': n, 'head': {'sha': HEAD}, 'base': {'repo': {'full_name': W.UPSTREAM}}} for n in (5, 6)]
@@ -309,12 +314,34 @@ class Render(Tmp):
         self.assertIn('**1** not reported', text)
         self.assertIn('rows for boards not selected: `adafruit_fruit_jam`', text)
 
+    def test_malformed_summary_fields_render_as_unknown(self):
+        self.selection(boards=('metro_m4_express', 'raspberry_pi_pico'))
+        self.write('status/hil-status-raspberry_pi_pico-2/raspberry_pi_pico.json',
+                   {'board': 'raspberry_pi_pico', 'attempt': 2, 'outcome': []})
+        pico = board('raspberry_pi_pico', verdict=[])
+        pico['tests'] = 1
+        self.summary([board([]), pico])
+        text = self.render()
+        self.assertIn('**2** not reported', text)
+        self.assertIn('| `metro_m4_express` | ❔ | ❔ |', text)
+        self.assertIn('| `raspberry_pi_pico` | ❔ | ❔ | — | — | — | — |', text)
+        self.summary(1)
+        self.assertIn('| `raspberry_pi_pico` | ❔ | ❔ |', self.render())
+        self.selection(hil={'boards': 1, 'uncovered': 1}, build=[])
+        self.assertIn('No farm board is reached by this change.', self.render())
+
     def test_a_huge_report_is_truncated(self):
         self.selection(boards=tuple(f'b{i}' for i in range(400)))
         self.summary([board(f'b{i}', 'fail', detail='x' * 400) for i in range(400)])
+        with mock.patch.object(W, 'MAX_COMMENT', 1 << 30):
+            full = self.render()
+        self.assertEqual(full[W.MAX_COMMENT - 1:W.MAX_COMMENT + 1], 'xx')   # the limit falls inside a code span
         text = self.render()
         self.assertLessEqual(len(text), W.MAX_COMMENT + 100)
-        self.assertIn('truncated', text)
+        body, marker = text.split('\n…truncated', 1)
+        self.assertIn('see the run', marker)
+        for ln in body.splitlines():   # every line kept whole, so no code span is left open
+            self.assertIn(ln, full.splitlines())
 
 
 if __name__ == '__main__':

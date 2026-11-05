@@ -27,6 +27,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[4]
 UPSTREAM = 'adafruit/Adafruit_TinyUSB_Arduino'
@@ -133,7 +134,8 @@ def cmd_pr(a):
                ((p.get('base') or {}).get('repo') or {}).get('url', '').endswith(f'/repos/{a.repo}')]
     if not numbers and a.head_branch and a.head_repo:
         try:
-            pulls = gh(f'repos/{a.repo}/pulls?state=open&per_page=100&head={a.head_repo.split("/")[0]}:{a.head_branch}')
+            head = quote(f'{a.head_repo.split("/")[0]}:{a.head_branch}', safe='')   # a branch may hold '#', '+', '&'
+            pulls = gh(f'repos/{a.repo}/pulls?state=open&per_page=100&head={head}')
         except ApiError as e:   # unknown, not absent: the comment job must not pass as if no PR existed
             print(e, file=sys.stderr)
             return 2
@@ -208,6 +210,16 @@ def read_json(base, rel):
         return None
 
 
+def listed(v):
+    """v when it is a list, else empty: an artifact's nested types are untrusted too."""
+    return v if isinstance(v, list) else []
+
+
+def as_str(v):
+    """v when it is a string, else None, so an untrusted value is a safe dict key."""
+    return v if isinstance(v, str) else None
+
+
 def literal(v, table=False):
     """Text on one line as an inline code span, so no Markdown, HTML, mention or link in it renders; pipes escaped
     in a table cell (GFM unescapes them inside the span)."""
@@ -233,14 +245,15 @@ def short(sha):
 
 
 def board_row(name, status, r):
-    build = {'success': '✅', 'failure': '❌', 'cancelled': '⚪'}.get((status or {}).get('outcome'), '❔')
+    build = {'success': '✅', 'failure': '❌', 'cancelled': '⚪'}.get(as_str((status or {}).get('outcome')), '❔')
     if r is None:
         return [literal(name, True), build, '❔'] + ['—'] * len(TESTS) + ['—', '—', core_of(status, None)]
-    results = {t.get('test'): t.get('pass') for t in r.get('tests') or [] if isinstance(t, dict)}
+    results = {t['test']: t.get('pass') for t in listed(r.get('tests'))
+               if isinstance(t, dict) and as_str(t.get('test'))}
     tests = [('✅' if results[t] else '❌') if t in results else '—' for t in TESTS]
     cleanup = r.get('cleanup') if isinstance(r.get('cleanup'), dict) else None
     restore = '—' if not cleanup or cleanup.get('state') == 'untouched' else '✅' if cleanup.get('pass') else '❌'
-    verdict = VERDICT.get(r.get('verdict'), '❔') + (' (flaky)' if r.get('flaky') else '')
+    verdict = VERDICT.get(as_str(r.get('verdict')), '❔') + (' (flaky)' if r.get('flaky') else '')
     return [literal(name, True), build, verdict] + tests + [restore, duration(r.get('runS')), core_of(status, r)]
 
 
@@ -258,7 +271,7 @@ def render(sel, statuses, summary, a):
     if sel is None or sel.get('runId') != str(a.run_id):
         return lines + ['⚠️ The selection of this run is unavailable: no HIL result for this push.']
     hil = sel.get('hil') if isinstance(sel.get('hil'), dict) else {}
-    boards = [b for b in hil.get('boards') or [] if isinstance(b, str)]
+    boards = [b for b in listed(hil.get('boards')) if isinstance(b, str)]
     if not sel.get('eligible'):
         lines.append(f'HIL not run: {literal(sel.get("reason") or "not eligible")}')
     elif not boards:
@@ -273,11 +286,12 @@ def render(sel, statuses, summary, a):
             why = (f'The rig summary names run {literal(summary.get("runId"))} attempt '
                    f'{literal(summary.get("attempt"))}, not this one: hardware result unavailable.')
         else:
-            rows = {r.get('board'): r for r in summary.get('boards') or [] if isinstance(r, dict)}
+            rows = {r['board']: r for r in listed(summary.get('boards'))
+                    if isinstance(r, dict) and as_str(r.get('board'))}
         if rows:
             counts = {}
             for b in boards:
-                v = (rows.get(b) or {}).get('verdict')
+                v = as_str((rows.get(b) or {}).get('verdict'))
                 counts[v] = counts.get(v, 0) + 1
             lines.append(' · '.join(f'**{counts.get(v, 0)}** {VERDICT[v].split(" ", 1)[1]}' for v in VERDICT
                                     if counts.get(v)) + (f' · **{counts[None]}** not reported' if counts.get(None)
@@ -303,15 +317,16 @@ def render(sel, statuses, summary, a):
                          if x]
                 notes.append(f'- {literal(b)}: {literal(r.get("detail") or r.get("verdict"))}'
                              + (f' ({", ".join(extra)})' if extra else ''))
-                for t in r.get('tests') or []:
+                for t in listed(r.get('tests')):
                     if isinstance(t, dict) and t.get('pass') is False:
                         notes.append(f'  - {literal(t.get("test"))}: {literal(t.get("detail"))}')
         if rows and set(rows) - set(boards):
             notes.append(f'- rows for boards not selected: {literal(" ".join(sorted(map(str, set(rows) - set(boards)))))}')
         if notes:
             lines += [''] + notes
-    uncovered = [u for u in hil.get('uncovered') or [] if isinstance(u, dict)]
-    paths = [u for u in ((sel.get('build') or {}).get('uncovered') or []) if isinstance(u, dict)]
+    uncovered = [u for u in listed(hil.get('uncovered')) if isinstance(u, dict)]
+    build = sel.get('build') if isinstance(sel.get('build'), dict) else {}
+    paths = [u for u in listed(build.get('uncovered')) if isinstance(u, dict)]
     if uncovered or paths:
         lines += ['', 'Not covered by any farm board:']
         lines += [f'- family {literal(u.get("family"))}: {literal(u.get("reason"))}' for u in uncovered]
@@ -332,8 +347,8 @@ def cmd_render(a):
             statuses[m[1]] = s
     summary = read_json(a.run, 'summary.json') if a.rig_attempt else None
     text = '\n'.join(render(sel, statuses, summary, a)) + '\n'
-    if len(text) > MAX_COMMENT:
-        text = text[:MAX_COMMENT] + '\n\n…truncated: see the run\'s artifacts.\n'
+    if len(text) > MAX_COMMENT:   # at a line end: a code span never crosses one, so none is left open
+        text = text[:text.rfind('\n', 0, MAX_COMMENT) + 1] + '\n…truncated: see the run\'s artifacts.\n'
     Path(a.out).write_text(text)
     print(text)
     return 0
