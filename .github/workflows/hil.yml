@@ -110,12 +110,13 @@ jobs:
           python3 "$H"/hil_ci.py pack --board "$BOARD" --record "build/hil/$BOARD.build.json" \
             --out "$RUNNER_TEMP/hil-build" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
 
-      # overwrite: a re-run of this leg replaces its earlier attempt's tree
+      # overwrite: a re-run of this leg replaces its earlier attempt's tree; hidden files: the harness is under .claude/
       - uses: actions/upload-artifact@v4
         with:
           name: hil-build-${{ matrix.board }}
           path: ${{ runner.temp }}/hil-build
           if-no-files-found: error
+          include-hidden-files: true
           overwrite: true
 
       - name: Record the build status

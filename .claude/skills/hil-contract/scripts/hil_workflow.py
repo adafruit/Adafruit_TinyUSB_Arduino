@@ -9,7 +9,8 @@ from the default branch, every artifact read as untrusted data.
   hil_workflow.py status --board B --attempt N --outcome O [--versions FILE] --out FILE
       one hosted build leg's outcome, core and arduino-cli versions.
   hil_workflow.py pr --repo R --head-sha SHA --head-branch BR --head-repo R2 --prs JSON
-      the open PR of R a HIL run is for, from trusted workflow_run metadata; prints its number or nothing.
+      the open PR of R a HIL run is for, from trusted workflow_run metadata; prints its number or nothing (none, or
+      ambiguous); exit 2 when the API cannot tell.
   hil_workflow.py rig-attempt --repo R --run-id N --attempt N
       the attempt the hil-run job of run N attempt N ran in; prints nothing when it did not run.
   hil_workflow.py render --selection DIR --status DIR --run DIR --run-id N --rig-attempt N --pr-head SHA
@@ -136,9 +137,9 @@ def cmd_pr(a):
     if not numbers and a.head_branch and a.head_repo:
         try:
             pulls = gh(f'repos/{a.repo}/pulls?state=open&per_page=100&head={a.head_repo.split("/")[0]}:{a.head_branch}')
-        except ApiError as e:
+        except ApiError as e:   # unknown, not absent: the comment job must not pass as if no PR existed
             print(e, file=sys.stderr)
-            return 0
+            return 2
         numbers = [p['number'] for p in pulls if p.get('head', {}).get('sha') == a.head_sha and
                    p.get('base', {}).get('repo', {}).get('full_name') == a.repo]
     if len(numbers) == 1:
@@ -237,7 +238,7 @@ def short(sha):
 def board_row(name, status, r):
     build = {'success': '✅', 'failure': '❌', 'cancelled': '⚪'}.get((status or {}).get('outcome'), '❔')
     if r is None:
-        return [literal(name, True), build, '—'] + ['—'] * len(TESTS) + ['—', '—', core_of(status, None)]
+        return [literal(name, True), build, '❔'] + ['—'] * len(TESTS) + ['—', '—', core_of(status, None)]
     results = {t.get('test'): t.get('pass') for t in r.get('tests') or [] if isinstance(t, dict)}
     tests = [('✅' if results[t] else '❌') if t in results else '—' for t in TESTS]
     cleanup = r.get('cleanup') if isinstance(r.get('cleanup'), dict) else None
@@ -300,7 +301,7 @@ def render(sel, statuses, summary, a):
                              + (' (the rig ran an earlier attempt\'s build)' if r and r.get('verdict') != 'not-run'
                                 else ''))
             if r and (r.get('verdict') != 'pass' or r.get('flaky') or r.get('retry')):
-                extra = [x for x in (r.get('retry'), 'passed on retry' if r.get('flaky') else '',
+                extra = [x for x in (literal(r.get('retry') or ''), 'passed on retry' if r.get('flaky') else '',
                                      f'waited {duration(r.get("waitedS"))} for the board' if r.get('waitedS') else '')
                          if x]
                 notes.append(f'- {literal(b)}: {literal(r.get("detail") or r.get("verdict"))}'

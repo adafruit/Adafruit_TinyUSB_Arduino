@@ -133,7 +133,7 @@ class Api(unittest.TestCase):
         self.assertIn('ambiguous', err)
         with self.gh({f'repos/{W.UPSTREAM}/pulls?': W.ApiError('down')}):
             self.assertEqual(run('pr', '--repo', W.UPSTREAM, '--head-sha', HEAD, '--head-branch', 'b',
-                                 '--head-repo', 'u/f')[:2], (0, ''))
+                                 '--head-repo', 'u/f')[:2], (2, ''))
 
     def test_rig_attempt_is_the_hil_run_jobs_own(self):
         jobs = f'repos/{W.UPSTREAM}/actions/runs/9/attempts/3/jobs'
@@ -231,15 +231,18 @@ class Render(Tmp):
                       board('metro_m4_express', flaky=True, waitedS=40)])
         text = self.render()
         self.assertIn('**1** pass · **1** fail', text)
-        self.assertIn('- `raspberry_pi_pico`: `echo failed` (retry not run: deadline)', text)
+        self.assertIn('- `raspberry_pi_pico`: `echo failed` (`retry not run: deadline`)', text)
         self.assertIn('  - `cdc_echo`: `cdc_echo detail`', text)
         self.assertIn('✅ pass (flaky)', text)
         self.assertIn('passed on retry, waited 40s for the board', text)
 
     def test_hostile_report_text_renders_inert(self):
         self.selection()
-        self.summary([board('raspberry_pi_pico', 'fail', detail='@hathach | <img src=x> `code` [x](http://e)\n## h')])
+        self.summary([board('raspberry_pi_pico', 'fail', detail='@hathach | <img src=x> `code` [x](http://e)\n## h',
+                            retry='retry not run: @hathach\n## r [x](http://e)')])
         text = self.render()
+        self.assertIn('`retry not run: @hathach ## r [x](http://e)`', text)
+        self.assertNotIn('\n## r', text)
         line = next(ln for ln in text.splitlines() if ln.startswith('- `raspberry_pi_pico`'))
         self.assertIn('``@hathach | <img src=x> `code` [x](http://e) ## h``', line)
         self.assertNotIn('\n## h', text)
@@ -250,7 +253,7 @@ class Render(Tmp):
         text = self.render(rig_attempt='', conclusion='failure')
         self.assertIn('The rig job did not run (workflow `failure`)', text)
         self.assertNotIn('| ✅ pass', text)
-        self.assertIn('| `raspberry_pi_pico` | ❌ | — |', text)
+        self.assertIn('| `raspberry_pi_pico` | ❌ | ❔ |', text)
         text = self.render()   # the rig ran, no summary
         self.assertIn('left no readable summary', text)
         self.summary([board('raspberry_pi_pico')], attempt=1)   # another attempt's summary
