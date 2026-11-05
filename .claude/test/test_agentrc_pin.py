@@ -200,6 +200,45 @@ class Installed(Env):
         self.assertEqual(run.call_args.kwargs['cwd'], agentrc_pin.ROOT)
         self.assertEqual(run.call_args.kwargs['env']['AGENTRC_DIR'], str(self.claude))
 
+    def test_a_hook_run_tests_git_init_leaves_the_hooks_repository_alone(self):
+        primary, target = self.repo, self.tmp / 'target'
+        git(primary, 'worktree', 'add', '-q', '--detach', str(self.tmp / 'wt'))
+        probe = agentrc_pin.ROOT / '.claude' / 'test' / 'test_probe.py'
+        probe.parent.mkdir(parents=True)
+        probe.write_text(f'''if True:
+            import subprocess, unittest
+
+            class Probe(unittest.TestCase):
+                def test_init(self):
+                    subprocess.run(['git', 'init', '-q', {str(target)!r}], check=True)
+            ''')
+        config = (primary / '.git' / 'config').read_bytes()
+        hook_git_dir = primary / '.git' / 'worktrees' / 'wt'   # what git exports to a hook committing in wt
+        self.env(GIT_DIR=str(hook_git_dir), GIT_INDEX_FILE=str(hook_git_dir / 'index'))
+        run, done = subprocess.run, []
+        with mock.patch.object(agentrc_pin.subprocess, 'run',
+                               lambda *a, **k: done.append(run(*a, capture_output=True, text=True, **k)) or done[-1]):
+            self.assertEqual(agentrc_pin.test(), 0, done[-1].stdout + done[-1].stderr if done else None)
+        self.assertTrue((target / '.git').is_dir())
+        self.assertEqual((primary / '.git' / 'config').read_bytes(), config)
+
+
+class Runner(Env):
+    """test()'s child environment, whichever agentrc is selected."""
+
+    def test_the_child_gets_no_git_variable_from_any_source(self):
+        self.env(GIT_DIR='x', GIT_INDEX_FILE='x', GIT_CONFIG_COUNT='1')
+        before = dict(os.environ)
+        for src in ('installed', 'pin', 'staged'):
+            with self.subTest(src=src), mock.patch.object(agentrc_pin, 'selected', return_value=(src, self.tmp, [])), \
+                    mock.patch.object(agentrc_pin.subprocess, 'run', return_value=mock.Mock(returncode=0)) as run:
+                self.assertEqual(agentrc_pin.test(), 0)
+                env = run.call_args.kwargs['env']
+                self.assertEqual([k for k in env if k.startswith('GIT_')], [])
+                self.assertEqual(env['PATH'], os.environ['PATH'])
+                self.assertEqual(env.get('AGENTRC_DIR'), str(self.tmp) if src == 'installed' else None)
+        self.assertEqual(dict(os.environ), before)
+
 
 class Staged(Env):
     def stage(self, manifest, hil_load=''):
