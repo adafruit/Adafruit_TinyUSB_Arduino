@@ -60,18 +60,20 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
   - This script builds its tests plus a `serial_echo` smoke build per image kind (`raspberry_pi_pico`,
     `metro_m4_express`, `espressif_s3_devkitm`); a HIL fixture (`test/hil/esp32_ts3usb30.cpp`) builds the HIL
     sketches of its boards; the HIL harness and rosters (`.claude/skills/hil-contract/scripts/`, `test/hil/`) and the
-    HIL workflows (`HIL_WORKFLOWS`) run their tests and select every roster board for HIL; docs, agent and repo metadata build nothing; anything else is
-    uncovered.
+    HIL workflow (`HIL_WORKFLOW`) run every contract test but the build's and select every roster board for HIL; the
+    report workflow (`REPORT_WORKFLOW`), run from the default branch, runs its tests only; docs, agent and repo
+    metadata build nothing; anything else is uncovered.
 - **Boards** (`BOARDS`): CI's matrix (`.github/workflows/githubci.yml`) with adafruit/ci-arduino `all_platforms.py`'s
   FQBNs under the same names, plus the rig boards named as in tinyusb's HIL farm: `raspberry_pi_pico`,
   `adafruit_fruit_jam`, `metro_m4_express`, the native-host `raspberry_pi_pico_w` and `raspberry_pi_pico2` (`role`
   host), and `espressif_s3_devkitm` and `espressif_p4_function_ev`. Each rig board builds on the core ci-arduino
-  installs for its CI platform (`filters`), which the HIL CI sets up (the HIL contract's CI). An ESP32 rig board compiles a copy of each sketch beside its build dir
-  with its `fixture` added, leaving `examples/` untouched, and snapshots the core's `boot_app0.bin` into the build
-  dir for `flash_args`. Example eligibility mirrors ci-arduino `build_platform.py`: `.<platform>.test.skip`,
-  a `.skip.txt` line equal to the platform, and `.<platform>.test.only` when any `.*.test.only` exists; a rig board
-  takes its CI platform's files (`filters`). A board whose core is not installed is exit 2 naming
-  `arduino-cli core install`. Local cores need not be CI's versions; the record names what built.
+  installs for its CI platform (`filters`), which the HIL CI sets up (the HIL contract's CI). An ESP32 rig board
+  compiles a copy of each sketch beside its build dir with its `fixture` added, leaving `examples/` untouched, and
+  snapshots the core's `boot_app0.bin` into the build dir for `flash_args`. Example eligibility mirrors ci-arduino
+  `build_platform.py`: `.<platform>.test.skip`, a `.skip.txt` line equal to the platform, and `.<platform>.test.only`
+  when any `.*.test.only` exists; a rig board takes its CI platform's files (`filters`). A board whose core is not
+  installed is exit 2 naming `arduino-cli core install`. Local cores need not be CI's versions; the record names what
+  built.
 - **Dependencies** (`arduino` skill): `library.properties` `depends=` plus `EXTRA_DEPENDENCIES` (CI's `ARDUINO_LIBS`
   beyond it), and theirs, transitively, must be installed before a build: a missing one is exit 2 naming the
   `arduino-cli lib install` line. A compile that takes any other library, outside the core, fails its sketch; the

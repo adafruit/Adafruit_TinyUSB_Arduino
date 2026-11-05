@@ -5,9 +5,9 @@ from the default branch, every artifact read as untrusted data.
 
   hil_workflow.py select --event E --repository R --run-id N --tested SHA --out FILE [--boards "B ..."]
       the boards a run tests: none outside UPSTREAM; a dispatch's named roster boards; a pull request's from
-      check_build.py --select-only against HEAD^1. Writes the selection and eligible/boards/matrix to $GITHUB_OUTPUT.
+      check_build.py --select-only against HEAD^1. Writes the selection and boards/matrix to $GITHUB_OUTPUT.
   hil_workflow.py status --board B --attempt N --outcome O [--versions FILE] --out FILE
-      one hosted build leg's outcome, core and arduino-cli versions.
+      one hosted build leg's outcome, with the platform and the core and arduino-cli versions setup recorded.
   hil_workflow.py pr --repo R --head-sha SHA --head-branch BR --head-repo R2 --prs JSON
       the open PR of R a HIL run is for, from trusted workflow_run metadata; prints its number or nothing (none, or
       ambiguous); exit 2 when the API cannot tell.
@@ -65,7 +65,7 @@ def cmd_select(a):
         if not boards or unknown:
             print(f'not in {ROSTER}: {unknown or "no board"}', file=sys.stderr)
             return 2
-        sel.update(eligible=True, hil={'boards': boards, 'full': False, 'uncovered': []})
+        sel['eligible'], sel['hil']['boards'] = True, boards
     else:
         p = subprocess.run([sys.executable, str(ROOT / '.claude/skills/build/scripts/check_build.py'), '--select-only',
                             '--base', 'HEAD^1', '--hil-config', ROSTER], cwd=ROOT, capture_output=True, text=True)
@@ -80,9 +80,8 @@ def cmd_select(a):
             return 2
         sel.update(eligible=True, hil=hil, build={'uncovered': build.get('uncovered', [])})
     Path(a.out).write_text(json.dumps(sel, indent=1) + '\n')
-    boards = sel['hil']['boards'] if sel['eligible'] else []
-    lines = [f'eligible={"true" if sel["eligible"] else "false"}', f'boards={" ".join(boards)}',
-             f'matrix={json.dumps([{"board": b} for b in boards])}']
+    boards = sel['hil']['boards']
+    lines = [f'boards={" ".join(boards)}', f'matrix={json.dumps([{"board": b} for b in boards])}']
     if os.environ.get('GITHUB_OUTPUT'):
         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
             f.write('\n'.join(lines) + '\n')
@@ -92,13 +91,11 @@ def cmd_select(a):
 
 
 def cmd_status(a):
-    sys.path.insert(0, str(ROOT / '.claude/skills/build/scripts'))
-    import check_build   # its board table only: no engine is loaded
-    platform_id = ':'.join(check_build.BOARDS[a.board]['fqbn'].split(':', 2)[:2])
     try:
         versions = json.loads(Path(a.versions).read_text()) if a.versions else {}
     except (OSError, ValueError):
         versions = {}
+    platform_id = versions.get('platform')   # null: setup failed before it named the platform
     cores = (versions.get('cores') or {}).get('platforms') or []
     core = next((c for c in cores if isinstance(c, dict) and c.get('id') == platform_id), {})
     status = {'board': a.board, 'attempt': a.attempt, 'outcome': a.outcome,
@@ -277,11 +274,11 @@ def render(sel, statuses, summary, a):
                    f'{literal(summary.get("attempt"))}, not this one: hardware result unavailable.')
         else:
             rows = {r.get('board'): r for r in summary.get('boards') or [] if isinstance(r, dict)}
-        counts = {}
-        for b in boards:
-            v = (rows.get(b) or {}).get('verdict') if rows else None
-            counts[v] = counts.get(v, 0) + 1
         if rows:
+            counts = {}
+            for b in boards:
+                v = (rows.get(b) or {}).get('verdict')
+                counts[v] = counts.get(v, 0) + 1
             lines.append(' · '.join(f'**{counts.get(v, 0)}** {VERDICT[v].split(" ", 1)[1]}' for v in VERDICT
                                     if counts.get(v)) + (f' · **{counts[None]}** not reported' if counts.get(None)
                                                          else ''))
@@ -291,10 +288,10 @@ def render(sel, statuses, summary, a):
         head = ['Board', 'Build', 'Result', *TESTS, 'Restore', 'Time', 'Core']
         lines += ['| ' + ' | '.join(head) + ' |', '|' + '---|' * len(head)]
         for b in boards:
-            lines.append('| ' + ' | '.join(board_row(b, statuses.get(b), rows.get(b) if rows else None)) + ' |')
+            lines.append('| ' + ' | '.join(board_row(b, statuses.get(b), rows.get(b))) + ' |')
         notes = []
         for b in boards:
-            r = rows.get(b) if rows else None
+            r = rows.get(b)
             st = statuses.get(b)
             if st and st.get('outcome') not in ('success', None):
                 notes.append(f'- {literal(b)}: build {literal(st.get("outcome"))}'

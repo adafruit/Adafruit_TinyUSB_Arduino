@@ -32,5 +32,4 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    sys.modules.setdefault('hil_ci', sys.modules[__name__])
     sys.exit(main())

@@ -56,8 +56,7 @@ class Select(Tmp):
         self.assertIn('--select-only', sp.call_args[0][0])
         self.assertEqual((s['eligible'], s['hil']['boards'], s['build']['uncovered'][0]['reason'], s['runId'],
                           s['tested']), (True, ['raspberry_pi_pico'], 'bundled', '9', MERGE))
-        self.assertEqual(outputs, {'eligible': 'true', 'boards': 'raspberry_pi_pico',
-                                   'matrix': '[{"board": "raspberry_pi_pico"}]'})
+        self.assertEqual(outputs, {'boards': 'raspberry_pi_pico', 'matrix': '[{"board": "raspberry_pi_pico"}]'})
 
     def test_a_failed_selection_fails_rather_than_selecting_nothing(self):
         for check in (subprocess.CompletedProcess([], 2, stdout='{"error": "x"}\n', stderr=''),
@@ -72,7 +71,8 @@ class Select(Tmp):
 
     def test_a_dispatch_runs_named_roster_boards_only(self):
         code, s, outputs, sp, _ = self.select(event='workflow_dispatch', boards='metro_m4_express raspberry_pi_pico')
-        self.assertEqual((code, s['hil']['boards']), (0, ['metro_m4_express', 'raspberry_pi_pico']))
+        self.assertEqual((code, s['eligible'], s['hil']), (0, True, {'boards': ['metro_m4_express', 'raspberry_pi_pico'],
+                                                                   'full': False, 'uncovered': []}))
         sp.assert_not_called()
         code, s, outputs, _, err = self.select(event='workflow_dispatch', boards='nope')
         self.assertEqual((code, s), (2, None))
@@ -82,7 +82,7 @@ class Select(Tmp):
 class Status(Tmp):
     def test_records_outcome_core_and_cli(self):
         versions = self.tmp / 'v.json'
-        versions.write_text(json.dumps({'cli': {'VersionString': '1.3.1'}, 'cores': {'platforms': [
+        versions.write_text(json.dumps({'platform': 'rp2040:rp2040', 'cli': {'VersionString': '1.3.1'}, 'cores': {'platforms': [
             {'id': 'esp32:esp32', 'installed_version': '3.3.9'}, {'id': 'rp2040:rp2040', 'installed_version': '5.4.4'}]}}))
         out = self.tmp / 's' / 'raspberry_pi_pico.json'
         code, _, _ = run('status', '--board', 'raspberry_pi_pico', '--attempt', '2', '--outcome', 'failure',
@@ -96,7 +96,7 @@ class Status(Tmp):
         out = self.tmp / 'x.json'
         run('status', '--board', 'espressif_s3_devkitm', '--attempt', '1', '--outcome', 'failure',
             '--versions', str(self.tmp / 'none.json'), '--out', str(out))
-        self.assertEqual(json.loads(out.read_text())['platform'], {'id': 'esp32:esp32', 'version': None})
+        self.assertEqual(json.loads(out.read_text())['platform'], {'id': None, 'version': None})
 
 
 class Api(unittest.TestCase):

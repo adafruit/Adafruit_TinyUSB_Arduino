@@ -107,13 +107,16 @@ CONTRACT_FILES = ('.claude/skills/build/scripts/check_build.py', '.claude/skills
                   '.claude/skills/hil-contract/scripts/hil_remote.py',
                   '.claude/skills/hil-contract/scripts/agentrc_pin.py', 'test/hil/agentrc.json')
 AGENTRC = None   # set by engine(): agentrc_pin.identity()
-HIL_WORKFLOWS = ('.github/workflows/hil.yml', '.github/workflows/hil_comment.yml')
+HIL_WORKFLOW = '.github/workflows/hil.yml'
+REPORT_WORKFLOW = '.github/workflows/hil_comment.yml'
 
 
 def classify_source(path):
     """The library's own source rules (arduino_build.classify falls through to the common ones on None)."""
-    if path in HIL_WORKFLOWS:
+    if path == HIL_WORKFLOW:
         return 'hil', None, 'the HIL workflow: its tests, and the battery on every roster board'
+    if path == REPORT_WORKFLOW:   # runs from the default branch: a PR never runs its own copy
+        return 'tests', 'hil_workflow', 'the HIL report workflow: its tests'
     if path in CORE_CONSUMED:
         return 'uncovered', None, 'the cores compile their own sources against their bundled copy of this header'
     if path.startswith('src/arduino/ports/'):

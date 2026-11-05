@@ -32,7 +32,6 @@ jobs:
   select:
     runs-on: ubuntu-latest
     outputs:
-      eligible: ${{ steps.select.outputs.eligible }}
       boards: ${{ steps.select.outputs.boards }}
       matrix: ${{ steps.select.outputs.matrix }}
     steps:
@@ -63,7 +62,7 @@ jobs:
   # one leg per board: its record packed as hil-build-<board>, its outcome and versions as hil-status-<board>-<attempt>
   hil-build:
     needs: select
-    if: needs.select.result == 'success' && needs.select.outputs.eligible == 'true' && needs.select.outputs.matrix != '[]'
+    if: needs.select.result == 'success' && needs.select.outputs.matrix != '[]'
     name: hil-build (${{ matrix.board }})
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -81,10 +80,6 @@ jobs:
         with:
           repository: adafruit/ci-arduino
           path: ci
-
-      # githubci.yml's layout: ci-arduino and its arduino-cli in the checkout, kept out of the clean tree a record needs
-      - name: Keep ci-arduino out of the tree's status
-        run: printf '/ci/\n/bin/\n' >> .git/info/exclude
 
       - name: pre-install
         run: bash ci/actions_install.sh
@@ -136,13 +131,10 @@ jobs:
   # a board without a packed tree, or whose tree admission refuses, is not-run with its reason
   hil-run:
     needs: [select, hil-build]
-    if: ${{ !cancelled() && needs.select.result == 'success' && needs.select.outputs.eligible == 'true' && needs.select.outputs.boards != '' }}
+    if: ${{ !cancelled() && needs.select.result == 'success' && needs.select.outputs.boards != '' }}
     runs-on: [self-hosted, Linux, X64, arduino-tinyusb]
     # above hil_ci.py's 60 min --deadline plus one board's 15 min budget: a started battery restores its board
     timeout-minutes: 90
-    # the attempt this job ran in: hil_comment.yml reads it from the jobs API, this output is for the log
-    outputs:
-      attempt: ${{ github.run_attempt }}
     env:
       BOARDS: ${{ needs.select.outputs.boards }}
     steps:
@@ -178,8 +170,8 @@ jobs:
             --attempt "$GITHUB_RUN_ATTEMPT" --out "$HIL_OUT" --deadline 3600 $(printf -- '-b %s ' $BOARDS) \
             test/hil/ci.json
 
-      # summary.json at the artifact's root; the packed trees stay on the rig, the harness's Markdown views are not
-      # uploaded (the report renders from summary.json)
+      # summary.json at the artifact's root; the packed trees and each attempt's images (hil-build-* has them) stay
+      # on the rig, the harness's Markdown views are not uploaded (the report renders from summary.json)
       - name: Upload the summary, reports and logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -188,5 +180,6 @@ jobs:
           path: |
             ${{ env.HIL_OUT }}
             !${{ env.HIL_OUT }}/*/tree
+            !${{ env.HIL_OUT }}/**/images
             !${{ env.HIL_OUT }}/**/*.md
           if-no-files-found: ignore

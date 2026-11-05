@@ -19,6 +19,7 @@ import agentrc_pin  # noqa: E402
 import check_build  # noqa: E402
 import hil_ci  # noqa: E402
 import hil_test  # noqa: E402
+import hil_workflow  # noqa: E402
 
 hil_test.engine()   # the selected agentrc: a missing one fails here, naming the remedy
 
@@ -57,6 +58,14 @@ class Tables(unittest.TestCase):
             board = check_build.BOARDS[name]
             self.assertEqual(vendor_arch(board['fqbn']), vendor_arch(check_build.BOARDS[board['filters']]['fqbn']),
                              name)
+
+    def test_the_pr_report_names_the_contracts_roster_tests_and_sketches(self):
+        """hil_workflow.py renders without agentrc, so it keeps its own copies of these."""
+        self.assertEqual(hil_workflow.ROSTER, hil_test.REMOTE_ROSTER)
+        self.assertEqual(list(hil_workflow.TESTS), list(hil_test.TESTS))
+        for sketches in check_build.HIL_SKETCHES.values():
+            for sketch in sketches:
+                self.assertIn(f'`{Path(sketch).name}`', hil_workflow.COVERAGE)
 
 
 if __name__ == '__main__':
