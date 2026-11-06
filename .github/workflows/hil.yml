@@ -137,8 +137,6 @@ jobs:
     timeout-minutes: 90
     env:
       BOARDS: ${{ needs.select.outputs.boards }}
-      PR_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       # kept across runs and attempts, outside the workspace: each board's tree and every attempt's report and log,
       # for recovery (SKILL.md Recovery)
@@ -167,7 +165,6 @@ jobs:
           path: ${{ runner.temp }}/hil-build
 
       - name: Download the selection
-        if: always()
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
@@ -175,7 +172,6 @@ jobs:
           path: ${{ runner.temp }}/hil/selection
 
       - name: Download the build statuses
-        if: always()
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
@@ -185,30 +181,19 @@ jobs:
       # ends with the PR comment's report, in this step's log (the step a failed job opens on) and on the run's
       # summary page
       - name: Battery on the rig
-        id: battery
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           rc=0
           python3 "$H"/hil_ci.py run --hosted "$RUNNER_TEMP/hil-build" --head "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" \
             --attempt "$GITHUB_RUN_ATTEMPT" --out "$HIL_OUT" --deadline 3600 $(printf -- '-b %s ' $BOARDS) \
             test/hil/ci.json || rc=$?
-          if python3 "$H"/hil_workflow.py render --selection "$RUNNER_TEMP/hil/selection" \
-               --status "$RUNNER_TEMP/hil/status" --run "$HIL_OUT" --run-id "$GITHUB_RUN_ID" \
-               --rig-attempt "$GITHUB_RUN_ATTEMPT" --pr-head "$PR_HEAD" --run-url "$RUN_URL" \
-               --out "$GITHUB_STEP_SUMMARY"; then
-            echo "rendered=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning title=HIL report::not rendered"
-          fi
-          exit "$rc"
-
-      # the battery step skipped (an earlier step failed) or ended before its own render (cancelled)
-      - name: Render the report
-        if: always() && steps.battery.outputs.rendered != 'true'
-        continue-on-error: true
-        run: |
           python3 "$H"/hil_workflow.py render --selection "$RUNNER_TEMP/hil/selection" \
             --status "$RUNNER_TEMP/hil/status" --run "$HIL_OUT" --run-id "$GITHUB_RUN_ID" \
-            --rig-attempt "$GITHUB_RUN_ATTEMPT" --pr-head "$PR_HEAD" --run-url "$RUN_URL" --out "$GITHUB_STEP_SUMMARY"
+            --rig-attempt "$GITHUB_RUN_ATTEMPT" --pr-head "$PR_HEAD" --run-url "$RUN_URL" --out "$GITHUB_STEP_SUMMARY" \
+            || echo "::warning title=HIL report::not rendered"
+          exit "$rc"
 
       # summary.json at the artifact's root; the packed trees and each attempt's images (hil-build-* has them) stay
       # on the rig, the harness's Markdown views are not uploaded (the report renders from summary.json)
