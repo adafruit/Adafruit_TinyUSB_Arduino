@@ -28,7 +28,8 @@
 
 #if CFG_TUD_ENABLED && TU_CHECK_MCU(OPT_MCU_SAMD11, OPT_MCU_SAMD21, OPT_MCU_SAML2X, OPT_MCU_SAMD51, OPT_MCU_SAME5X)
 
-#include "sam.h"
+#include <sam.h>
+#include "same5x_usb.h"
 #include "device/dcd.h"
 
 /*------------------------------------------------------------------*/
@@ -103,7 +104,7 @@ bool dcd_init(uint8_t rhport, const tusb_rhport_init_t* rh_init) {
   return true;
 }
 
-#if TU_CHECK_MCU(OPT_MCU_SAMD51, OPT_MCU_SAME5X)
+#if TU_CHECK_MCU(OPT_MCU_SAMD51)
 void dcd_int_enable(uint8_t rhport) {
   (void) rhport;
   NVIC_EnableIRQ(USB_0_IRQn);
@@ -118,6 +119,23 @@ void dcd_int_disable(uint8_t rhport) {
   NVIC_DisableIRQ(USB_2_IRQn);
   NVIC_DisableIRQ(USB_1_IRQn);
   NVIC_DisableIRQ(USB_0_IRQn);
+}
+
+#elif TU_CHECK_MCU(OPT_MCU_SAME5X)
+void dcd_int_enable(uint8_t rhport) {
+  (void) rhport;
+  NVIC_EnableIRQ(USB_OTHER_IRQn);
+  NVIC_EnableIRQ(USB_SOF_HSOF_IRQn);
+  NVIC_EnableIRQ(USB_TRCPT0_IRQn);
+  NVIC_EnableIRQ(USB_TRCPT1_IRQn);
+}
+
+void dcd_int_disable(uint8_t rhport) {
+  (void) rhport;
+  NVIC_DisableIRQ(USB_TRCPT1_IRQn);
+  NVIC_DisableIRQ(USB_TRCPT0_IRQn);
+  NVIC_DisableIRQ(USB_SOF_HSOF_IRQn);
+  NVIC_DisableIRQ(USB_OTHER_IRQn);
 }
 
 #elif TU_CHECK_MCU(OPT_MCU_SAMD11, OPT_MCU_SAMD21, OPT_MCU_SAML2X)
@@ -348,9 +366,12 @@ static void maybe_transfer_complete(void) {
       UsbDeviceDescBank* bank = &sram_registers[epnum][TUSB_DIR_IN];
       uint16_t const total_transfer_size = bank->PCKSIZE.bit.BYTE_COUNT;
 
-      dcd_event_xfer_complete(0, epnum | TUSB_DIR_IN_MASK, total_transfer_size, XFER_RESULT_SUCCESS, true);
-
+      // SAME5x exposes transfer completion through split IRQ vectors. Clear
+      // the hardware source before publishing the software event so another
+      // pending USB vector cannot report the same bank completion twice.
       ep->EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT1;
+
+      dcd_event_xfer_complete(0, epnum | TUSB_DIR_IN_MASK, total_transfer_size, XFER_RESULT_SUCCESS, true);
     }
 
     // Handle OUT completions
@@ -358,9 +379,11 @@ static void maybe_transfer_complete(void) {
       UsbDeviceDescBank* bank = &sram_registers[epnum][TUSB_DIR_OUT];
       uint16_t const total_transfer_size = bank->PCKSIZE.bit.BYTE_COUNT;
 
-      dcd_event_xfer_complete(0, epnum, total_transfer_size, XFER_RESULT_SUCCESS, true);
-
+      // See the IN path above. OUT direct transfers rely on exactly one
+      // completion to retire direct_rx_active and return the caller buffer.
       ep->EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT0;
+
+      dcd_event_xfer_complete(0, epnum, total_transfer_size, XFER_RESULT_SUCCESS, true);
     }
   }
 }

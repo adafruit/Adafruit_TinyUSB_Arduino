@@ -266,11 +266,18 @@ int Adafruit_USBD_CDC::availableForWrite(void) {
 
 extern "C" {
 
+// Optional application observer. The Arduino CDC wrapper retains ownership of
+// tud_cdc_line_state_cb() so 1200-baud bootloader touch remains intact.
+__attribute__((weak)) void tud_cdc_line_state_app_cb(uint8_t instance, bool dtr,
+                                                     bool rts) {
+  (void)instance;
+  (void)dtr;
+  (void)rts;
+}
+
 // Invoked when cdc when line state changed e.g connected/disconnected
 // Use to reset to DFU when disconnect with 1200 bps
 void tud_cdc_line_state_cb(uint8_t instance, bool dtr, bool rts) {
-  (void)rts;
-
   // DTR = false is counted as disconnected
   if (!dtr) {
     // touch1200 only with first CDC instance (Serial)
@@ -283,6 +290,8 @@ void tud_cdc_line_state_cb(uint8_t instance, bool dtr, bool rts) {
       }
     }
   }
+
+  tud_cdc_line_state_app_cb(instance, dtr, rts);
 }
 }
 
