@@ -228,6 +228,8 @@ class Render(Tmp):
         self.assertEqual(row, '| `raspberry_pi_pico` | ✅ | ✅ pass | ✅ | ✅ | — | — | ✅ | 1m15s | '
                               '`rp2040:rp2040 5.4.4` |')
         self.assertIn('[run 9 attempt 2](https://github.com/x/y/actions/runs/9)', text)
+        self.summary([board('raspberry_pi_pico', tests=[('cdc_echo', True), ('hid_inout', True)], firmware=None)])
+        self.assertIn(row, self.render())  # the core falls back to the build status
 
     def test_failures_retries_and_waits_are_noted(self):
         self.selection(boards=('metro_m4_express', 'raspberry_pi_pico'))
