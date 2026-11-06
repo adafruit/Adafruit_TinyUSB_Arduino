@@ -220,16 +220,17 @@ class Render(Tmp):
     def test_a_passing_board(self):
         self.selection()
         self.status('raspberry_pi_pico', 2)
-        self.summary([board('raspberry_pi_pico', tests=[('cdc_echo', True), ('hid_inout', True)])])
+        fw = {'platform': {'id': 'rp2040:rp2040', 'version': '5.4.5'}}
+        self.summary([board('raspberry_pi_pico', tests=[('cdc_echo', True), ('hid_inout', True)], firmware=fw)])
         text = self.render()
         self.assertTrue(text.startswith(W.TITLE))
         self.assertIn('**1** pass', text)
         row = next(ln for ln in text.splitlines() if ln.startswith('| `raspberry_pi_pico`'))
         self.assertEqual(row, '| `raspberry_pi_pico` | ✅ | ✅ pass | ✅ | ✅ | — | — | ✅ | 1m15s | '
-                              '`rp2040:rp2040 5.4.4` |')
+                              '`rp2040:rp2040 5.4.5` |')  # the firmware's core outranks the build status
         self.assertIn('[run 9 attempt 2](https://github.com/x/y/actions/runs/9)', text)
         self.summary([board('raspberry_pi_pico', tests=[('cdc_echo', True), ('hid_inout', True)], firmware=None)])
-        self.assertIn(row, self.render())  # the core falls back to the build status
+        self.assertIn(row.replace('5.4.5', '5.4.4'), self.render())  # the core falls back to the build status
 
     def test_failures_retries_and_waits_are_noted(self):
         self.selection(boards=('metro_m4_express', 'raspberry_pi_pico'))
