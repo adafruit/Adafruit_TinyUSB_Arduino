@@ -204,6 +204,8 @@ python3 $H/hil_remote.py session close <id>                         # restore th
   the 60 min deadline. Its state dir, `_work/Adafruit_TinyUSB_Arduino/hil-state/<run id>-<attempt>/` on ci.lan, keeps
   each board's tree (`<board>/tree`, the attempt dir Recovery runs in) and every attempt's report and log
   (`<board>/run-<n>`); `summary.json` there is what the report shows.
+  It then renders that report onto the run's summary page and into its log, the same Markdown the PR comment
+  shows, so every run reads without its JSON, those `hil-comment` does not post included.
 - The admission checks consistency, not trust: a pull request's harness and firmware run on the rig as the runner's
   user; the fork-PR approval setting of the repository is the gate.
 - `hil-comment` posts only the newest attempt of the PR head's newest run. A board's row shows its build, verdict, each

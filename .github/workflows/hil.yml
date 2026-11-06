@@ -170,6 +170,34 @@ jobs:
             --attempt "$GITHUB_RUN_ATTEMPT" --out "$HIL_OUT" --deadline 3600 $(printf -- '-b %s ' $BOARDS) \
             test/hil/ci.json
 
+      # the PR comment's report on this run's summary page and in its log: every run reads without its JSON
+      - name: Download the selection
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: hil-selection
+          path: ${{ runner.temp }}/hil/selection
+
+      - name: Download the build statuses
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: hil-status-*
+          path: ${{ runner.temp }}/hil/status
+
+      - name: Render the report
+        if: always()
+        continue-on-error: true
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 "$H"/hil_workflow.py render --selection "$RUNNER_TEMP/hil/selection" \
+            --status "$RUNNER_TEMP/hil/status" --run "$HIL_OUT" --run-id "$GITHUB_RUN_ID" \
+            --rig-attempt "$GITHUB_RUN_ATTEMPT" --pr-head "$PR_HEAD" --run-url "$RUN_URL" --out "$GITHUB_STEP_SUMMARY"
+
       # summary.json at the artifact's root; the packed trees and each attempt's images (hil-build-* has them) stay
       # on the rig, the harness's Markdown views are not uploaded (the report renders from summary.json)
       - name: Upload the summary, reports and logs
