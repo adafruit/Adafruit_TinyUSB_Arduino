@@ -145,7 +145,7 @@ class Selection(unittest.TestCase):
         sel = eng.select(['src/arduino/ports/stm32/x.cpp', 'test/hil/ci.json'], roster=['raspberry_pi_pico'])
         self.assertEqual([u['path'] for u in sel['uncovered']], ['src/arduino/ports/stm32/x.cpp'])
         self.assertEqual(sel['hil'], {'boards': ['raspberry_pi_pico'], 'full': True, 'uncovered': []})
-        self.assertEqual(sel['tests'], ['hil', 'hil_remote'])
+        self.assertEqual(sel['tests'], sorted(set(cb.CONTRACT_TESTS) - {'build'}))
 
     def test_hil_selection_names_families_the_roster_lacks(self):
         sel = eng.select(['src/arduino/ports/nrf/x.cpp', 'src/arduino/ports/samd/y.cpp'], roster=['metro_m4_express'])
@@ -164,6 +164,17 @@ class Selection(unittest.TestCase):
         sketches = list(cb.HIL_SKETCHES['device'])
         self.assertEqual(sel['builds'], {'espressif_p4_function_ev': sketches, 'espressif_s3_devkitm': sketches})
         self.assertEqual(sel['hil']['boards'], ['espressif_p4_function_ev'])
+
+    def test_hil_workflow_and_ci_scripts_run_the_battery_on_every_board(self):
+        roster = ['raspberry_pi_pico', 'metro_m4_express']
+        for path in (cb.HIL_WORKFLOW, '.claude/skills/hil-contract/scripts/hil_ci.py',
+                     '.claude/skills/hil-contract/scripts/hil_workflow.py'):
+            sel = eng.select([path], roster=roster)
+            self.assertEqual((sel['hil']['full'], sel['hil']['boards']), (True, sorted(roster)), path)
+            self.assertEqual(sel['tests'], sorted(set(cb.CONTRACT_TESTS) - {'build'}), path)
+        for path in (cb.REPORT_WORKFLOW, '.github/workflows/githubci.yml'):
+            self.assertEqual(eng.select([path], roster=roster)['hil']['boards'], [], path)
+        self.assertEqual(eng.select([cb.REPORT_WORKFLOW])['tests'], ['hil_workflow'])
 
     def test_build_contract_change_smoke_builds_each_image_kind(self):
         sel = eng.select(['.claude/skills/build/scripts/check_build.py'])

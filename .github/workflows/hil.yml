@@ -1,0 +1,210 @@
+name: HIL
+# display only: hil_comment.yml ties a run to its PR by the run's metadata
+run-name: "${{ github.event.pull_request && format('HIL PR #{0}', github.event.pull_request.number) || 'HIL' }}"
+
+# The HIL battery (.claude/skills/hil-contract/SKILL.md, CI) on the ci.lan farm boards a change reaches. A hosted
+# runner per board sets up as adafruit/ci-arduino does (latest arduino-cli, cores and libraries), builds the board's
+# HIL record and packs it with the harness; the rig builds nothing. Pull requests from forks reach the rig too, as
+# tinyusb's do: no job here holds a write token or a secret. hil_comment.yml posts the report.
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      board:
+        description: roster board(s), space separated
+        required: true
+
+# never cancelled: a battery killed mid-run leaves its board for recovery; keyed by PR number, as forks share branch
+# names
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # githubci.yml's, installed the same way (test_build.py keeps them equal)
+  ARDUINO_LIBS: "\"Adafruit SPIFlash\" \"Adafruit seesaw Library\" \"Adafruit NeoPixel\" \"Adafruit Circuit Playground\" \"Adafruit InternalFlash\" \"SdFat - Adafruit Fork\" \"SD\" \"MIDI Library\" \"Pico PIO USB\""
+  H: .claude/skills/hil-contract/scripts
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    outputs:
+      boards: ${{ steps.select.outputs.boards }}
+      matrix: ${{ steps.select.outputs.matrix }}
+    steps:
+      # HEAD is the merge commit, HEAD^1 the base it merges into
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Fetch the pinned agentrc
+        if: github.repository == 'adafruit/Adafruit_TinyUSB_Arduino'
+        run: python3 "$H"/agentrc_pin.py fetch
+
+      - name: Select the boards the change reaches
+        id: select
+        env:
+          BOARD_INPUT: ${{ github.event.inputs.board }}
+        run: |
+          python3 "$H"/hil_workflow.py select --event "$GITHUB_EVENT_NAME" --repository "$GITHUB_REPOSITORY" \
+            --run-id "$GITHUB_RUN_ID" --tested "$GITHUB_SHA" --boards "$BOARD_INPUT" --out hil-selection.json
+
+      # overwrite: a re-run of every job selects again under the same name
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hil-selection
+          path: hil-selection.json
+          overwrite: true
+
+  # one leg per board: its record packed as hil-build-<board>, its outcome and versions as hil-status-<board>-<attempt>
+  hil-build:
+    needs: select
+    if: needs.select.result == 'success' && needs.select.outputs.matrix != '[]'
+    name: hil-build (${{ matrix.board }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.select.outputs.matrix) }}
+    env:
+      BOARD: ${{ matrix.board }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout adafruit/ci-arduino
+        uses: actions/checkout@v4
+        with:
+          repository: adafruit/ci-arduino
+          path: ci
+
+      - name: pre-install
+        run: bash ci/actions_install.sh
+
+      - name: Install Libraries
+        run: |
+          arduino-cli lib install ${{ env.ARDUINO_LIBS }}
+          arduino-cli lib list
+
+      - name: Fetch the pinned agentrc
+        run: python3 "$H"/agentrc_pin.py fetch
+
+      - name: Set up the board as ci-arduino does
+        run: python3 "$H"/hil_ci.py setup --board "$BOARD" --ci ci --versions "$RUNNER_TEMP/versions.json"
+
+      - name: Build the HIL record
+        run: |
+          python3 .claude/skills/build/scripts/check_build.py --board "$BOARD" --shared \
+            --record "build/hil/$BOARD.build.json" --hil-config test/hil/ci.json
+
+      - name: Pack the record with the harness
+        run: |
+          python3 "$H"/hil_ci.py pack --board "$BOARD" --record "build/hil/$BOARD.build.json" \
+            --out "$RUNNER_TEMP/hil-build" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT"
+
+      # overwrite: a re-run of this leg replaces its earlier attempt's tree; hidden files: the harness is under .claude/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hil-build-${{ matrix.board }}
+          path: ${{ runner.temp }}/hil-build
+          if-no-files-found: error
+          include-hidden-files: true
+          overwrite: true
+
+      - name: Record the build status
+        if: always()
+        run: |
+          python3 "$H"/hil_workflow.py status --board "$BOARD" --attempt "$GITHUB_RUN_ATTEMPT" \
+            --outcome "${{ job.status }}" --versions "$RUNNER_TEMP/versions.json" \
+            --out "$RUNNER_TEMP/hil-status/$BOARD.json"
+
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hil-status-${{ matrix.board }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hil-status/${{ matrix.board }}.json
+          overwrite: true
+
+  # a board without a packed tree, or whose tree admission refuses, is not-run with its reason
+  hil-run:
+    needs: [select, hil-build]
+    if: ${{ !cancelled() && needs.select.result == 'success' && needs.select.outputs.boards != '' }}
+    runs-on: [self-hosted, Linux, X64, arduino-tinyusb]
+    # above hil_ci.py's 60 min --deadline plus one board's 15 min budget: a started battery restores its board
+    timeout-minutes: 90
+    env:
+      BOARDS: ${{ needs.select.outputs.boards }}
+    steps:
+      # kept across runs and attempts, outside the workspace: each board's tree and every attempt's report and log,
+      # for recovery (SKILL.md Recovery)
+      - name: Set the run directory
+        run: echo "HIL_OUT=$(dirname "$GITHUB_WORKSPACE")/hil-state/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+
+      - name: Clean workspace
+        run: |
+          rm -rf "${{ github.workspace }}"
+          mkdir -p "${{ github.workspace }}"
+
+      # the rig keeps state between jobs: no token stays in its checkout
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Fetch the pinned agentrc
+        run: python3 "$H"/agentrc_pin.py fetch
+
+      - name: Fetch the hosted builds
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: hil-build-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/hil-build
+
+      - name: Download the selection
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: hil-selection
+          path: ${{ runner.temp }}/hil/selection
+
+      - name: Download the build statuses
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: hil-status-*
+          path: ${{ runner.temp }}/hil/status
+
+      # ends with the PR comment's report, in this step's log (the step a failed job opens on) and on the run's
+      # summary page
+      - name: Battery on the rig
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          rc=0
+          python3 "$H"/hil_ci.py run --hosted "$RUNNER_TEMP/hil-build" --head "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" --out "$HIL_OUT" --deadline 3600 $(printf -- '-b %s ' $BOARDS) \
+            test/hil/ci.json || rc=$?
+          python3 "$H"/hil_workflow.py render --selection "$RUNNER_TEMP/hil/selection" \
+            --status "$RUNNER_TEMP/hil/status" --run "$HIL_OUT" --run-id "$GITHUB_RUN_ID" \
+            --rig-attempt "$GITHUB_RUN_ATTEMPT" --pr-head "$PR_HEAD" --run-url "$RUN_URL" --out "$GITHUB_STEP_SUMMARY" \
+            || echo "::warning title=HIL report::not rendered"
+          exit "$rc"
+
+      # summary.json at the artifact's root; the packed trees and each attempt's images (hil-build-* has them) stay
+      # on the rig, the harness's Markdown views are not uploaded (the report renders from summary.json)
+      - name: Upload the summary, reports and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hil-run-${{ github.run_attempt }}
+          path: |
+            ${{ env.HIL_OUT }}
+            !${{ env.HIL_OUT }}/*/tree
+            !${{ env.HIL_OUT }}/**/images
+            !${{ env.HIL_OUT }}/**/*.md
+          if-no-files-found: ignore

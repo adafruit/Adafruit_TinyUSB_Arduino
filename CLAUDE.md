@@ -53,14 +53,15 @@
   flashes.
 - HIL contract: `.claude/skills/hil-contract/SKILL.md`. It owns taking and releasing a rig board, names the roster for
   the host you are on, runs the battery on a dev PC's board or the ci.lan farm, and gives hw-validator and hw-debugger
-  their manual sessions. Manual runs only: no CI job runs it. Hardware validation comes from its report, never from a
-  build; what no roster board covers is reported pending.
+  their manual sessions; `.github/workflows/hil.yml` runs it on every pull request on the farm (its CI section).
+  Hardware validation comes from its report, never from a build; what no roster board covers is reported pending.
 - Before submitting, and again after a rebase: `pre-commit run --all-files`.
 - For code changes: `python3 .claude/skills/build/scripts/check_build.py --base origin/master --worktree`.
 
 ## PRs and Follow-ups
 
-- Before opening or updating a PR, follow Build and Validate; CI does not run HIL.
+- Before opening or updating a PR, follow Build and Validate. CI's HIL report covers the selected farm boards on the
+  latest cores; a hardware claim beyond it still needs its own run.
 - A non-draft PR opened on the human's request, unless they declined babysitting, or their request or yes to babysit
   one, authorizes one headless `chief` to drive its reviews and CI to green: push commits to its branch, reply to and
   resolve its review threads through `pr-babysit` with `autoPush: true` and `markSonar: true`. Launch it in the PR
