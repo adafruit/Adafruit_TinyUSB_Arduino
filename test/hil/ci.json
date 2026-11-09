@@ -65,8 +65,8 @@
         "tests": ["host_device_info"],
         "dev_attached": [
           {
-            "vid_pid": "0951:1603",
-            "serial": "820000000000000045B46338"
+            "vid_pid": "abcd:1234",
+            "serial": "\u0409"
           }
         ]
       }
