@@ -1,3 +1,11 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
+ * SPDX-FileCopyrightText: Copyright (c) 2020 Ha Thach (tinyusb.org)
+ * SPDX-License-Identifier: MIT
+ *
+ * This file is part of the TinyUSB stack.
+ */
+
 #ifndef RP2040_COMMON_H_
 #define RP2040_COMMON_H_
 
@@ -90,7 +98,9 @@ enum {
   EPSTATE_IDLE = 0,
   EPSTATE_ACTIVE,
   EPSTATE_PENDING,
-  EPSTATE_PENDING_SETUP
+  EPSTATE_PENDING_SETUP,
+  EPSTATE_ABORTING,        // host interrupt endpoint: abort waits for a poll already on the wire
+  EPSTATE_ABORTING_PENDING // as ABORTING, with the next transfer queued in user_buf/remaining_len
 };
 
 // Hardware information per endpoint
@@ -118,6 +128,7 @@ typedef struct hw_endpoint {
   struct TU_ATTR_PACKED {
     uint8_t transfer_type : 2;
     uint8_t need_pre      : 1; // preamble for low-speed device behind full speed hub
+    uint8_t abort_frame   : 5; // SOF_RD (modulo 32) when an interrupt endpoint abort stopped polling
   };
 #endif
 
@@ -139,10 +150,17 @@ extern volatile uint32_t e15_last_sof;
 #endif
 
 void rp2usb_init(void);
+void rp2usb_deinit(void);
 
 // if usb hardware is in host mode
 TU_ATTR_ALWAYS_INLINE static inline bool rp2usb_is_host_mode(void) {
   return (usb_hw->main_ctrl & USB_MAIN_CTRL_HOST_NDEVICE_BITS) ? true : false;
+}
+
+// Bit of an endpoint in the per-endpoint registers (BUFF_STATUS, BUFF_CPU_SHOULD_HANDLE, EP_ABORT, EP_ABORT_DONE):
+// 2n for EPn IN, 2n+1 for EPn OUT.
+TU_ATTR_ALWAYS_INLINE static inline uint32_t rp2usb_ep_bit(uint8_t ep_addr) {
+  return TU_BIT((tu_edpt_number(ep_addr) << 1) | (tu_edpt_dir(ep_addr) == TUSB_DIR_IN ? 0u : 1u));
 }
 
 extern critical_section_t rp2usb_lock;

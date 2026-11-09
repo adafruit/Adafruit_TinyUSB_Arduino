@@ -1,25 +1,6 @@
 /*
- * The MIT License (MIT)
- *
- * Copyright (c) 2019 Ha Thach (tinyusb.org)
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-FileCopyrightText: Copyright (c) 2019 Ha Thach (tinyusb.org)
+ * SPDX-License-Identifier: MIT
  *
  * This file is part of the TinyUSB stack.
  */
@@ -88,13 +69,21 @@ bool tud_inited(void);
 // Task function should be called in main/rtos loop, extended version of tud_task()
 // - timeout_ms: millisecond to wait, zero = no wait, 0xFFFFFFFF = wait forever
 // - in_isr: if function is called in ISR
-void tud_task_ext(uint32_t timeout_ms, bool in_isr);
+// Return true when the stack is not initialized or tud_task_stop() was called: leave the task loop, then
+// call tud_deinit() from this task if needed
+bool tud_task_ext(uint32_t timeout_ms, bool in_isr);
 
 // Task function should be called in main/rtos loop
 TU_ATTR_ALWAYS_INLINE static inline
-void tud_task (void) {
-  tud_task_ext(UINT32_MAX, false);
+bool tud_task (void) {
+  return tud_task_ext(UINT32_MAX, false);
 }
+
+// Make tud_task()/tud_task_ext() return true once the events queued before this call are processed, waking it
+// if blocked. Call once per stop from one other task (not ISR) to stop the USB task before tud_deinit().
+// On a full queue it waits for space if the OS adapter's queue send waits (FreeRTOS, ThreadX, Zephyr), else
+// returns false (no OS, RT-Thread, RTX4, Mynewt...): retry. Also returns false if not initialized
+bool tud_task_stop(void);
 
 // Check if there is pending events need processing by tud_task()
 bool tud_task_event_ready(void);
@@ -103,8 +92,14 @@ bool tud_task_event_ready(void);
 extern void dcd_int_handler(uint8_t rhport);
 #endif
 
-// Interrupt handler, name alias to DCD
-#define tud_int_handler   dcd_int_handler
+// Interrupt handler, name alias to DCD. Most BSPs call it from their vector ISR rather than
+// tusb_int_handler(), so the SystemView ISR span is recorded here.
+#if CFG_TUSB_SYSVIEW >= CFG_TUSB_SYSVIEW_LEVEL_ISR
+  #define tud_int_handler(_rhport) \
+    do { TU_SYSVIEW_ISR_ENTER(); dcd_int_handler(_rhport); TU_SYSVIEW_ISR_EXIT(); } while(0)
+#else
+  #define tud_int_handler   dcd_int_handler
+#endif
 
 // Get current bus speed
 tusb_speed_t tud_speed_get(void);
@@ -130,15 +125,15 @@ bool tud_ready(void) {
 // Remote wake up host, only if suspended and enabled by host
 bool tud_remote_wakeup(void);
 
-// Enable pull-up resistor on D+ D-
-// Return false on unsupported MCUs
+// Disable pull-up resistor on D+ D-, a no-op on MCUs without software control. Always returns true
 bool tud_disconnect(void);
 
-// Disable pull-up resistor on D+ D-
-// Return false on unsupported MCUs
+// Enable pull-up resistor on D+ D-, a no-op on MCUs without software control. Always returns true
 bool tud_connect(void);
 
-// Enable or disable the Start Of Frame callback support
+// Enable or disable the Start Of Frame callback support.
+// A bus reset, or a SET_CONFIGURATION that leaves the current configuration, turns it off again: enable it from
+// tud_mount_cb() rather than once at startup.
 void tud_sof_cb_enable(bool en);
 
 // Carry out Data and Status stage of control transfer
@@ -196,7 +191,7 @@ void tud_resume_cb(void);
 // Invoked when there is a new usb event, which need to be processed by tud_task()/tud_task_ext()
 void tud_event_hook_cb(uint8_t rhport, uint32_t eventid, bool in_isr);
 
-// Invoked when a new (micro) frame started
+// Invoked when a new (micro) frame started, while enabled by tud_sof_cb_enable()
 void tud_sof_cb(uint32_t frame_count);
 
 // Invoked when received control request with VENDOR TYPE
@@ -248,7 +243,7 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_requ
 
 // Config number, interface count, string index, total length, attribute, power in mA
 #define TUD_CONFIG_DESCRIPTOR(config_num, _itfcount, _stridx, _total_len, _attribute, _power_ma) \
-  9, TUSB_DESC_CONFIGURATION, U16_TO_U8S_LE(_total_len), _itfcount, config_num, _stridx, TU_BIT(7) | _attribute, (_power_ma)/2
+  9, TUSB_DESC_CONFIGURATION, U16_TO_U8S_LE(_total_len), _itfcount, config_num, _stridx, TU_BIT(7) | _attribute, (uint8_t)TU_MIN((_power_ma)/2, UINT8_MAX)
 
 //--------------------------------------------------------------------+
 // CDC Descriptor Templates
@@ -425,6 +420,43 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_requ
   TUD_MIDI_JACKID_OUT_EMB(1)
 
 //--------------------------------------------------------------------+
+// MIDI 2.0 Descriptor Templates (USB-MIDI 2.0)
+//--------------------------------------------------------------------+
+
+// Alt Setting 1: MS Interface + MS Header (bcdMSC=0x0200)
+// Per USB-MIDI 2.0 Table 5-2: wTotalLength in the MS Header is not used in 2.0
+// and shall be set to match bLength (= 0x0007) for conformity with USB-MIDI 1.0.
+#define TUD_MIDI2_DESC_ALT1_HEAD_LEN (9 + 7)
+#define TUD_MIDI2_DESC_ALT1_HEAD(_itfnum, _stridx) \
+  /* MIDI Streaming Interface, Alt Setting 1 */\
+  9, TUSB_DESC_INTERFACE, (uint8_t)((_itfnum) + 1), 1, 2, TUSB_CLASS_AUDIO, AUDIO_SUBCLASS_MIDI_STREAMING, AUDIO_FUNC_PROTOCOL_CODE_UNDEF, 0,\
+  /* MS Header (MIDI 2.0): wTotalLength = bLength per spec */\
+  7, TUSB_DESC_CS_INTERFACE, MIDI_CS_INTERFACE_HEADER, U16_TO_U8S_LE(0x0200), U16_TO_U8S_LE(0x0007)
+
+// Alt Setting 1: Standard USB Endpoint (7 bytes) + CS Endpoint General 2.0
+#define TUD_MIDI2_DESC_ALT1_EP_LEN(_numgtbs) (7 + 4 + (_numgtbs))
+#define TUD_MIDI2_DESC_ALT1_EP(_ep, _epsize, _numgtbs, ...) \
+  7, TUSB_DESC_ENDPOINT, _ep, TUSB_XFER_BULK, U16_TO_U8S_LE(_epsize), 0, \
+  (uint8_t)(4 + (_numgtbs)), TUSB_DESC_CS_ENDPOINT, MIDI_CS_ENDPOINT_GENERAL_2_0, _numgtbs, ## __VA_ARGS__
+
+// Total length: Alt 0 (MIDI 1.0) + Alt 1 (UMP)
+#define TUD_MIDI2_DESC_LEN (TUD_MIDI_DESC_LEN + TUD_MIDI2_DESC_ALT1_HEAD_LEN + TUD_MIDI2_DESC_ALT1_EP_LEN(1) * 2)
+
+// Complete MIDI 2.0 descriptor with both alternate settings (single cable/GTB)
+#define TUD_MIDI2_DESCRIPTOR(_itfnum, _stridx, _epout, _epin, _epsize) \
+  /* Alt Setting 0 (MIDI 1.0) */\
+  TUD_MIDI_DESC_HEAD(_itfnum, _stridx, 1),\
+  TUD_MIDI_DESC_JACK_DESC(1, 0),\
+  TUD_MIDI_DESC_EP(_epout, _epsize, 1),\
+  TUD_MIDI_JACKID_IN_EMB(1),\
+  TUD_MIDI_DESC_EP(_epin, _epsize, 1),\
+  TUD_MIDI_JACKID_OUT_EMB(1),\
+  /* Alt Setting 1 (UMP) */\
+  TUD_MIDI2_DESC_ALT1_HEAD(_itfnum, _stridx),\
+  TUD_MIDI2_DESC_ALT1_EP(_epout, _epsize, 1, 1 /* bAssoGrpTrmBlkID */),\
+  TUD_MIDI2_DESC_ALT1_EP(_epin, _epsize, 1, 1 /* bAssoGrpTrmBlkID */)
+
+//--------------------------------------------------------------------+
 // Audio Descriptor Templates
 //--------------------------------------------------------------------+
 
@@ -580,10 +612,24 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_requ
 #define TUD_AUDIO20_DESC_OUTPUT_TERM(_termid, _termtype, _assocTerm, _srcid, _clkid, _ctrl, _stridx) \
   TUD_AUDIO20_DESC_OUTPUT_TERM_LEN, TUSB_DESC_CS_INTERFACE, AUDIO20_CS_AC_INTERFACE_OUTPUT_TERMINAL, _termid, U16_TO_U8S_LE(_termtype), _assocTerm, _srcid, _clkid, U16_TO_U8S_LE(_ctrl), _stridx
 
+/* Mixer Unit Descriptor(4.7.2.6) */
+#define TUD_AUDIO20_DESC_MIXER_UNIT_LEN(_nrinpins, _n, _m) \
+  (13+(_nrinpins)+((((_n) * (_m)) % 8) != 0 ? ((_n) * (_m) / 8 + 1) : ((_n) * (_m) / 8)))
+#define TUD_AUDIO20_DESC_MIXER_UNIT_START(_unitid, _nrinpins, _n, _m, ...) \
+  TUD_AUDIO20_DESC_MIXER_UNIT_LEN(_nrinpins, _n, _m), TUSB_DESC_CS_INTERFACE, 0x04, _unitid, _nrinpins, __VA_ARGS__, _m
+#define TUD_AUDIO20_DESC_MIXER_UNIT_END(_channelcfg, _idxchannelnames, _ctrl, _stridx, ...) \
+  U32_TO_U8S_LE(_channelcfg), _idxchannelnames, __VA_ARGS__, _ctrl, _stridx
+
 /* Feature Unit Descriptor(4.7.2.8) */
 #define TUD_AUDIO20_DESC_FEATURE_UNIT_LEN(_nchannels) (6 + ((_nchannels) + 1) * 4)
 #define TUD_AUDIO20_DESC_FEATURE_UNIT(_unitid, _srcid, _stridx, ...) \
   TUD_AUDIO20_DESC_FEATURE_UNIT_LEN(TU_ARGS_NUM(__VA_ARGS__) - 1), TUSB_DESC_CS_INTERFACE, AUDIO20_CS_AC_INTERFACE_FEATURE_UNIT, _unitid, _srcid, TU_ARGS_APPLY_EXPAND(U32_TO_U8S_LE, __VA_ARGS__), _stridx
+
+/* Up/Down-mix Processing Unit Descriptor(4.7.2.11.1) */
+#define TUD_AUDIO20_DESC_UP_DOWN_MIX_PROCESSING_UNIT_LEN(_nrmodes)\
+  (18+4*_nrmodes)
+#define TUD_AUDIO20_DESC_UP_DOWN_MIX_PROCESSING_UNIT(_unitid, _srcid, _nrchannels, _channelcfg, _idxchannelnames, _ctrl, _stridx, ...)\
+  TUD_AUDIO20_DESC_UP_DOWN_MIX_PROCESSING_UNIT_LEN(TU_ARGS_NUM(__VA_ARGS__)), TUSB_DESC_CS_INTERFACE, 0x08, _unitid, U16_TO_U8S_LE(0x01), 1, _srcid, _nrchannels, U32_TO_U8S_LE(_channelcfg), _idxchannelnames, U16_TO_U8S_LE(_ctrl), _stridx, TU_ARGS_NUM(__VA_ARGS__), TU_ARGS_APPLY_EXPAND(U32_TO_U8S_LE, __VA_ARGS__)
 
 /* Standard AC Interrupt Endpoint Descriptor(4.8.2.1) */
 #define TUD_AUDIO20_DESC_STD_AC_INT_EP_LEN 7

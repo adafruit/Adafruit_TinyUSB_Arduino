@@ -1,27 +1,8 @@
 /*
- * The MIT License (MIT)
- *
- * Copyright (c) 2020 Ha Thach (tinyusb.org)
- * Copyright (c) 2020 Reinhard Panhuber
- * Copyright (c) 2023 HiFiPhile
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-FileCopyrightText: Copyright (c) 2020 Ha Thach (tinyusb.org)
+ * SPDX-FileCopyrightText: Copyright (c) 2020 Reinhard Panhuber
+ * SPDX-FileCopyrightText: Copyright (c) 2023 HiFiPhile (Zixun LI)
+ * SPDX-License-Identifier: MIT
  *
  * This file is part of the TinyUSB stack.
  */
@@ -237,7 +218,8 @@ bool tud_audio_buffer_and_schedule_control_xfer(uint8_t rhport, tusb_control_req
 //--------------------------------------------------------------------+
 
 #if CFG_TUD_AUDIO_ENABLE_EP_IN
-// Invoked in ISR context once an audio packet was sent successfully.
+// Invoked in ISR context once an audio packet was sent successfully, or in tud_task() context
+// on ports with TUP_USBD_XFER_ISR = 0 (e.g. WCH CH32), where transfer completion is not handled in ISR.
 // Normally this function is not needed, since the data transfer should be driven by audio clock (i.e. I2S clock),
 // call tud_audio_write() in I2S receive callback.
 bool tud_audio_tx_done_isr(uint8_t rhport, uint16_t n_bytes_sent, uint8_t func_id, uint8_t ep_in,
@@ -245,7 +227,8 @@ bool tud_audio_tx_done_isr(uint8_t rhport, uint16_t n_bytes_sent, uint8_t func_i
 #endif
 
 #if CFG_TUD_AUDIO_ENABLE_EP_OUT
-// Invoked in ISR context once an audio packet was received successfully.
+// Invoked in ISR context once an audio packet was received successfully, or in tud_task() context
+// on ports with TUP_USBD_XFER_ISR = 0 (e.g. WCH CH32), where transfer completion is not handled in ISR.
 // Normally this function is not needed, since the data transfer should be driven by audio clock (i.e. I2S clock),
 // call tud_audio_read() in I2S transmit callback.
 bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received, uint8_t func_id, uint8_t ep_out,
@@ -461,7 +444,9 @@ void     audiod_reset          (uint8_t rhport);
 uint16_t audiod_open           (uint8_t rhport, tusb_desc_interface_t const * itf_desc, uint16_t max_len);
 bool     audiod_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const * request);
 bool     audiod_xfer_cb        (uint8_t rhport, uint8_t edpt_addr, xfer_result_t result, uint32_t xferred_bytes);
+#if TUP_USBD_XFER_ISR
 bool     audiod_xfer_isr       (uint8_t rhport, uint8_t edpt_addr, xfer_result_t result, uint32_t xferred_bytes);
+#endif
 void     audiod_sof_isr        (uint8_t rhport, uint32_t frame_count);
 
 #ifdef __cplusplus
