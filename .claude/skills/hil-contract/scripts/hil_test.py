@@ -58,13 +58,18 @@ HID_REPORT = 64
 E = None   # agentrc's arduino_hil, bound to this profile by engine()
 
 
+def attached(board):
+    """The devices on a host board's port that host_device_info can name: agentrc's board registry's `dev_attached`
+    (resolved into the entry) with a serial."""
+    return {(d['vid_pid'], d['serial']) for d in board.get('dev_attached', []) if 'serial' in d}
+
+
 def check_board(name, b, path):
-    attached = b.get('arduino', {}).get('dev_attached')
-    if BUILD.BOARDS[name].get('role') == 'host' and not (
-            attached and all(re.fullmatch(r'[0-9a-f]{4}:[0-9a-f]{4}', d.get('vid_pid', '')) and d.get('serial')
-                             for d in attached)):
-        raise E.Refused(f'roster {path}: {name}: a host board needs arduino.dev_attached, each a vid_pid '
-                        f'"vvvv:pppp" and a serial')
+    if 'dev_attached' in b.get('arduino', {}):
+        raise E.Refused(f'roster {path}: {name}: arduino.dev_attached is agentrc\'s board registry\'s now; drop it')
+    if BUILD.BOARDS[name].get('role') == 'host' and not attached(b):
+        raise E.Refused(f'roster {path}: {name}: a host board needs a device with a serial in its dev_attached, '
+                        f'from agentrc\'s board registry')
 
 
 def test_cdc(dev, nonce, deadline, tracker, run_dir, board=None):
@@ -150,9 +155,9 @@ def host_devices(text):
 
 def step_host(name, board, image, test, run_dir, tracker):
     """A host board's step: the console open and drained before the flash, so the boot's enumeration output is
-    kept; pass when every roster dev_attached device is reported with its serial."""
+    kept; pass when every attached device with a serial is reported with it."""
     import serial
-    started, want = time.monotonic(), {(d['vid_pid'], d['serial']) for d in board['arduino']['dev_attached']}
+    started, want = time.monotonic(), attached(board)
     try:
         tty = E.console_tty(board, time.monotonic() + 5)
     except (RuntimeError, TimeoutError) as e:
