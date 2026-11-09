@@ -24,8 +24,8 @@
 
 #include "tusb_option.h"
 
-#if CFG_TUD_ENABLED &&                                                         \
-    (defined(ARDUINO_ARCH_CH32) || defined(CH32V20x) || defined(CH32V30x))
+#if CFG_TUD_ENABLED && (defined(ARDUINO_ARCH_CH32) || defined(CH32V20x) ||     \
+                        defined(CH32V30x) || defined(CH32V4x7))
 
 #include "Arduino.h"
 #include "arduino/Adafruit_USBD_Device.h"
@@ -38,6 +38,13 @@
 // Forward USB interrupt events to TinyUSB IRQ Handler
 //--------------------------------------------------------------------+
 extern "C" {
+
+#if defined(CH32V4x7)
+__attribute__((interrupt)) void USBHS1_IRQHandler(void) { tud_int_handler(0); }
+
+// The board supplies its bootloader's reset convention, if it has one.
+void ch32TinyUSBEnterBootloader(void) __attribute__((weak));
+#endif
 
 // USBD (fsdev)
 #if CFG_TUD_WCH_USBIP_FSDEV
@@ -104,6 +111,25 @@ void yield(void) {
 //--------------------------------------------------------------------+
 
 void TinyUSB_Port_InitDevice(uint8_t rhport) {
+#if defined(CH32V4x7)
+  // USBHS1 uses the external crystal independently of the CPU clock.
+  RCC->CTLR &= ~RCC_USBHSPLLON;
+  RCC_USBHSPLLCLKConfig(RCC_USBHSPLLCLKSource_HSE);
+#if HSE_VALUE == 25000000
+  RCC_USBHSPLLReferConfig(RCC_USBHSPLLCKREFCLK_25M);
+#else
+#error "CH32V4x7 USBHS currently requires a 25 MHz external crystal"
+#endif
+  RCC->CTLR |= RCC_USBHSPLLON;
+  uint32_t timeout = 1000000;
+  while (!(RCC->CTLR & RCC_USBHSPLLRDY) && --timeout) {
+  }
+  if (!timeout) {
+    return;
+  }
+  RCC_UTMI1cmd(ENABLE);
+  RCC_HBPeriphClockCmd(RCC_HBPeriph_USBHS1, ENABLE);
+#endif
 #if CFG_TUD_WCH_USBIP_FSDEV || CFG_TUD_WCH_USBIP_USBFS
   // Full speed OTG or FSDev
 
@@ -171,6 +197,11 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
 }
 
 void TinyUSB_Port_EnterDFU(void) {
+#if defined(CH32V4x7)
+  if (ch32TinyUSBEnterBootloader) {
+    ch32TinyUSBEnterBootloader();
+  }
+#endif
   // Reset to Boot ROM
   // Serial1.println("Reset to Boot ROM");
   //__disable_irq();
@@ -184,12 +215,23 @@ void TinyUSB_Port_EnterDFU(void) {
 
 uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]) {
   volatile uint32_t *ch32_uuid = ((volatile uint32_t *)0x1FFFF7E8UL);
+#if defined(CH32V4x7)
+  // TinyUF2 formats each of the two UID words most-significant byte first.
+  for (uint8_t word = 0; word < 2; word++) {
+    const uint32_t value = ch32_uuid[word];
+    for (uint8_t byte = 0; byte < 4; byte++) {
+      serial_id[4 * word + byte] = value >> (24 - 8 * byte);
+    }
+  }
+  return 8;
+#else
   uint32_t *serial_32 = (uint32_t *)serial_id;
   serial_32[0] = ch32_uuid[0];
   serial_32[1] = ch32_uuid[1];
   serial_32[2] = ch32_uuid[2];
 
   return 12;
+#endif
 }
 
 #endif
