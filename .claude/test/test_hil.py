@@ -86,6 +86,12 @@ class Tables(unittest.TestCase):
         path.write_text(json.dumps(data))
         with self.assertRaisesRegex(E.Refused, "agentrc's board registry's now"):
             E.load_roster(path)
+        data = json.loads((ROOT / 'test/hil/local.example.json').read_text())   # unregistered: its own copy stays
+        data['boards'][0].update(name='raspberry_pi_pico2', arduino={'tests': ['host_device_info']},
+                                 dev_attached=[{'serial': 'x'}])
+        path.write_text(json.dumps(data))
+        with self.assertRaisesRegex(E.Refused, 'raspberry_pi_pico2: dev_attached: .*vid_pid'):
+            E.load_roster(path)
 
     def test_check_board_takes_device_boards_as_they_are(self):
         ht.check_board('raspberry_pi_pico', {}, 'r.json')
@@ -93,6 +99,14 @@ class Tables(unittest.TestCase):
             ht.check_board('raspberry_pi_pico_w', {'arduino': {}}, 'r.json')
         with self.assertRaisesRegex(E.Refused, 'needs a device with a serial'):
             ht.check_board('raspberry_pi_pico2', {'dev_attached': [{'vid_pid': '1a86:7523'}]}, 'r.json')
+
+    def test_check_board_refuses_a_malformed_dev_attached(self):   # an unregistered board's own copy
+        for devices in ([{'serial': 'x'}], [{'vid_pid': 'ABCD:1234', 'serial': 'x'}],
+                        [{'vid_pid': 'abcd:1234', 'serial': 5}], ['abcd:1234'], 'abcd:1234'):
+            with self.subTest(devices=devices), \
+                    self.assertRaisesRegex(E.Refused, 'r.json: raspberry_pi_pico2: dev_attached: '):
+                ht.check_board('raspberry_pi_pico2', {'dev_attached': devices}, 'r.json')
+        ht.check_board('raspberry_pi_pico', {'dev_attached': [{'vid_pid': '1a86:7523'}]}, 'r.json')
 
     def test_attached_keeps_the_devices_with_a_serial(self):
         board = {'dev_attached': [{'vid_pid': 'abcd:1234', 'serial': '\u0409', 'is_msc': True},

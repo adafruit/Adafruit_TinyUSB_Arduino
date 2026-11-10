@@ -341,8 +341,8 @@ def render(sel, statuses, summary, a):
         lines += ['', 'Not covered by any farm board:']
         lines += [f'- family {literal(u.get("family"))}: {literal(u.get("reason"))}' for u in uncovered]
         lines += [f'- {literal(u.get("path"))}: {literal(u.get("reason"))}' for u in paths]
-    lines += ['', f'<sub>{COVERAGE} ✅ pass · ❌ fail · ⛔ blocker (board held for recovery) · ⚪ not run · — not part '
-              'of the board\'s battery · ❔ unknown</sub>']
+    lines += ['', f'<sub>{COVERAGE} ✅ pass · ❌ fail · ⛔ blocker (cleanup failed or unproven: needs recovery) · '
+              '⚪ not run · — not part of the board\'s battery · ❔ unknown</sub>']
     return lines
 
 

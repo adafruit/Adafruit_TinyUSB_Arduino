@@ -20,7 +20,8 @@ inside it. restore --release passes only when the hold was released too.
 
 The last stdout line of every command but lock and read-block is JSON. Exits: 0 pass, 1 a board failed or did not
 run (cleaned up or untouched), 2 refused before any hardware access, 3 a session command (--under-hold) whose hold the
-lock record shows no live holder of, 4 a cleanup did not finish (board held).
+lock record shows no live holder of, 4 a cleanup could not be proven (logged, the board released) or the run was
+aborted.
 """
 
 import json
@@ -67,6 +68,9 @@ def attached(board):
 def check_board(name, b, path):
     if 'dev_attached' in b.get('arduino', {}):
         raise E.Refused(f'roster {path}: {name}: arduino.dev_attached is agentrc\'s board registry\'s now; drop it')
+    # the roster's own copy, which resolution keeps unchecked for a board the registry lists no devices for
+    if 'dev_attached' in b and (why := BUILD.E.hil_boards.dev_attached_problem(b['dev_attached'])):
+        raise E.Refused(f'roster {path}: {name}: dev_attached: {why}')
     if BUILD.BOARDS[name].get('role') == 'host' and not attached(b):
         raise E.Refused(f'roster {path}: {name}: a host board needs a device with a serial in its dev_attached, '
                         f'from agentrc\'s board registry')
