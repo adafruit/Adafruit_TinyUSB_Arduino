@@ -56,7 +56,9 @@ A roster entry:
   no GDB route.
 - `arduino.tests`: the tests the battery runs, all of the board's role (device or host, the build contract's board
   table). The devices wired to a host board's USB port are agentrc's board registry's `dev_attached` (the `hil`
-  skill's Board registry), resolved into the entry by `probe`; the roster keeps no copy.
+  skill's Board registry), resolved into the entry by `probe`; the roster keeps no copy. A board without a registered
+  `probe` lists its own top-level `dev_attached` instead: each device a lowercase `vid_pid` `vvvv:pppp` and an
+  optional `serial`, a host board needing at least one with a serial.
 
 ci.lan's boards are also on tinyusb's roster (tinyusb `test/hil/tinyusb.json`) and tinyuf2's. This contract performs
 no rig-wide operation (hub power, port cycle, controller rebind).

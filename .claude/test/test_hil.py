@@ -153,6 +153,12 @@ class HostTest(Base):
         no_serial = 'Device 1: ID 0951:1603\r\nDevice Descriptor:\r\n  iSerialNumber       0     \r\n'
         self.assertEqual(ht.host_devices(no_serial), {('0951:1603', '')})
 
+    def test_parser_takes_a_utf8_serial_whole(self):   # the Pico 2's registry device abcd:1234, serial U+0409
+        buf = 'Device 1: ID abcd:1234\r\nDevice Descriptor:\r\n  iSerialNumber       3     Љ\r\n'.encode()
+        self.assertEqual(ht.host_devices(buf.decode(errors='replace')), {('abcd:1234', 'Љ')})
+        cut = buf[:buf.index(b'\xd0\x89') + 1]
+        self.assertEqual(ht.host_devices(cut.decode(errors='replace')), set())
+
     def host_step(self, output, flash_why='', console_error=None):
         board = roster('raspberry_pi_pico_w')
         calls, chunks = [], [output.encode()]
