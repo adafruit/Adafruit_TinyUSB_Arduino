@@ -43,6 +43,7 @@ static xfer_ctl_t xfer_status[EP_MAX][2];
 TU_ATTR_ALIGNED(4) static uint8_t ep0_buffer[EP0_MAX_SIZE];
 static volatile bool ep0_tog;    // EP0 expected IN toggle
 static volatile bool ep0_rx_tog; // EP0 expected OUT toggle
+static bool ep0_status_in; // direction of the current request's status stage
 static volatile bool
     sof_enabled; // usbd asked for SOF (see the RX_SOF branch in the ISR)
 static volatile bool reset_pending;
@@ -149,18 +150,22 @@ static void queue_out_packet(uint8_t ep_num, xfer_ctl_t *xfer) {
   }
 }
 
-static void update_in(uint8_t rhport, uint8_t ep_num, bool force) {
+// Return true when the submission completes. The caller reports the event
+// after all endpoint state is settled, since an ISR callback may submit again.
+static bool update_in(uint8_t ep_num, bool rearm) {
   xfer_ctl_t *xfer = XFER_CTL_BASE(ep_num, TUSB_DIR_IN);
   if (!xfer->valid) {
-    return;
+    return false;
   }
 
-  if (!force && ep_num != 0 && !xfer->is_iso) {
+  if (ep_num != 0 && !xfer->is_iso) {
     ep_data_tog[ep_num][TUSB_DIR_IN] = !ep_data_tog[ep_num][TUSB_DIR_IN];
   }
 
-  if (force || (xfer->total_len > xfer->queued_len)) {
-    queue_in_packet(ep_num, xfer);
+  if (xfer->total_len > xfer->queued_len) {
+    if (rearm) {
+      queue_in_packet(ep_num, xfer);
+    }
   } else {
     xfer->valid = false;
     if (ep_num == 0) {
@@ -170,15 +175,15 @@ static void update_in(uint8_t rhport, uint8_t ep_num, bool force) {
     } else {
       set_tx_res(ep_num, USBHS_UEP_T_RES_NAK);
     }
-    dcd_event_xfer_complete(rhport, ep_num | TUSB_DIR_IN_MASK, xfer->queued_len,
-                            XFER_RESULT_SUCCESS, true);
+    return true;
   }
+  return false;
 }
 
-static void update_out(uint8_t rhport, uint8_t ep_num, uint16_t rx_len) {
+static bool update_out(uint8_t ep_num, uint16_t rx_len, bool rearm) {
   xfer_ctl_t *xfer = XFER_CTL_BASE(ep_num, TUSB_DIR_OUT);
   if (!xfer->valid) {
-    return;
+    return false;
   }
 
   uint16_t remaining = xfer->total_len - xfer->queued_len;
@@ -199,8 +204,6 @@ static void update_out(uint8_t rhport, uint8_t ep_num, uint16_t rx_len) {
     if (ep_num == 0) {
       set_rx_res(0, USBHS_UEP_R_RES_NAK);
     }
-    dcd_event_xfer_complete(rhport, ep_num, xfer->queued_len,
-                            XFER_RESULT_SUCCESS, true);
   }
 
   if (ep_num == 0) {
@@ -209,10 +212,10 @@ static void update_out(uint8_t rhport, uint8_t ep_num, uint16_t rx_len) {
     // chunk per dcd_edpt_xfer(), so the toggle must survive across chunks
     // (packet 2, 4, ... are DATA0) as well as within a multi-packet stage.
     ep0_rx_tog = !ep0_rx_tog;
-    if (xfer->valid) {
+    if (xfer->valid && rearm) {
       arm_ep0_out();
     }
-  } else if (xfer->valid) {
+  } else if (xfer->valid && rearm) {
     queue_out_packet(ep_num, xfer);
   } else {
     // RES=NAK is documented as "respond with NAK or busy": with no xfer queued
@@ -222,6 +225,7 @@ static void update_out(uint8_t rhport, uint8_t ep_num, uint16_t rx_len) {
     // completed transfer before task context delivers it.
     set_rx_res(ep_num, USBHS_UEP_R_RES_NAK);
   }
+  return !xfer->valid;
 }
 
 //--------------------------------------------------------------------+
@@ -235,6 +239,7 @@ static bool ch32v4x7_usb2_init(uint8_t rhport) {
   memset((void *)ep_data_tog, 0, sizeof(ep_data_tog));
   ep0_tog = true;
   ep0_rx_tog = false;
+  ep0_status_in = false;
   // Reset latches when the device stack is reinitialized.
   sof_enabled = false;
   bus_suspended = false;
@@ -403,6 +408,7 @@ static void ch32v4x7_usb2_edpt_close_all(uint8_t rhport) {
 
 static bool ch32v4x7_usb2_edpt_xfer(uint8_t rhport, uint8_t ep_addr,
                                     uint8_t *buffer, uint16_t total_bytes) {
+  (void)rhport;
   const uint8_t ep_num = tu_edpt_number(ep_addr);
   const tusb_dir_t dir = tu_edpt_dir(ep_addr);
 
@@ -421,7 +427,7 @@ static bool ch32v4x7_usb2_edpt_xfer(uint8_t rhport, uint8_t ep_addr,
   }
 
   if (dir == TUSB_DIR_IN) {
-    update_in(rhport, ep_num, true);
+    queue_in_packet(ep_num, xfer);
   } else {
     queue_out_packet(ep_num, xfer);
   }
@@ -448,7 +454,6 @@ static void ch32v4x7_usb2_edpt_stall(uint8_t rhport, uint8_t ep_addr) {
 }
 
 static void ch32v4x7_usb2_edpt_clear_stall(uint8_t rhport, uint8_t ep_addr) {
-  (void)rhport;
   const uint8_t ep_num = tu_edpt_number(ep_addr);
   const tusb_dir_t dir = tu_edpt_dir(ep_addr);
   // Same bound edpt_open()/edpt_close() apply: tu_edpt_number() yields 0..15,
@@ -457,37 +462,73 @@ static void ch32v4x7_usb2_edpt_clear_stall(uint8_t rhport, uint8_t ep_addr) {
   // depth, not a reachable hole.
   TU_ASSERT(ep_num < EP_MAX, );
 
+  // Stop both the ISR and the endpoint before changing its transfer state.
+  // CLEAR_FEATURE may target an active, non-stalled endpoint. Account for a
+  // packet already completed by the SIE before resetting its toggle, and do
+  // not arm another packet until the reset is finished.
+  const bool irq_enabled = NVIC_GetStatusIRQ(USBHS1_IRQn) != 0;
+  NVIC_DisableIRQ(USBHS1_IRQn);
+  const uint16_t ep_mask = (uint16_t)(1u << ep_num);
+  bool completed = false;
+
   if (dir == TUSB_DIR_OUT) {
+    const uint16_t enabled = USBHSD->UEP_RX_EN;
+    USBHSD->UEP_RX_EN = (uint16_t)(enabled & ~ep_mask);
+    set_rx_res(ep_num, USBHS_UEP_R_RES_NAK);
+    const uint8_t rx_ctrl = EP_RX_CTRL(ep_num);
+    EP_RX_CTRL(ep_num) = (uint8_t)(rx_ctrl & ~USBHS_UEP_R_DONE);
+    if ((rx_ctrl & USBHS_UEP_R_DONE) &&
+        ((ep_num == 0) || xfer_status[ep_num][TUSB_DIR_OUT].is_iso ||
+         (rx_ctrl & USBHS_UEP_R_TOG_MATCH))) {
+      completed = update_out(ep_num, EP_RX_LEN(ep_num), false);
+    }
     ep_data_tog[ep_num][TUSB_DIR_OUT] =
         false; // clear-halt resets the toggle to DATA0
+    EP_RX_CTRL(ep_num) = USBHS_UEP_R_RES_NAK | USBHS_UEP_R_TOG_DATA0;
     xfer_ctl_t *xfer = XFER_CTL_BASE(ep_num, TUSB_DIR_OUT);
     if (xfer->valid) {
       // A receive is still armed; re-queue it instead of leaving it NAKing
       // (usbtest case 29 clears the halt on an armed bulk-OUT pipe).
       queue_out_packet(ep_num, xfer);
-    } else {
-      EP_RX_CTRL(ep_num) = USBHS_UEP_R_RES_NAK | USBHS_UEP_R_TOG_DATA0;
     }
+    USBHSD->UEP_RX_EN = enabled;
   } else {
-    ep_data_tog[ep_num][TUSB_DIR_IN] =
-        false; // clear-halt resets the toggle to DATA0
+    const uint16_t enabled = USBHSD->UEP_TX_EN;
+    USBHSD->UEP_TX_EN = (uint16_t)(enabled & ~ep_mask);
+    set_tx_res(ep_num, USBHS_UEP_T_RES_NAK);
+    const bool done = (EP_TX_CTRL(ep_num) & USBHS_UEP_T_DONE) != 0;
+    EP_TX_CTRL(ep_num) &= (uint8_t)~USBHS_UEP_T_DONE;
     xfer_ctl_t *xfer = XFER_CTL_BASE(ep_num, TUSB_DIR_IN);
-    if (xfer->valid) {
-      // A transmit is still armed (the class driver considers it submitted and
-      // won't re-arm it); re-queue it instead of leaving it NAKing (usbtest
-      // halt test 13 clears the halt on an armed bulk-IN pipe). queued_len
-      // tracks ARMED bytes and edpt_stall (EP_TX_LEN=0) discarded exactly the
-      // one armed packet: rewind only that packet, so a mid-transfer halt-clear
-      // does not retransmit packets the host already ACKed.
+    if (done) {
+      // This packet was ACKed: retain its bytes and deliver a final completion
+      // if needed, without queueing the next packet with the old toggle.
+      completed = update_in(ep_num, false);
+    } else if (xfer->valid) {
+      // queued_len includes the one armed but unacknowledged packet. Rewind
+      // only that packet, including a short final packet; a ZLP rewinds zero.
       uint16_t rearm = (uint16_t)(xfer->queued_len % xfer->max_size);
       if (rearm == 0 && xfer->queued_len != 0) {
         rearm = xfer->max_size;
       }
       xfer->queued_len -= rearm;
-      queue_in_packet(ep_num, xfer);
-    } else {
-      EP_TX_CTRL(ep_num) = USBHS_UEP_T_RES_NAK | USBHS_UEP_T_TOG_DATA0;
     }
+    ep_data_tog[ep_num][TUSB_DIR_IN] = false;
+    EP_TX_CTRL(ep_num) = USBHS_UEP_T_RES_NAK | USBHS_UEP_T_TOG_DATA0;
+    if (xfer->valid) {
+      queue_in_packet(ep_num, xfer);
+    }
+    USBHSD->UEP_TX_EN = enabled;
+  }
+  if (completed) {
+    // Notify only after the reset: an xfer_isr callback can immediately submit
+    // a new transfer. This bare-metal port queues with the USB IRQ masked, as
+    // in the ISR, so a bus reset cannot interleave before the completion event.
+    dcd_event_xfer_complete(rhport, ep_addr,
+                            XFER_CTL_BASE(ep_num, dir)->queued_len,
+                            XFER_RESULT_SUCCESS, true);
+  }
+  if (irq_enabled) {
+    NVIC_EnableIRQ(USBHS1_IRQn);
   }
 }
 
@@ -521,6 +562,7 @@ static void ch32v4x7_usb2_int_handler(uint8_t rhport) {
     xfer_status[0][TUSB_DIR_IN].max_size = EP0_MAX_SIZE;
     ep0_tog = true;
     ep0_rx_tog = false;
+    ep0_status_in = false;
     EP_RX_CTRL(0) = USBHS_UEP_R_RES_ACK | USBHS_UEP_R_TOG_DATA0;
     USBHSD->INT_FG = USBHS_UDIF_BUS_RST;
     return;
@@ -570,21 +612,22 @@ static void ch32v4x7_usb2_int_handler(uint8_t rhport) {
           // cleared) and the full-byte TX write would clear its DONE, so usbd
           // would never run the transfer's CONTROL_STAGE_ACK - which is where
           // classes apply a received payload (hid_device.c applies SET_REPORT
-          // only on that stage). Only when that transfer is actually finished,
-          // though. On an unfinished multi-packet control-IN, update_in() would
-          // queue the NEXT packet, and queue_in_packet() memcpys it into
-          // ep0_buffer - the very buffer holding the SETUP about to be handed
-          // to usbd, which would arrive as stale descriptor bytes. A host may
-          // legally abort a control-IN with a new SETUP (USB 2.0 8.5.3), e.g.
-          // cutting a GET_DESCRIPTOR short, so this is reachable. An abandoned
-          // transfer has no completion worth reporting; the pipe reset below
-          // drops it.
+          // only on that stage). Do not deliver an abandoned IN data chunk:
+          // usbd submits long control reads one packet at a time, so even a
+          // completed DCD submission can make usbd queue more old data after
+          // this reset and consume the new request's DATA1 toggle. A zero-size
+          // IN alone is not sufficient either: it may terminate a data stage.
           const xfer_ctl_t *ep0_in = XFER_CTL_BASE(0, TUSB_DIR_IN);
           if ((EP_TX_CTRL(0) & USBHS_UEP_T_DONE) && ep0_in->valid &&
-              (ep0_in->total_len <= ep0_in->queued_len)) {
+              ep0_status_in && ep0_in->total_len == 0) {
             EP_TX_CTRL(0) &= (uint8_t)~USBHS_UEP_T_DONE;
-            update_in(rhport, 0, false);
+            if (update_in(0, false)) {
+              dcd_event_xfer_complete(rhport, TUSB_DIR_IN_MASK, 0,
+                                      XFER_RESULT_SUCCESS, true);
+            }
           }
+          ep0_status_in = (setup->wLength == 0) ||
+                          (setup->bmRequestType_bit.direction == TUSB_DIR_OUT);
           ep0_tog = true;
           ep0_rx_tog = true;
           // A SETUP resets the control pipe: drop any stage still armed from a
@@ -619,7 +662,12 @@ static void ch32v4x7_usb2_int_handler(uint8_t rhport) {
           EP_RX_CTRL(ep_num) = (uint8_t)(rx_ctrl & ~USBHS_UEP_R_DONE);
           if ((ep_num == 0) || xfer_status[ep_num][TUSB_DIR_OUT].is_iso ||
               (rx_ctrl & USBHS_UEP_R_TOG_MATCH)) {
-            update_out(rhport, ep_num, EP_RX_LEN(ep_num));
+            if (update_out(ep_num, EP_RX_LEN(ep_num), true)) {
+              dcd_event_xfer_complete(
+                  rhport, ep_num,
+                  XFER_CTL_BASE(ep_num, TUSB_DIR_OUT)->queued_len,
+                  XFER_RESULT_SUCCESS, true);
+            }
           }
         }
       }
@@ -627,7 +675,12 @@ static void ch32v4x7_usb2_int_handler(uint8_t rhport) {
       if (EP_TX_CTRL(ep_num) & USBHS_UEP_T_DONE) {
         // IN transaction completed
         EP_TX_CTRL(ep_num) &= (uint8_t)~USBHS_UEP_T_DONE;
-        update_in(rhport, ep_num, false);
+        if (update_in(ep_num, true)) {
+          dcd_event_xfer_complete(
+              rhport, ep_num | TUSB_DIR_IN_MASK,
+              XFER_CTL_BASE(ep_num, TUSB_DIR_IN)->queued_len,
+              XFER_RESULT_SUCCESS, true);
+        }
       }
     }
     // The transfer interrupt is acknowledged by clearing the per-endpoint DONE
