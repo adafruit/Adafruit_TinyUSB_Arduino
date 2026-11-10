@@ -1,26 +1,8 @@
 /*
- * The MIT License (MIT)
- *
- * Copyright (c) 2020 Reinhard Panhuber, Jerzy Kasenberg
- * Copyright (c) 2023 HiFiPhile
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-FileCopyrightText: Copyright (c) 2020 Reinhard Panhuber, Jerzy Kasenberg
+ * SPDX-FileCopyrightText: Copyright (c) 2023 HiFiPhile (Zixun LI)
+ * SPDX-FileCopyrightText: Copyright (c) 2020 Ha Thach (tinyusb.org)
+ * SPDX-License-Identifier: MIT
  *
  * This file is part of the TinyUSB stack.
  */
@@ -236,6 +218,7 @@ typedef struct
 #if CFG_TUD_AUDIO_ENABLE_EP_IN && CFG_TUD_AUDIO_EP_IN_FLOW_CONTROL
   uint32_t sample_rate_tx;
   uint16_t packet_sz_tx[3];
+  int8_t ctrl_blackout_tx; // frames before flow control may reverse; sign = last correction (-smaller, +larger)
   uint8_t bclock_id_tx;
   uint8_t interval_tx;
   uint8_t format_type_tx;
@@ -392,11 +375,11 @@ TU_ATTR_WEAK bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_reque
 tu_static CFG_TUD_MEM_SECTION audiod_function_t _audiod_fct[CFG_TUD_AUDIO];
 
 #if CFG_TUD_AUDIO_ENABLE_EP_OUT
-static bool audiod_rx_xfer_isr(uint8_t rhport, audiod_function_t* audio, uint16_t n_bytes_received);
+static bool audiod_rx_done(uint8_t rhport, audiod_function_t* audio, uint16_t n_bytes_received, bool is_isr);
 #endif
 
 #if CFG_TUD_AUDIO_ENABLE_EP_IN
-static bool audiod_tx_xfer_isr(uint8_t rhport, audiod_function_t* audio, uint16_t n_bytes_sent);
+static bool audiod_tx_done(uint8_t rhport, audiod_function_t* audio, uint16_t n_bytes_sent, bool is_isr);
 #endif
 
 static bool audiod_get_interface(uint8_t rhport, tusb_control_request_t const *p_request);
@@ -410,7 +393,8 @@ static inline uint8_t audiod_get_audio_fct_idx(audiod_function_t *audio);
 #if CFG_TUD_AUDIO_ENABLE_EP_IN && CFG_TUD_AUDIO_EP_IN_FLOW_CONTROL
 static void audiod_parse_flow_control_params(audiod_function_t *audio, uint8_t const *p_desc);
 static bool audiod_calc_tx_packet_sz(audiod_function_t *audio);
-static uint16_t audiod_tx_packet_size(const uint16_t *nominal_size, uint16_t data_count, uint16_t fifo_depth, uint16_t fifo_threshold, uint16_t max_size);
+static uint16_t audiod_tx_packet_size(audiod_function_t *audio, uint16_t data_count);
+static void audiod_tx_trim_to_threshold(audiod_function_t *audio);
 #endif
 
 #if CFG_TUD_AUDIO_ENABLE_EP_OUT && CFG_TUD_AUDIO_ENABLE_FEEDBACK_EP
@@ -463,18 +447,21 @@ tu_fifo_t *tud_audio_n_get_ep_out_ff(uint8_t func_id) {
   return NULL;
 }
 
-static bool audiod_rx_xfer_isr(uint8_t rhport, audiod_function_t* audio, uint16_t n_bytes_received) {
+static bool audiod_rx_done(uint8_t rhport, audiod_function_t* audio, uint16_t n_bytes_received, bool is_isr) {
   uint8_t idx_audio_fct = audiod_get_audio_fct_idx(audio);
 
   #if !CFG_TUD_EDPT_DEDICATED_HWFIFO
-  // Data currently is in linear buffer, copy into EP OUT FIFO
-  TU_VERIFY(0 < tu_fifo_write_n(&audio->ep_out_ff, audio->lin_buf_out, n_bytes_received));
+  // Data currently is in linear buffer, copy into EP OUT FIFO. A zero-length packet has no data, but the endpoint
+  // must still be re-armed.
+  if (n_bytes_received > 0) {
+    TU_VERIFY(0 < tu_fifo_write_n(&audio->ep_out_ff, audio->lin_buf_out, n_bytes_received));
+  }
 
   // Schedule for next receive
-  TU_VERIFY(usbd_edpt_xfer(rhport, audio->ep_out, audio->lin_buf_out, audio->ep_out_sz, true));
+  TU_VERIFY(usbd_edpt_xfer(rhport, audio->ep_out, audio->lin_buf_out, audio->ep_out_sz, is_isr));
   #else
   // Data is already placed in EP FIFO, schedule for next receive
-  TU_VERIFY(usbd_edpt_xfer_fifo(rhport, audio->ep_out, &audio->ep_out_ff, audio->ep_out_sz, true));
+  TU_VERIFY(usbd_edpt_xfer_fifo(rhport, audio->ep_out, &audio->ep_out_ff, audio->ep_out_sz, is_isr));
   #endif
 
   #if CFG_TUD_AUDIO_ENABLE_FEEDBACK_EP
@@ -526,7 +513,7 @@ void tud_audio_n_set_ep_in_fifo_threshold(uint8_t func_id, uint16_t threshold) {
   }
 }
 
-static bool audiod_tx_xfer_isr(uint8_t rhport, audiod_function_t * audio, uint16_t n_bytes_sent) {
+static bool audiod_tx_done(uint8_t rhport, audiod_function_t * audio, uint16_t n_bytes_sent, bool is_isr) {
   uint8_t idx_audio_fct = audiod_get_audio_fct_idx(audio);
 
   // Only send something if current alternate interface is not 0 as in this case nothing is to be sent due to UAC2 specifications
@@ -537,16 +524,16 @@ static bool audiod_tx_xfer_isr(uint8_t rhport, audiod_function_t * audio, uint16
 
   #if CFG_TUD_AUDIO_EP_IN_FLOW_CONTROL
   // packet_sz_tx is based on total packet size, here we want size for each support buffer.
-  n_bytes_tx = audiod_tx_packet_size(audio->packet_sz_tx, tu_fifo_count(&audio->ep_in_ff), audio->ep_in_ff.depth, audio->ep_in_fifo_threshold, audio->ep_in_sz);
+  n_bytes_tx = audiod_tx_packet_size(audio, tu_fifo_count(&audio->ep_in_ff));
   #else
   n_bytes_tx = tu_min16(tu_fifo_count(&audio->ep_in_ff), audio->ep_in_sz);// Limit up to max packet size, more can not be done for ISO
   #endif
   #if !CFG_TUD_EDPT_DEDICATED_HWFIFO
   tu_fifo_read_n(&audio->ep_in_ff, audio->lin_buf_in, n_bytes_tx);
-  TU_VERIFY(usbd_edpt_xfer(rhport, audio->ep_in, audio->lin_buf_in, n_bytes_tx, true));
+  TU_VERIFY(usbd_edpt_xfer(rhport, audio->ep_in, audio->lin_buf_in, n_bytes_tx, is_isr));
   #else
   // Send everything in ISO EP FIFO
-  TU_VERIFY(usbd_edpt_xfer_fifo(rhport, audio->ep_in, &audio->ep_in_ff, n_bytes_tx, true));
+  TU_VERIFY(usbd_edpt_xfer_fifo(rhport, audio->ep_in, &audio->ep_in_ff, n_bytes_tx, is_isr));
   #endif
 
   // Call a weak callback here - a possibility for user to get informed former TX was completed and data gets now loaded into EP in buffer
@@ -904,7 +891,9 @@ uint16_t audiod_open(uint8_t rhport, tusb_desc_interface_t const *itf_desc, uint
         uint8_t const *p_desc_end = p_desc + _audiod_fct[i].desc_length;
         // Condition modified from p_desc < p_desc_end to prevent gcc>=12 strict-overflow warning
         while (p_desc_end - p_desc > 0) {
-          if (tu_desc_type(p_desc) == TUSB_DESC_ENDPOINT) {
+          // Only isochronous EPs, so the AC interrupt EP is never taken for a data or feedback EP
+          if (tu_desc_type(p_desc) == TUSB_DESC_ENDPOINT &&
+              ((tusb_desc_endpoint_t const *) p_desc)->bmAttributes.xfer == TUSB_XFER_ISOCHRONOUS) {
             // Unified UAC1/UAC2 endpoint processing
             tusb_desc_endpoint_t const *desc_ep = (tusb_desc_endpoint_t const *) p_desc;
             bool is_feedback_ep = false;
@@ -948,21 +937,25 @@ uint16_t audiod_open(uint8_t rhport, tusb_desc_interface_t const *itf_desc, uint
           p_desc = tu_desc_next(p_desc);
         }
 
+        // An allocation failure means the ISO endpoints exceed what the MCU provides (endpoint numbers or
+        // FIFO/packet memory): the configuration is too large for this port, so the open fails on purpose.
+        // Lower the settings that size the EPs (sample rate, channel count, bit resolution, hence wMaxPacketSize
+        // and CFG_TUD_AUDIO_FUNC_x_EP_IN/OUT_SZ_MAX) or the number of audio functions.
   #if CFG_TUD_AUDIO_ENABLE_EP_IN
         if (ep_in != 0) {
-          usbd_edpt_iso_alloc(rhport, ep_in, ep_in_size);
+          TU_ASSERT(usbd_edpt_iso_alloc(rhport, ep_in, ep_in_size));
         }
   #endif
 
   #if CFG_TUD_AUDIO_ENABLE_EP_OUT
         if (ep_out != 0) {
-          usbd_edpt_iso_alloc(rhport, ep_out, ep_out_size);
+          TU_ASSERT(usbd_edpt_iso_alloc(rhport, ep_out, ep_out_size));
         }
   #endif
 
   #if CFG_TUD_AUDIO_ENABLE_FEEDBACK_EP
         if (ep_fb != 0) {
-          usbd_edpt_iso_alloc(rhport, ep_fb, 4);
+          TU_ASSERT(usbd_edpt_iso_alloc(rhport, ep_fb, 4));
         }
   #endif
       }
@@ -1179,9 +1172,6 @@ static bool audiod_set_interface(uint8_t rhport, tusb_control_request_t const *p
             is_feedback_ep = (desc_ep->bmAttributes.usage == 1);
           }
 
-          //TODO: We need to set EP non busy since this is not taken care of right now in ep_close() - THIS IS A WORKAROUND!
-          usbd_edpt_clear_stall(rhport, ep_addr);
-
 #if CFG_TUD_AUDIO_ENABLE_EP_IN
           // For data or data with implicit feedback IN EP
           if (tu_edpt_dir(ep_addr) == TUSB_DIR_IN && is_data_ep)
@@ -1197,6 +1187,7 @@ static bool audiod_set_interface(uint8_t rhport, tusb_control_request_t const *p
             // If flow control is enabled, parse for the corresponding parameters - doing this here means only AS interfaces with EPs get scanned for parameters
   #if  CFG_TUD_AUDIO_EP_IN_FLOW_CONTROL
             audiod_parse_flow_control_params(audio, p_desc_parse_for_params);
+            audiod_tx_trim_to_threshold(audio);
   #endif
             // Schedule first transmit if alternate interface is not zero, as sample data is available a ZLP is loaded
   #if !CFG_TUD_EDPT_DEDICATED_HWFIFO
@@ -1463,38 +1454,53 @@ bool audiod_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_
 
 bool audiod_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint32_t xferred_bytes) {
   (void) result;
-  (void) xferred_bytes;
 
-  #if CFG_TUD_AUDIO_ENABLE_INTERRUPT_EP
-  // Search for interface belonging to given end point address and proceed as required
   for (uint8_t func_id = 0; func_id < CFG_TUD_AUDIO; func_id++) {
     audiod_function_t *audio = &_audiod_fct[func_id];
+    (void) func_id;
 
+#if !TUP_USBD_XFER_ISR
+  #if CFG_TUD_AUDIO_ENABLE_EP_IN
+    if (audio->ep_in == ep_addr) {
+      audiod_tx_done(rhport, audio, (uint16_t) xferred_bytes, false);
+      return true;
+    }
+  #endif
+
+  #if CFG_TUD_AUDIO_ENABLE_EP_OUT
+    if (audio->ep_out == ep_addr) {
+      audiod_rx_done(rhport, audio, (uint16_t) xferred_bytes, false);
+      return true;
+    }
+    #if CFG_TUD_AUDIO_ENABLE_FEEDBACK_EP
+    if (audio->ep_fb == ep_addr) {
+      audiod_fb_send(func_id, false);
+      return true;
+    }
+    #endif
+  #endif
+#endif // !TUP_USBD_XFER_ISR
+
+  #if CFG_TUD_AUDIO_ENABLE_INTERRUPT_EP
     // Data transmission of control interrupt finished
     if (audio->ep_int == ep_addr) {
-      // According to USB2 specification, maximum payload of interrupt EP is 8 bytes on low speed, 64 bytes on full speed, and 1024 bytes on high speed (but only if an alternate interface other than 0 is used - see specification p. 49)
-      // In case there is nothing to send we have to return a NAK - this is taken care of by PHY ???
-      // In case of an erroneous transmission a retransmission is conducted - this is taken care of by PHY ???
-
-      // I assume here, that things above are handled by PHY
-      // All transmission is done - what remains to do is to inform job was completed
-
       tud_audio_int_done_cb(rhport);
       return true;
     }
-
-  }
-  #else
-  (void) rhport;
-  (void) ep_addr;
   #endif
 
+    (void) audio;
+  }
+
+  (void) rhport;
+  (void) ep_addr;
+  (void) xferred_bytes;
   return false;
 }
 
+#if TUP_USBD_XFER_ISR
 bool audiod_xfer_isr(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint32_t xferred_bytes) {
   (void) result;
-  (void) xferred_bytes;
 
   // Search for interface belonging to given end point address and proceed as required
   for (uint8_t func_id = 0; func_id < CFG_TUD_AUDIO; func_id++)
@@ -1514,7 +1520,7 @@ bool audiod_xfer_isr(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint
       // This is the only place where we can fill something into the EPs buffer!
 
       // Load new data
-      audiod_tx_xfer_isr(rhport, audio, (uint16_t) xferred_bytes);
+      audiod_tx_done(rhport, audio, (uint16_t) xferred_bytes, true);
       return true;
     }
 #endif
@@ -1522,7 +1528,7 @@ bool audiod_xfer_isr(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint
 #if CFG_TUD_AUDIO_ENABLE_EP_OUT
     // New audio packet received
     if (audio->ep_out == ep_addr) {
-      audiod_rx_xfer_isr(rhport, audio, (uint16_t) xferred_bytes);
+      audiod_rx_done(rhport, audio, (uint16_t) xferred_bytes, true);
       return true;
     }
   #if CFG_TUD_AUDIO_ENABLE_FEEDBACK_EP
@@ -1539,6 +1545,7 @@ bool audiod_xfer_isr(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint
 
   return false;
 }
+#endif // TUP_USBD_XFER_ISR
 
 #if CFG_TUD_AUDIO_ENABLE_EP_OUT && CFG_TUD_AUDIO_ENABLE_FEEDBACK_EP
 
@@ -1860,38 +1867,60 @@ static bool audiod_calc_tx_packet_sz(audiod_function_t *audio) {
   return true;
 }
 
-static uint16_t audiod_tx_packet_size(const uint16_t *nominal_size, uint16_t data_count, uint16_t fifo_depth, uint16_t fifo_threshold, uint16_t max_depth) {
+// Drop what was queued while the stream was closed down to the threshold: starting full, flow
+// control needs ~100 frames to drain it and the overwritable FIFO overflows meanwhile.
+static void audiod_tx_trim_to_threshold(audiod_function_t *audio) {
+  tu_fifo_t *ff = &audio->ep_in_ff;
+  const uint16_t frame_sz = (uint16_t) (audio->n_channels_tx * audio->n_bytes_per_sample_tx);
+  const uint16_t count = tu_fifo_count(ff);
+  // channel/width fields are stale for a non-PCM alt, whose frames they cannot align
+  if (audio->format_type_tx != AUDIO20_FORMAT_TYPE_I || frame_sz == 0 || count <= audio->ep_in_fifo_threshold) {
+    return;
+  }
+  if (count >= ff->depth) {
+    tu_fifo_correct_read_pointer(ff); // an overflowed FIFO keeps a stale read index
+  }
+  tu_fifo_discard_n(ff, (uint16_t) ((count - audio->ep_in_fifo_threshold) / frame_sz * frame_sz));
+}
+
+static uint16_t audiod_tx_packet_size(audiod_function_t *audio, uint16_t data_count) {
+  const uint16_t *nominal_size = audio->packet_sz_tx;
+  const uint16_t fifo_threshold = audio->ep_in_fifo_threshold;
   // Flow control need a FIFO size of at least 4*Navg
-  if (nominal_size[1] && nominal_size[1] <= fifo_depth * 4) {
-    // Use blackout to prioritize normal size packet
-    static int ctrl_blackout = 0;
+  if (nominal_size[1] && nominal_size[1] * 4 <= audio->ep_in_ff.depth) {
+    // Use blackout to prioritize normal size packet. It only holds off a reversal: repeating the
+    // last correction must stay possible, or a source more than ~0.2% off nominal overflows.
+    int8_t blackout = audio->ctrl_blackout_tx;
     uint16_t packet_size;
     uint16_t slot_size = nominal_size[2] - nominal_size[1];
     if (data_count < nominal_size[0]) {
       // If you get here frequently, then your I2S clock deviation is too big !
       packet_size = 0;
-    } else if (data_count < (fifo_threshold - slot_size) && !ctrl_blackout) {
+    } else if (data_count < (fifo_threshold - slot_size) && blackout <= 0) {
       packet_size = nominal_size[0];
-      ctrl_blackout = 10;
-    } else if (data_count > (fifo_threshold + slot_size) && !ctrl_blackout) {
+      blackout = -10;
+    } else if (data_count > (fifo_threshold + slot_size) && blackout >= 0) {
       packet_size = nominal_size[2];
       if (nominal_size[0] == nominal_size[1]) {
         // nav > INT(nav), eg. 44.1k, 88.2k
-        ctrl_blackout = 0;
+        blackout = 0;
       } else {
         // nav = INT(nav), eg. 48k, 96k
-        ctrl_blackout = 10;
+        blackout = 10;
       }
     } else {
       packet_size = nominal_size[1];
-      if (ctrl_blackout) {
-        ctrl_blackout--;
+      if (blackout > 0) {
+        blackout--;
+      } else if (blackout < 0) {
+        blackout++;
       }
     }
+    audio->ctrl_blackout_tx = blackout;
     // Normally this cap is not necessary
-    return tu_min16(packet_size, max_depth);
+    return tu_min16(packet_size, audio->ep_in_sz);
   } else {
-    return tu_min16(data_count, max_depth);
+    return tu_min16(data_count, audio->ep_in_sz);
   }
 }
 

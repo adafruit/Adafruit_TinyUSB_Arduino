@@ -1,26 +1,7 @@
 /*
- * The MIT License (MIT)
- *
- * Copyright (c) 2019 Ha Thach (tinyusb.org)
- * Copyright (c) 2021 Koji KITAYAMA
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-FileCopyrightText: Copyright (c) 2019 Ha Thach (tinyusb.org)
+ * SPDX-FileCopyrightText: Copyright (c) 2021 Koji Kitayama
+ * SPDX-License-Identifier: MIT
  *
  * This file is part of the TinyUSB stack.
  */
@@ -62,16 +43,30 @@ bool tud_video_n_streaming(uint_fast8_t ctl_idx, uint_fast8_t stm_idx);
  *
  * @param[in] ctl_idx    Destination control interface index
  * @param[in] stm_idx    Destination streaming interface index
- * @param[in] buffer     Frame buffer. The caller must not use this buffer until the operation is completed.
+ * @param[in] buffer     Frame buffer. Do not reuse until the complete or abort callback.
  * @param[in] bufsize    Byte size of the frame buffer */
 bool tud_video_n_frame_xfer(uint_fast8_t ctl_idx, uint_fast8_t stm_idx, void *buffer, size_t bufsize);
 
 /*------------- Optional callbacks -------------*/
-/** Invoked when compeletion of a frame transfer
+/** Invoked on completion of a frame transfer
  *
  * @param[in] ctl_idx    Destination control interface index
  * @param[in] stm_idx    Destination streaming interface index */
 void tud_video_frame_xfer_complete_cb(uint_fast8_t ctl_idx, uint_fast8_t stm_idx);
+
+/** Invoked when an accepted frame is aborted by COMMIT, endpoint halt or transfer failure.
+ * For a COMMIT, the queued payload drains before this callback runs; if it was the frame's
+ * final payload and succeeds, tud_video_frame_xfer_complete_cb() runs instead. If that
+ * payload's completion was lost, the COMMIT runs this callback at once.
+ * The frame buffer can now be reused. The default implementation calls
+ * tud_video_frame_xfer_complete_cb() so existing applications release their buffers.
+ * This callback does not report delivery of a complete frame to the host.
+ * A refused initial tud_video_n_frame_xfer() returns false without a callback.
+ * SET_INTERFACE, bus reset and unconfiguration drop a queued frame without any callback.
+ *
+ * @param[in] ctl_idx    Destination control interface index
+ * @param[in] stm_idx    Destination streaming interface index */
+void tud_video_frame_xfer_abort_cb(uint_fast8_t ctl_idx, uint_fast8_t stm_idx);
 
 //--------------------------------------------------------------------+
 // Application Callback API (weak is optional)
@@ -94,6 +89,7 @@ int tud_video_commit_cb(uint_fast8_t ctl_idx, uint_fast8_t stm_idx,
                                      video_probe_and_commit_control_t const *parameters);
 
 /** Invoked if buffer is set to NULL (allows bufferless on the fly data generation)
+ *  Must not call tud_video_n_frame_xfer(): it runs with the class lock held on the submit path.
  *
  * @param[in]   ctl_idx       Destination control interface index
  * @param[in]   stm_idx       Destination streaming interface index
