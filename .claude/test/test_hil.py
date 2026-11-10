@@ -79,31 +79,56 @@ class Tables(unittest.TestCase):
         self.assertEqual(list(E.load_roster(ROOT / 'test/hil/local.example.json')), ['raspberry_pi_pico'])
 
     def test_roster_refusals(self):
-        good = json.loads((ROOT / 'test/hil/ci.json').read_text())
-        cases = (('raspberry_pi_pico_w', {'arduino': {'tests': ['host_device_info']}}, 'dev_attached'),
-                 ('raspberry_pi_pico2', {'arduino': {'tests': ['host_device_info'], 'dev_attached': [
-                     {'vid_pid': '0951_1603', 'serial': 'x'}]}}, 'dev_attached'),
-                 ('raspberry_pi_pico2', {'arduino': {'tests': ['host_device_info'], 'dev_attached': [
-                     {'vid_pid': '0951:1603', 'serial': ''}]}}, 'dev_attached'))   # the engine tests the rest
-        for name, over, why in cases:
-            data = json.loads(json.dumps(good))
-            entry = next(b for b in data['boards'] if b['name'] == name)
-            entry.update(over)
-            path = Path(self.enterContext(tempfile.TemporaryDirectory())) / 'r.json'
-            path.write_text(json.dumps(data))
-            with self.subTest(name=name, why=why), self.assertRaisesRegex(E.Refused, why):
-                E.load_roster(path)
+        data = json.loads((ROOT / 'test/hil/ci.json').read_text())
+        entry = next(b for b in data['boards'] if b['name'] == 'raspberry_pi_pico2')
+        entry['arduino']['dev_attached'] = [{'vid_pid': 'abcd:1234', 'serial': '\u0409'}]
+        path = Path(self.enterContext(tempfile.TemporaryDirectory())) / 'r.json'
+        path.write_text(json.dumps(data))
+        with self.assertRaisesRegex(E.Refused, "agentrc's board registry's now"):
+            E.load_roster(path)
+        data = json.loads((ROOT / 'test/hil/local.example.json').read_text())   # unregistered: its own copy stays
+        data['boards'][0].update(name='raspberry_pi_pico2', arduino={'tests': ['host_device_info']},
+                                 dev_attached=[{'serial': 'x'}])
+        path.write_text(json.dumps(data))
+        with self.assertRaisesRegex(E.Refused, 'raspberry_pi_pico2: dev_attached: .*vid_pid'):
+            E.load_roster(path)
 
     def test_check_board_takes_device_boards_as_they_are(self):
         ht.check_board('raspberry_pi_pico', {}, 'r.json')
-        with self.assertRaisesRegex(E.Refused, 'r.json: raspberry_pi_pico_w: a host board needs arduino.dev_attached'):
+        with self.assertRaisesRegex(E.Refused, 'r.json: raspberry_pi_pico_w: a host board needs a device with a serial'):
             ht.check_board('raspberry_pi_pico_w', {'arduino': {}}, 'r.json')
+        with self.assertRaisesRegex(E.Refused, 'needs a device with a serial'):
+            ht.check_board('raspberry_pi_pico2', {'dev_attached': [{'vid_pid': '1a86:7523'}]}, 'r.json')
+
+    def test_check_board_refuses_a_malformed_dev_attached(self):   # an unregistered board's own copy
+        for devices in ([{'serial': 'x'}], [{'vid_pid': 'ABCD:1234', 'serial': 'x'}],
+                        [{'vid_pid': 'abcd:1234', 'serial': 5}], ['abcd:1234'], 'abcd:1234'):
+            with self.subTest(devices=devices), \
+                    self.assertRaisesRegex(E.Refused, 'r.json: raspberry_pi_pico2: dev_attached: '):
+                ht.check_board('raspberry_pi_pico2', {'dev_attached': devices}, 'r.json')
+        ht.check_board('raspberry_pi_pico', {'dev_attached': [{'vid_pid': '1a86:7523'}]}, 'r.json')
+
+    def test_a_registered_board_takes_no_dev_attached_of_its_own(self):   # its registry entry lists none
+        own = {'dev_attached': [{'vid_pid': 'abcd:1234', 'serial': 'x'}]}
+        registry = {'P1': {'name': 'b1'}}
+        with mock.patch.object(ht.BUILD.E.hil_boards, 'registry', return_value=registry):
+            with self.assertRaisesRegex(E.Refused, "r.json: raspberry_pi_pico2: dev_attached of probe P1 comes only "
+                                                   "from agentrc's board registry"):
+                ht.check_board('raspberry_pi_pico2', {'probe': 'P1', **own}, 'r.json')
+            registry['P1']['dev_attached'] = own['dev_attached']   # resolution put the registry's at the top level
+            ht.check_board('raspberry_pi_pico2', {'probe': 'P1', **own}, 'r.json')
+            ht.check_board('raspberry_pi_pico2', own, 'r.json')   # unregistered: its own copy stays
+
+    def test_attached_keeps_the_devices_with_a_serial(self):
+        board = {'dev_attached': [{'vid_pid': 'abcd:1234', 'serial': '\u0409', 'is_msc': True},
+                                  {'vid_pid': '1a86:7523'}]}
+        self.assertEqual(ht.attached(board), {('abcd:1234', '\u0409')})
 
 
 class Detach(Base):
     def test_only_the_rp2040_family_clears_the_pull_up(self):
         self.A.flash.run_openocd_commands.return_value = mock.Mock(returncode=0, stdout='', stderr='')
-        self.A.usb.usb_scan.return_value = []
+        self.A.usb.usb_devices.return_value = []
         self.assertEqual(E.detach('raspberry_pi_pico', roster('raspberry_pi_pico'), '239a:cafe', mock.Mock()),
                          'detached')
         self.assertEqual(self.A.flash.run_openocd_commands.call_args[0][1], ['mww 0x5011304c 0x00010000'])
@@ -138,6 +163,12 @@ class HostTest(Base):
         self.assertEqual(ht.host_devices(HOST_OUTPUT.split('Device 3')[0]), {('1a86:55d4', '52D2002694')})
         no_serial = 'Device 1: ID 0951:1603\r\nDevice Descriptor:\r\n  iSerialNumber       0     \r\n'
         self.assertEqual(ht.host_devices(no_serial), {('0951:1603', '')})
+
+    def test_parser_takes_a_utf8_serial_whole(self):   # the Pico 2's registry device abcd:1234, serial U+0409
+        buf = 'Device 1: ID abcd:1234\r\nDevice Descriptor:\r\n  iSerialNumber       3     Љ\r\n'.encode()
+        self.assertEqual(ht.host_devices(buf.decode(errors='replace')), {('abcd:1234', 'Љ')})
+        cut = buf[:buf.index(b'\xd0\x89') + 1]
+        self.assertEqual(ht.host_devices(cut.decode(errors='replace')), set())
 
     def host_step(self, output, flash_why='', console_error=None):
         board = roster('raspberry_pi_pico_w')

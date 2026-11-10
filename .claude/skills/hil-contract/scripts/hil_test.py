@@ -20,7 +20,9 @@ inside it. restore --release passes only when the hold was released too.
 
 The last stdout line of every command but lock and read-block is JSON. Exits: 0 pass, 1 a board failed or did not
 run (cleaned up or untouched), 2 refused before any hardware access, 3 a session command (--under-hold) whose hold the
-lock record shows no live holder of, 4 a cleanup did not finish (board held).
+lock record shows no live holder of, 4 a cleanup could not be proven (logged, the board released) or the run was
+aborted; restore --release also exits 5 not released (the hold may still stand) or 6 restore failed (logged,
+released).
 """
 
 import json
@@ -58,13 +60,26 @@ HID_REPORT = 64
 E = None   # agentrc's arduino_hil, bound to this profile by engine()
 
 
+def attached(board):
+    """The devices on a host board's port that host_device_info can name: agentrc's board registry's `dev_attached`
+    (resolved into the entry) with a serial."""
+    return {(d['vid_pid'], d['serial']) for d in board.get('dev_attached', []) if 'serial' in d}
+
+
 def check_board(name, b, path):
-    attached = b.get('arduino', {}).get('dev_attached')
-    if BUILD.BOARDS[name].get('role') == 'host' and not (
-            attached and all(re.fullmatch(r'[0-9a-f]{4}:[0-9a-f]{4}', d.get('vid_pid', '')) and d.get('serial')
-                             for d in attached)):
-        raise E.Refused(f'roster {path}: {name}: a host board needs arduino.dev_attached, each a vid_pid '
-                        f'"vvvv:pppp" and a serial')
+    if 'dev_attached' in b.get('arduino', {}):
+        raise E.Refused(f'roster {path}: {name}: arduino.dev_attached is agentrc\'s board registry\'s now; drop it '
+                        f'(a board without a registered probe lists its own top-level dev_attached)')
+    # resolution keeps the roster's own copy, unchecked, for a board the registry lists no devices for
+    if 'probe' in b and 'dev_attached' in b and \
+            'dev_attached' not in BUILD.E.hil_boards.registry().get(b['probe'], {}):
+        raise E.Refused(f'roster {path}: {name}: dev_attached of probe {b["probe"]} comes only from agentrc\'s board '
+                        f'registry, which lists none; drop the roster\'s copy')
+    if 'dev_attached' in b and (why := BUILD.E.hil_boards.dev_attached_problem(b['dev_attached'])):
+        raise E.Refused(f'roster {path}: {name}: dev_attached: {why}')
+    if BUILD.BOARDS[name].get('role') == 'host' and not attached(b):
+        raise E.Refused(f'roster {path}: {name}: a host board needs a device with a serial in its dev_attached, '
+                        f'from agentrc\'s board registry or, without a registered probe, its own top-level one')
 
 
 def test_cdc(dev, nonce, deadline, tracker, run_dir, board=None):
@@ -150,9 +165,9 @@ def host_devices(text):
 
 def step_host(name, board, image, test, run_dir, tracker):
     """A host board's step: the console open and drained before the flash, so the boot's enumeration output is
-    kept; pass when every roster dev_attached device is reported with its serial."""
+    kept; pass when every attached device with a serial is reported with it."""
     import serial
-    started, want = time.monotonic(), {(d['vid_pid'], d['serial']) for d in board['arduino']['dev_attached']}
+    started, want = time.monotonic(), attached(board)
     try:
         tty = E.console_tty(board, time.monotonic() + 5)
     except (RuntimeError, TimeoutError) as e:
