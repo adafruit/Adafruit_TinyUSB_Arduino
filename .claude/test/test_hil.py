@@ -108,6 +108,17 @@ class Tables(unittest.TestCase):
                 ht.check_board('raspberry_pi_pico2', {'dev_attached': devices}, 'r.json')
         ht.check_board('raspberry_pi_pico', {'dev_attached': [{'vid_pid': '1a86:7523'}]}, 'r.json')
 
+    def test_a_registered_board_takes_no_dev_attached_of_its_own(self):   # its registry entry lists none
+        own = {'dev_attached': [{'vid_pid': 'abcd:1234', 'serial': 'x'}]}
+        registry = {'P1': {'name': 'b1'}}
+        with mock.patch.object(ht.BUILD.E.hil_boards, 'registry', return_value=registry):
+            with self.assertRaisesRegex(E.Refused, "r.json: raspberry_pi_pico2: dev_attached of probe P1 comes only "
+                                                   "from agentrc's board registry"):
+                ht.check_board('raspberry_pi_pico2', {'probe': 'P1', **own}, 'r.json')
+            registry['P1']['dev_attached'] = own['dev_attached']   # resolution put the registry's at the top level
+            ht.check_board('raspberry_pi_pico2', {'probe': 'P1', **own}, 'r.json')
+            ht.check_board('raspberry_pi_pico2', own, 'r.json')   # unregistered: its own copy stays
+
     def test_attached_keeps_the_devices_with_a_serial(self):
         board = {'dev_attached': [{'vid_pid': 'abcd:1234', 'serial': '\u0409', 'is_msc': True},
                                   {'vid_pid': '1a86:7523'}]}

@@ -70,7 +70,11 @@ def check_board(name, b, path):
     if 'dev_attached' in b.get('arduino', {}):
         raise E.Refused(f'roster {path}: {name}: arduino.dev_attached is agentrc\'s board registry\'s now; drop it '
                         f'(a board without a registered probe lists its own top-level dev_attached)')
-    # the roster's own copy, which resolution keeps unchecked for a board the registry lists no devices for
+    # resolution keeps the roster's own copy, unchecked, for a board the registry lists no devices for
+    if 'probe' in b and 'dev_attached' in b and \
+            'dev_attached' not in BUILD.E.hil_boards.registry().get(b['probe'], {}):
+        raise E.Refused(f'roster {path}: {name}: dev_attached of probe {b["probe"]} comes only from agentrc\'s board '
+                        f'registry, which lists none; drop the roster\'s copy')
     if 'dev_attached' in b and (why := BUILD.E.hil_boards.dev_attached_problem(b['dev_attached'])):
         raise E.Refused(f'roster {path}: {name}: dev_attached: {why}')
     if BUILD.BOARDS[name].get('role') == 'host' and not attached(b):
