@@ -110,6 +110,12 @@ void yield(void) {
 // Porting API
 //--------------------------------------------------------------------+
 
+/** @brief Configure the selected CH32 USB clocks and initialize the device
+ * stack.
+ *  @param rhport TinyUSB root-hub port to initialize.
+ *  @note CH32V4x7 requires a 25 MHz HSE; initialization stops if its PLL fails
+ *        to lock. Other CH32 families retain their existing clock requirements.
+ */
 void TinyUSB_Port_InitDevice(uint8_t rhport) {
 #if defined(CH32V4x7)
   // USBHS1 uses the external crystal independently of the CPU clock.
@@ -196,6 +202,9 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
   tusb_init(rhport, &rh_init);
 }
 
+/** @brief Request CH32V4x7 bootloader entry through the optional board hook.
+ *  @note Does nothing when no supported board hook is present.
+ */
 void TinyUSB_Port_EnterDFU(void) {
 #if defined(CH32V4x7)
   if (ch32TinyUSBEnterBootloader) {
@@ -213,6 +222,11 @@ void TinyUSB_Port_EnterDFU(void) {
   // while(1) {}
 }
 
+/** @brief Copy the MCU's unique ID into the USB serial-number buffer.
+ *  @param serial_id Output buffer with room for 16 bytes.
+ *  @return Number of bytes written: eight on CH32V4x7, twelve on other CH32s.
+ *  @note CH32V4x7 uses TinyUF2's byte order to retain its USB serial identity.
+ */
 uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]) {
   volatile uint32_t *ch32_uuid = ((volatile uint32_t *)0x1FFFF7E8UL);
 #if defined(CH32V4x7)

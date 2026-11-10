@@ -65,16 +65,29 @@ static volatile bool ep_data_tog[EP_MAX][2];
 // edpt_stall()/edpt_clear_stall() call them on an endpoint that may be actively
 // armed and ACKing, because a class driver may halt an endpoint with a transfer
 // in flight (usbtest case 13 does exactly that).
+/** @brief Set an IN response without clearing a pending completion.
+ *  @param ep_num Endpoint number, excluding its direction bit.
+ *  @param res USBHS transmit response encoding.
+ */
 static void set_tx_res(uint8_t ep_num, uint8_t res) {
   EP_TX_CTRL(ep_num) = (uint8_t)((EP_TX_CTRL(ep_num) & ~USBHS_UEP_T_RES_MASK) |
                                  USBHS_UEP_T_DONE | res);
 }
 
+/** @brief Set an OUT response without clearing a pending completion.
+ *  @param ep_num Endpoint number, excluding its direction bit.
+ *  @param res USBHS receive response encoding.
+ */
 static void set_rx_res(uint8_t ep_num, uint8_t res) {
   EP_RX_CTRL(ep_num) = (uint8_t)((EP_RX_CTRL(ep_num) & ~USBHS_UEP_R_RES_MASK) |
                                  USBHS_UEP_R_DONE | res);
 }
 
+/** @brief Set the endpoint data toggle while preserving its DONE flag.
+ *  @param ep_num Endpoint number, excluding its direction bit.
+ *  @param ep_dir Endpoint transfer direction.
+ *  @param data1 True selects DATA1; false selects DATA0.
+ */
 static void set_ep_toggle(uint8_t ep_num, tusb_dir_t ep_dir, bool data1) {
   if (ep_dir == TUSB_DIR_IN) {
     EP_TX_CTRL(ep_num) =
@@ -99,12 +112,19 @@ static void set_ep_toggle(uint8_t ep_num, tusb_dir_t ep_dir, bool data1) {
 // cleared by the scan, and edpt_xfer() runs with EP0 NAKing, since usbd submits
 // a stage only once the previous one has completed, so no transaction is in
 // flight to raise DONE underneath it.
+/** @brief Arm EP0 OUT with its saved toggle after consuming any RX completion.
+ */
 static void arm_ep0_out(void) {
   EP_RX_CTRL(0) =
       (uint8_t)((ep0_rx_tog ? USBHS_UEP_R_TOG_DATA1 : USBHS_UEP_R_TOG_DATA0) |
                 USBHS_UEP_R_RES_ACK);
 }
 
+/** @brief Arm the next IN packet and include its bytes in the queued count.
+ *  @param ep_num Endpoint number, excluding its direction bit.
+ *  @param xfer Active submission; its buffer remains valid until completion.
+ *  @note EP0 copies data to its shared DMA buffer and advances its IN toggle.
+ */
 static void queue_in_packet(uint8_t ep_num, xfer_ctl_t *xfer) {
   uint16_t remaining = xfer->total_len - xfer->queued_len;
   uint16_t tx_len = TU_MIN(remaining, xfer->max_size);
@@ -131,6 +151,10 @@ static void queue_in_packet(uint8_t ep_num, xfer_ctl_t *xfer) {
   }
 }
 
+/** @brief Arm an OUT packet at the submission's next unfilled buffer position.
+ *  @param ep_num Endpoint number, excluding its direction bit.
+ *  @param xfer Active submission; received bytes are counted on completion.
+ */
 static void queue_out_packet(uint8_t ep_num, xfer_ctl_t *xfer) {
   uint16_t remaining = xfer->total_len - xfer->queued_len;
   uint16_t rx_len = TU_MIN(remaining, xfer->max_size);
@@ -150,8 +174,13 @@ static void queue_out_packet(uint8_t ep_num, xfer_ctl_t *xfer) {
   }
 }
 
-// Return true when the submission completes. The caller reports the event
-// after all endpoint state is settled, since an ISR callback may submit again.
+/** @brief Account for an acknowledged IN packet and optionally arm the next.
+ *  @param ep_num Endpoint number, excluding its direction bit.
+ *  @param rearm Whether an unfinished submission may arm its next packet.
+ *  @return True if this packet completed the submission.
+ *  @note The caller reports completion after settling all endpoint state,
+ *        since the event callback may immediately submit another transfer.
+ */
 static bool update_in(uint8_t ep_num, bool rearm) {
   xfer_ctl_t *xfer = XFER_CTL_BASE(ep_num, TUSB_DIR_IN);
   if (!xfer->valid) {
@@ -180,6 +209,14 @@ static bool update_in(uint8_t ep_num, bool rearm) {
   return false;
 }
 
+/** @brief Account for accepted OUT data and optionally arm another receive.
+ *  @param ep_num Endpoint number, excluding its direction bit.
+ *  @param rx_len Received packet length in bytes.
+ *  @param rearm Whether an unfinished submission may arm its next packet.
+ *  @return True when the requested length or a short packet ends the
+ * submission.
+ *  @note The caller filters duplicate packets and reports the completion event.
+ */
 static bool update_out(uint8_t ep_num, uint16_t rx_len, bool rearm) {
   xfer_ctl_t *xfer = XFER_CTL_BASE(ep_num, TUSB_DIR_OUT);
   if (!xfer->valid) {
@@ -232,6 +269,10 @@ static bool update_out(uint8_t ep_num, uint16_t rx_len, bool rearm) {
 // Controller internals, shared with the USB3.0 dcd for runtime fallback
 //--------------------------------------------------------------------+
 
+/** @brief Reset USBHS1 transfer state and attach with only EP0 enabled.
+ *  @param rhport Root-hub port; this implementation uses the USBHS1 controller.
+ *  @return True after configuring the controller and its endpoint buffers.
+ */
 static bool ch32v4x7_usb2_init(uint8_t rhport) {
   (void)rhport;
 
@@ -315,6 +356,10 @@ static void ch32v4x7_usb2_int_enable(void) { NVIC_EnableIRQ(USBHS1_IRQn); }
 
 static void ch32v4x7_usb2_int_disable(void) { NVIC_DisableIRQ(USBHS1_IRQn); }
 
+/** @brief Apply a SET_ADDRESS request only after its status stage completes.
+ *  @param rhport Root-hub port; this implementation uses USBHS1.
+ *  @param request Completed control request.
+ */
 static void
 ch32v4x7_usb2_edpt0_status_complete(uint8_t rhport,
                                     const tusb_control_request_t *request) {
@@ -326,6 +371,11 @@ ch32v4x7_usb2_edpt0_status_complete(uint8_t rhport,
   }
 }
 
+/** @brief Configure an endpoint's packet size, transfer type and initial DATA0.
+ *  @param rhport Root-hub port; this implementation uses USBHS1.
+ *  @param desc_edpt USB endpoint descriptor to configure.
+ *  @return True for a supported endpoint number; false for an out-of-range one.
+ */
 static bool ch32v4x7_usb2_edpt_open(uint8_t rhport,
                                     const tusb_desc_endpoint_t *desc_edpt) {
   (void)rhport;
@@ -361,6 +411,11 @@ static bool ch32v4x7_usb2_edpt_open(uint8_t rhport,
   return true;
 }
 
+/** @brief Disable a data endpoint and discard its active submission.
+ *  @param rhport Root-hub port; this implementation uses USBHS1.
+ *  @param ep_addr Endpoint address, including its direction bit.
+ *  @note EP0 remains enabled to accept subsequent control requests.
+ */
 static void ch32v4x7_usb2_edpt_close(uint8_t rhport, uint8_t ep_addr) {
   (void)rhport;
   const uint8_t ep_num = tu_edpt_number(ep_addr);
@@ -389,6 +444,9 @@ static void ch32v4x7_usb2_edpt_close(uint8_t rhport, uint8_t ep_addr) {
   XFER_CTL_BASE(ep_num, dir)->valid = false;
 }
 
+/** @brief Disable all data endpoints while retaining the EP0 control pipe.
+ *  @param rhport Root-hub port; this implementation uses USBHS1.
+ */
 static void ch32v4x7_usb2_edpt_close_all(uint8_t rhport) {
   (void)rhport;
   memset((void *)ep_data_tog, 0, sizeof(ep_data_tog));
@@ -406,6 +464,13 @@ static void ch32v4x7_usb2_edpt_close_all(uint8_t rhport) {
   USBHSD->UEP_RX_ISO = 0;
 }
 
+/** @brief Save a submission and arm its first data or status packet.
+ *  @param rhport Root-hub port; this implementation uses USBHS1.
+ *  @param ep_addr Endpoint address, including its direction bit.
+ *  @param buffer Transfer buffer, retained until completion; null for a ZLP.
+ *  @param total_bytes Total submission length in bytes.
+ *  @return True after arming the packet on the already-open endpoint.
+ */
 static bool ch32v4x7_usb2_edpt_xfer(uint8_t rhport, uint8_t ep_addr,
                                     uint8_t *buffer, uint16_t total_bytes) {
   (void)rhport;
@@ -435,6 +500,10 @@ static bool ch32v4x7_usb2_edpt_xfer(uint8_t rhport, uint8_t ep_addr,
   return true;
 }
 
+/** @brief Halt an endpoint while retaining its submission for clear-halt.
+ *  @param rhport Root-hub port; this implementation uses USBHS1.
+ *  @param ep_addr Endpoint address, including its direction bit.
+ */
 static void ch32v4x7_usb2_edpt_stall(uint8_t rhport, uint8_t ep_addr) {
   (void)rhport;
   const uint8_t ep_num = tu_edpt_number(ep_addr);
@@ -453,6 +522,12 @@ static void ch32v4x7_usb2_edpt_stall(uint8_t rhport, uint8_t ep_addr) {
   }
 }
 
+/** @brief Reset an endpoint to DATA0 without losing or repeating packet data.
+ *  @param rhport Root-hub port used when reporting a pending completion.
+ *  @param ep_addr Endpoint address, including its direction bit.
+ *  @note Masks the USB interrupt and stops the endpoint while accounting for
+ *        pending completions, then rearms once and restores the IRQ state.
+ */
 static void ch32v4x7_usb2_edpt_clear_stall(uint8_t rhport, uint8_t ep_addr) {
   const uint8_t ep_num = tu_edpt_number(ep_addr);
   const tusb_dir_t dir = tu_edpt_dir(ep_addr);
@@ -532,6 +607,10 @@ static void ch32v4x7_usb2_edpt_clear_stall(uint8_t rhport, uint8_t ep_addr) {
   }
 }
 
+/** @brief Enable or disable delivery of start-of-frame events to TinyUSB.
+ *  @param rhport Root-hub port; this implementation uses USBHS1.
+ *  @param en True enables SOF interrupts and event delivery.
+ */
 static void ch32v4x7_usb2_sof_enable(uint8_t rhport, bool en) {
   sof_enabled = en;
   (void)rhport;
@@ -542,6 +621,12 @@ static void ch32v4x7_usb2_sof_enable(uint8_t rhport, bool en) {
   }
 }
 
+/** @brief Drain endpoint completions and handle USBHS1 bus events.
+ *  @param rhport Root-hub port associated with emitted TinyUSB events.
+ *  @note An overlapping SETUP aborts old data stages but preserves a completed
+ *        status-IN event; bus reset and speed negotiation are reported
+ * separately.
+ */
 static void ch32v4x7_usb2_int_handler(uint8_t rhport) {
   uint8_t intflag = USBHSD->INT_FG;
 

@@ -5,6 +5,10 @@
  *   test/dcd/ch32v4x7/test_dcd.cpp -o /tmp/test_ch32v4x7 && /tmp/test_ch32v4x7
  */
 
+// Regression checks must remain active in builds that define NDEBUG.
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <cassert>
 #include <cstdio>
 #include <vector>
@@ -20,7 +24,11 @@ struct ControlRegister {
   uint8_t value = 0;
   uint8_t read_only = 0;
   unsigned arms = 0;
+  /** @brief Read the modeled control register without side effects. */
   operator uint8_t() const { return value; }
+  /** @brief Write control fields while honoring read-only and RW0 status bits.
+   *  @param next Software-written register value.
+   */
   void operator=(uint8_t next) {
     // DONE is write-zero-to-clear. SETUP_IS and TOG_MATCH are read-only.
     value = (next & ~(0x80 | read_only)) | (value & next & 0x80) |
@@ -29,6 +37,9 @@ struct ControlRegister {
       arms++;
     }
   }
+  /** @brief Apply a masked write with the same status-bit semantics.
+   *  @param mask Bits to retain in the software-written value.
+   */
   void operator&=(uint8_t mask) { *this = uint8_t(value & mask); }
 };
 
@@ -68,6 +79,10 @@ static void NVIC_EnableIRQ(int) { irq_enabled = true; }
 static std::vector<dcd_event_t> events;
 static bool resubmit;
 static uint8_t next_buffer[7];
+/** @brief Record driver events and optionally simulate immediate resubmission.
+ *  @param event Event emitted by the driver under test.
+ *  @param in_isr Whether the driver expects the USB interrupt to be masked.
+ */
 extern "C" void dcd_event_handler(const dcd_event_t *event, bool in_isr) {
   assert(!in_isr || !irq_enabled);
   events.push_back(*event);
@@ -79,6 +94,8 @@ extern "C" void dcd_event_handler(const dcd_event_t *event, bool in_isr) {
   }
 }
 
+/** @brief Initialize the driver and clear modeled hardware and event history.
+ */
 static void reset_model() {
   registers = {};
   for (unsigned ep = 0; ep < 8; ep++) {
@@ -87,13 +104,15 @@ static void reset_model() {
     rx_ctrl[ep].read_only = USBHS_UEP_R_TOG_MATCH | USBHS_UEP_R_SETUP_IS;
   }
   irq_enabled = false;
-  assert(dcd_init(0, nullptr));
+  const bool initialized = dcd_init(0, nullptr);
+  assert(initialized);
   registers.INT_FG = 0;
   events.clear();
   resubmit = false;
   irq_disables = 0;
 }
 
+/** @brief Service a modeled transfer interrupt, preserving its enable state. */
 static void interrupt() {
   bool enabled = irq_enabled;
   irq_enabled = false;
@@ -103,6 +122,10 @@ static void interrupt() {
   irq_enabled = enabled;
 }
 
+/** @brief Deliver a SETUP packet through the driver's interrupt handler.
+ *  @param direction Direction of the request's data stage.
+ *  @param length Requested data length in bytes.
+ */
 static void setup_request(uint8_t direction, uint16_t length) {
   tusb_control_request_t setup = {};
   setup.bmRequestType = direction << 7;
@@ -113,6 +136,12 @@ static void setup_request(uint8_t direction, uint16_t length) {
   interrupt();
 }
 
+/** @brief Check completion ordering and DATA1 after an overlapping SETUP.
+ *  @param direction Direction of the old request's data stage.
+ *  @param request_len Old request's wLength in bytes.
+ *  @param packet_len Length of its completed IN packet, including zero.
+ *  @param preserve Whether the old status-IN completion must be delivered.
+ */
 static void ep0_overlap(uint8_t direction, uint16_t request_len,
                         uint16_t packet_len, bool preserve) {
   reset_model();
@@ -135,17 +164,28 @@ static void ep0_overlap(uint8_t direction, uint16_t request_len,
 }
 
 static uint8_t bulk_buffer[1100];
+/** @brief Initialize and arm a bulk endpoint with a 512-byte maximum packet.
+ *  @param address Endpoint address, including its direction bit.
+ *  @param length Submitted transfer length in bytes.
+ */
 static void open_bulk(uint8_t address, uint16_t length) {
   reset_model();
   tusb_desc_endpoint_t ep = {};
   ep.bEndpointAddress = address;
   ep.bmAttributes.xfer = TUSB_XFER_BULK;
   ep.wMaxPacketSize = 512;
-  assert(dcd_edpt_open(0, &ep));
-  assert(dcd_edpt_xfer(0, address, bulk_buffer, length, false));
+  const bool opened = dcd_edpt_open(0, &ep);
+  assert(opened);
+  const bool submitted = dcd_edpt_xfer(0, address, bulk_buffer, length, false);
+  assert(submitted);
   irq_enabled = true;
 }
 
+/** @brief Check IN byte accounting, DATA0 and rearming during clear-halt.
+ *  @param done Whether the armed packet has already been acknowledged.
+ *  @param length Submitted transfer length in bytes.
+ *  @param stalled Whether to halt the endpoint before clearing it.
+ */
 static void clear_in(bool done, uint16_t length, bool stalled) {
   open_bulk(0x81, length);
   if (stalled) {
@@ -174,6 +214,11 @@ static void clear_in(bool done, uint16_t length, bool stalled) {
   }
 }
 
+/** @brief Check that clear-halt retains accepted OUT data exactly once.
+ *  @param done Whether the receive-completion flag is pending.
+ *  @param match Whether the received packet matches the expected data toggle.
+ *  @param packet_len Received packet length in bytes.
+ */
 static void clear_out(bool done, bool match, uint16_t packet_len) {
   open_bulk(1, 1024);
   rx_len[1] = packet_len;
@@ -197,6 +242,11 @@ static void clear_out(bool done, bool match, uint16_t packet_len) {
   }
 }
 
+/** @brief Run both regression groups, or select one by its command-line name.
+ *  @param argc Number of command-line arguments.
+ *  @param argv Optional group name: ep0 or halt.
+ *  @return Zero after all selected checks pass; a failed assertion aborts.
+ */
 int main(int argc, char **argv) {
   if (argc == 1 || strcmp(argv[1], "ep0") == 0) {
     ep0_overlap(TUSB_DIR_IN, 128, 64, false); // abandoned full data chunk
