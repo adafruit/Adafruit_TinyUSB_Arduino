@@ -118,21 +118,26 @@ void yield(void) {
  */
 void TinyUSB_Port_InitDevice(uint8_t rhport) {
 #if defined(CH32V4x7)
-  // USBHS1 uses the external crystal independently of the CPU clock.
-  RCC->CTLR &= ~RCC_USBHSPLLON;
-  RCC_USBHSPLLCLKConfig(RCC_USBHSPLLCLKSource_HSE);
-#if HSE_VALUE == 25000000
-  RCC_USBHSPLLReferConfig(RCC_USBHSPLLCKREFCLK_25M);
-#else
+#if HSE_VALUE != 25000000
 #error "CH32V4x7 USBHS currently requires a 25 MHz external crystal"
 #endif
-  RCC->CTLR |= RCC_USBHSPLLON;
-  uint32_t timeout = 1000000;
-  while (!(RCC->CTLR & RCC_USBHSPLLRDY) && --timeout) {
+  // USBHSPLL feeds the UTMI PHY independently of the CPU clock. Its source and
+  // reference are writable only while it is off (RM 3.4.12): keep a locked PLL
+  // so a second init does not stop the PHY clock under a running controller.
+  if ((RCC->CTLR & RCC_USBHSPLLRDY) == 0) {
+    RCC_HBPeriphClockCmd(RCC_HBPeriph_USBHS1, DISABLE);
+    RCC->CTLR &= ~RCC_USBHSPLLON;
+    RCC_USBHSPLLCLKConfig(RCC_USBHSPLLCLKSource_HSE);
+    RCC_USBHSPLLReferConfig(RCC_USBHSPLLCKREFCLK_25M);
+    RCC->CTLR |= RCC_USBHSPLLON;
+    for (uint32_t timeout = 1000000; timeout && !(RCC->CTLR & RCC_USBHSPLLRDY);
+         timeout--) {
+    }
+    if ((RCC->CTLR & RCC_USBHSPLLRDY) == 0) {
+      return;
+    }
   }
-  if (!timeout) {
-    return;
-  }
+  // not the RCC_UTMIxON macros: they are swapped against RCC_CFGR2
   RCC_UTMI1cmd(ENABLE);
   RCC_HBPeriphClockCmd(RCC_HBPeriph_USBHS1, ENABLE);
 #endif
@@ -225,18 +230,13 @@ void TinyUSB_Port_EnterDFU(void) {
 /** @brief Copy the MCU's unique ID into the USB serial-number buffer.
  *  @param serial_id Output buffer with room for 16 bytes.
  *  @return Number of bytes written: eight on CH32V4x7, twelve on other CH32s.
- *  @note CH32V4x7 uses TinyUF2's byte order to retain its USB serial identity.
+ *  @note CH32V4x7 matches TinyUF2's serial to retain its USB identity.
  */
 uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]) {
   volatile uint32_t *ch32_uuid = ((volatile uint32_t *)0x1FFFF7E8UL);
 #if defined(CH32V4x7)
-  // TinyUF2 formats each of the two UID words most-significant byte first.
-  for (uint8_t word = 0; word < 2; word++) {
-    const uint32_t value = ch32_uuid[word];
-    for (uint8_t byte = 0; byte < 4; byte++) {
-      serial_id[4 * word + byte] = value >> (24 - 8 * byte);
-    }
-  }
+  // TinyUF2's 8 bytes in memory order, so bootloader and sketch share a serial
+  memcpy(serial_id, (const void *)ch32_uuid, 8);
   return 8;
 #else
   uint32_t *serial_32 = (uint32_t *)serial_id;
