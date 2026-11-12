@@ -4,9 +4,7 @@
 
 - An Arduino library with no standalone build: sketches compile against this checkout through the build contract.
   CI's library list (`ARDUINO_LIBS`) and board matrix are in `.github/workflows/githubci.yml`, its FQBNs in
-  adafruit/ci-arduino's `all_platforms.py`, except the community CH32 target: this workflow and
-  `.claude/skills/build/scripts/check_build.py` explicitly select `usb=tinyusb_usbd` because its upstream default
-  disables USB. Keep those two FQBNs in sync; the build-contract tests check the override.
+  adafruit/ci-arduino's `all_platforms.py`.
 - Code references — wrappers: `src/arduino/` (`Adafruit_USBD_*`, `Adafruit_USBH_Host.*`, class dirs `cdc/`, `hid/`,
   `msc/`, `midi/`, `video/`, `webusb/`); core API and integration macros: `src/arduino/Adafruit_TinyUSB_API.h`;
   ports: `src/arduino/ports/<mcu>/`, their configs dispatched by `src/tusb_config.h`; vendored TinyUSB:

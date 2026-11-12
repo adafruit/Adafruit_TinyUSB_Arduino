@@ -65,9 +65,7 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
     report workflow (`REPORT_WORKFLOW`), run from the default branch, runs its tests only; docs, agent and repo
     metadata build nothing; anything else is uncovered.
 - **Boards** (`BOARDS`): CI's matrix (`.github/workflows/githubci.yml`) with adafruit/ci-arduino `all_platforms.py`'s
-  FQBNs under the same names, except `ch32_community_ch32v20x`: both the workflow and `BOARDS` append
-  `usb=tinyusb_usbd` because ci-arduino's default disables USB. The contract tests check that override matches.
-  The table also includes the rig boards named as in tinyusb's HIL farm: `raspberry_pi_pico`,
+  FQBNs under the same names, plus the rig boards named as in tinyusb's HIL farm: `raspberry_pi_pico`,
   `adafruit_fruit_jam`, `metro_m4_express`, the native-host `raspberry_pi_pico_w` and `raspberry_pi_pico2` (`role`
   host), and `espressif_s3_devkitm` and `espressif_p4_function_ev`. Each rig board builds on the core ci-arduino
   installs for its CI platform (`filters`), which the HIL CI sets up (the HIL contract's CI). An ESP32 rig board

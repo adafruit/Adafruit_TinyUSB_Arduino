@@ -25,8 +25,7 @@ import agentrc_pin  # noqa: E402
 
 LIBRARY_NAME = 'Adafruit TinyUSB Library'
 
-# CI's matrix (.github/workflows/githubci.yml), FQBNs from adafruit/ci-arduino all_platforms.py (except the
-# documented community CH32 USB override below), plus the rig boards
+# CI's matrix (.github/workflows/githubci.yml), FQBNs from adafruit/ci-arduino all_platforms.py, plus the rig boards
 # named as in tinyusb's HIL farm. `filters` is the ci-arduino platform whose .test.only/.skip files apply.
 BOARDS = {
     'feather_esp32_v2': {'fqbn': 'esp32:esp32:adafruit_feather_esp32_v2', 'family': 'esp32'},
@@ -45,8 +44,7 @@ BOARDS = {
     'metro_m0_tinyusb': {'fqbn': 'adafruit:samd:adafruit_metro_m0:usbstack=tinyusb', 'family': 'samd'},
     'metro_m4_tinyusb': {'fqbn': 'adafruit:samd:adafruit_metro_m4:speed=120,usbstack=tinyusb', 'family': 'samd'},
     'CH32V20x_EVT': {'fqbn': 'WCH:ch32v:CH32V20x_EVT:usb=tinyusb_usbd', 'family': 'ch32'},
-    # Matches githubci.yml's override: ci-arduino's default disables USB. Tests keep these FQBNs in sync.
-    'ch32_community_ch32v20x': {'fqbn': 'ch32-community:ch32v:CH32V20x_EVT:usb=tinyusb_usbd', 'family': 'ch32'},
+    'ch32_community_ch32v20x_tinyusb_usbd': {'fqbn': 'ch32-community:ch32v:CH32V20x_EVT:usb=tinyusb_usbd', 'family': 'ch32'},
     # rig boards: `span` is where a HIL image may load (XIP base: RP2040/RP2350 datasheets; sizes: the board's flash,
     # SAMD51 keeps the UF2 bootloader below 0x4000)
     'raspberry_pi_pico': {'fqbn': 'rp2040:rp2040:rpipico:flash=2097152_0,freq=120,dbgport=Disabled,dbglvl=None,'
@@ -81,7 +79,7 @@ REPRESENTATIVES = {
     'samd': ['metro_m4_express', 'metro_m0_tinyusb'],
     'nrf': ['nrf52840'],
     'esp32': ['feather_esp32s3', 'espressif_p4_function_ev'],
-    'ch32': ['CH32V20x_EVT', 'ch32_community_ch32v20x'],
+    'ch32': ['CH32V20x_EVT', 'ch32_community_ch32v20x_tinyusb_usbd'],
 }
 PORTABLE_FAMILY = {
     'raspberrypi/rp2040': 'rp2040', 'raspberrypi/pio_usb': 'rp2040', 'microchip/samd': 'samd',
