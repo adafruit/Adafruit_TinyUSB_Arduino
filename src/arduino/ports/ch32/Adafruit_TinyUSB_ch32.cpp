@@ -128,6 +128,7 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
          timeout--) {
     }
     if ((RCC->CTLR & RCC_USBHSPLLRDY) == 0) {
+      TU_LOG1("CH32V4x7: USBHSPLL failed to lock\r\n");
       return;
     }
   }
