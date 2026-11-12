@@ -213,7 +213,8 @@ python3 $H/hil_remote.py session close <id>                         # restore th
 - The admission checks consistency, not trust: a pull request's harness and firmware run on the rig as the runner's
   user; the fork-PR approval setting of the repository is the gate.
 - `hil-comment` posts only the newest attempt of the PR head's newest run. A board's row shows its build, verdict, each
-  test, the restore, the time and the core that built it; uncovered families and paths are listed, never passed.
+  test, the restore, the time and the core that built it; uncovered families and paths are listed, never passed. A
+  board whose core's bundled copy of library headers differs from the checkout gets a note naming them (Limits).
 
 ## Reservation
 
@@ -305,7 +306,9 @@ it again, and if it stays `closed: false`, keep the hold and report.
 - **Coverage:** the battery checks three device sketches from this host's side and one host sketch's descriptor
   report on the selected boards. It covers no other example, class, core or MCU family, no host-mode transfer, and no
   ESP32 host mode (the Arduino ESP32 config's host is MAX3421). A host board's check covers only its attached
-  devices with a serial: the CH340 (1a86:7523, no iSerial) on the Pico 2's port is not checked.
+  devices with a serial: the CH340 (1a86:7523, no iSerial) on the Pico 2's port is not checked. A board whose core
+  compiles its own copy of library headers (Build's `CORE_CONSUMED`) that differs from the checkout tests that mix,
+  not the checkout's headers alone.
 - **Host latency:** under concurrent sessions ci.lan has taken 0.4-16 s to open a DUT's CDC tty, before any request
   reached the device (usbmon, 2026-11-02). The open is not bounded by the test deadline; allow for it in any host-side
   timing claim.
