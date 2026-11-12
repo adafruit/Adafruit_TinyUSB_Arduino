@@ -40,12 +40,7 @@ extern "C" {
 #elif defined(CH32V30x)
 #define CFG_TUSB_MCU OPT_MCU_CH32V307
 #elif defined(CH32V4x7)
-// This controller has a separate DCD while its upstream MCU ID is pending.
-#define CFG_TUSB_MCU OPT_MCU_NONE
-#define CFG_TUD_MAX_SPEED OPT_MODE_HIGH_SPEED
-#define TUP_RHPORT_HIGHSPEED 1
-#define TUP_DCD_ENDPOINT_MAX 8
-#define TUP_DCD_EDPT_CLOSE_API
+#define CFG_TUSB_MCU OPT_MCU_CH32V4X7
 #endif
 
 #define CFG_TUSB_OS OPT_OS_NONE
