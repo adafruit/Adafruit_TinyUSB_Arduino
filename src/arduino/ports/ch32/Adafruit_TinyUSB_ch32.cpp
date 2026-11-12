@@ -39,6 +39,13 @@
 //--------------------------------------------------------------------+
 extern "C" {
 
+#if defined(CH32V4x7)
+__attribute__((interrupt)) void USBHS1_IRQHandler(void) { tud_int_handler(0); }
+
+// The board supplies its bootloader's reset convention, if it has one.
+void ch32TinyUSBEnterBootloader(void) __attribute__((weak));
+#endif
+
 // USBD (fsdev)
 #if CFG_TUD_WCH_USBIP_FSDEV
 __attribute__((interrupt("WCH-Interrupt-fast"))) void
@@ -104,6 +111,31 @@ void yield(void) {
 //--------------------------------------------------------------------+
 
 void TinyUSB_Port_InitDevice(uint8_t rhport) {
+#if defined(CH32V4x7)
+#if HSE_VALUE != 25000000
+#error "CH32V4x7 USBHS currently requires a 25 MHz external crystal"
+#endif
+  // USBHSPLL feeds the UTMI PHY independently of the CPU clock. Its source and
+  // reference are writable only while it is off (RM 3.4.12): keep a locked PLL
+  // so a second init does not stop the PHY clock under a running controller.
+  if ((RCC->CTLR & RCC_USBHSPLLRDY) == 0) {
+    RCC_HBPeriphClockCmd(RCC_HBPeriph_USBHS1, DISABLE);
+    RCC->CTLR &= ~RCC_USBHSPLLON;
+    RCC_USBHSPLLCLKConfig(RCC_USBHSPLLCLKSource_HSE);
+    RCC_USBHSPLLReferConfig(RCC_USBHSPLLCKREFCLK_25M);
+    RCC->CTLR |= RCC_USBHSPLLON;
+    for (uint32_t timeout = 1000000; timeout && !(RCC->CTLR & RCC_USBHSPLLRDY);
+         timeout--) {
+    }
+    if ((RCC->CTLR & RCC_USBHSPLLRDY) == 0) {
+      TU_LOG1("CH32V4x7: USBHSPLL failed to lock\r\n");
+      return;
+    }
+  }
+  // not the RCC_UTMIxON macros: they are swapped against RCC_CFGR2
+  RCC_UTMI1cmd(ENABLE);
+  RCC_HBPeriphClockCmd(RCC_HBPeriph_USBHS1, ENABLE);
+#endif
 #if CFG_TUD_WCH_USBIP_FSDEV || CFG_TUD_WCH_USBIP_USBFS
   // Full speed OTG or FSDev
 
@@ -171,6 +203,11 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
 }
 
 void TinyUSB_Port_EnterDFU(void) {
+#if defined(CH32V4x7)
+  if (ch32TinyUSBEnterBootloader) {
+    ch32TinyUSBEnterBootloader();
+  }
+#endif
   // Reset to Boot ROM
   // Serial1.println("Reset to Boot ROM");
   //__disable_irq();
