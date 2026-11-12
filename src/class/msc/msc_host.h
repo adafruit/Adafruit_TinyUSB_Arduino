@@ -1,25 +1,6 @@
 /*
- * The MIT License (MIT)
- *
- * Copyright (c) 2019 Ha Thach (tinyusb.org)
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-FileCopyrightText: Copyright (c) 2019 Ha Thach (tinyusb.org)
+ * SPDX-License-Identifier: MIT
  *
  * This file is part of the TinyUSB stack.
  */
@@ -61,18 +42,19 @@ bool tuh_msc_mounted(uint8_t dev_addr);
 // Check if the interface is currently ready or busy transferring data
 bool tuh_msc_ready(uint8_t dev_addr);
 
-// Get Max Lun
+// Get the LUN count the device reported, clamped to CFG_TUH_MSC_MAXLUN
 uint8_t tuh_msc_get_maxlun(uint8_t dev_addr);
 
-// Get number of block
+// Get number of block, as cached during enumeration (LUN 0 only). 0 for a LUN not below tuh_msc_get_maxlun()
 uint32_t tuh_msc_get_block_count(uint8_t dev_addr, uint8_t lun);
 
-// Get block size in bytes
+// Get block size in bytes, as cached during enumeration (LUN 0 only). 0 for a LUN not below tuh_msc_get_maxlun()
 uint32_t tuh_msc_get_block_size(uint8_t dev_addr, uint8_t lun);
 
 // Perform a full SCSI command (cbw, data, csw) in non-blocking manner.
 // Complete callback is invoked when SCSI op is complete.
-// return true if success, false if there is already pending operation.
+// return true if success, false if the interface is not configured, cbw->lun is not below tuh_msc_get_maxlun(),
+// or there is already pending operation. The commands below also return false in these cases.
 // NOTE: buffer must be accessible by USB/DMA controller, aligned correctly and multiple of cache line if enabled
 bool tuh_msc_scsi_command(uint8_t daddr, const msc_cbw_t *cbw, void *data, tuh_msc_complete_cb_t complete_cb,
                           uintptr_t arg);

@@ -1,25 +1,7 @@
 /*
- * The MIT License (MIT)
- *
- * Copyright (c) 2021 XMOS LIMITED
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-FileCopyrightText: Copyright (c) 2021 XMOS LIMITED
+ * SPDX-FileCopyrightText: Copyright (c) 2021 Ha Thach (tinyusb.org)
+ * SPDX-License-Identifier: MIT
  *
  * This file is part of the TinyUSB stack.
  */
@@ -50,6 +32,7 @@
 typedef struct {
   uint8_t attrs;
   uint8_t alt;
+  uint8_t alt_max; // highest bAlternateSetting of the DFU interface
   uint8_t state;
   uint8_t status;
 
@@ -60,23 +43,13 @@ typedef struct {
 
 static dfu_state_ctx_t _dfu_ctx;
 
-#if CFG_TUD_DFU_XFER_BUFSIZE > CFG_TUD_ENDPOINT0_BUFSIZE
-TU_ATTR_ALIGNED(4) uint8_t _transfer_buf[CFG_TUD_DFU_XFER_BUFSIZE];
-#endif
+// Download data must remain valid across the following GETSTATUS control transfer
+TU_ATTR_ALIGNED(4) static uint8_t _transfer_buf[CFG_TUD_DFU_XFER_BUFSIZE];
 
 static void reset_state(void) {
   _dfu_ctx.state = DFU_IDLE;
   _dfu_ctx.status = DFU_STATUS_OK;
   _dfu_ctx.flashing_in_progress = false;
-}
-
-static inline uint8_t* get_xfer_buffer(void) {
-  // Use EP0 buffer if it is large enough, otherwise use dedicated buffer
-  #if CFG_TUD_DFU_XFER_BUFSIZE > CFG_TUD_ENDPOINT0_BUFSIZE
-  return _transfer_buf;
-  #else
-  return usbd_get_ctrl_buf();
-  #endif
 }
 
 static bool reply_getstatus(uint8_t rhport, const tusb_control_request_t* request, dfu_state_t state, dfu_status_t status, uint32_t timeout);
@@ -173,6 +146,7 @@ void dfu_moded_reset(uint8_t rhport) {
   (void) rhport;
   _dfu_ctx.attrs = 0;
   _dfu_ctx.alt = 0;
+  _dfu_ctx.alt_max = 0;
   reset_state();
 }
 
@@ -192,7 +166,8 @@ uint16_t dfu_moded_open(uint8_t rhport, const tusb_desc_interface_t* itf_desc, u
   uint8_t alt_count = 0;
 
   uint16_t drv_len = 0;
-  TU_VERIFY(itf_desc->bInterfaceSubClass == TUD_DFU_APP_SUBCLASS && itf_desc->bInterfaceProtocol == DFU_PROTOCOL_DFU, 0);
+  TU_VERIFY(itf_desc->bInterfaceClass == TUSB_CLASS_APPLICATION_SPECIFIC &&
+            itf_desc->bInterfaceSubClass == TUD_DFU_APP_SUBCLASS && itf_desc->bInterfaceProtocol == DFU_PROTOCOL_DFU, 0);
 
   while(itf_desc->bInterfaceSubClass == TUD_DFU_APP_SUBCLASS && itf_desc->bInterfaceProtocol == DFU_PROTOCOL_DFU) {
     TU_ASSERT(max_len > drv_len, 0);
@@ -214,6 +189,8 @@ uint16_t dfu_moded_open(uint8_t rhport, const tusb_desc_interface_t* itf_desc, u
   drv_len += sizeof(tusb_desc_dfu_functional_t);
 
   _dfu_ctx.attrs = func_desc->bAttributes;
+  // at least one alt was counted; with 256 alts the counter wrapped to 0 and minus 1 gives 255
+  _dfu_ctx.alt_max = (uint8_t) (alt_count - 1u);
 
   // CFG_TUD_DFU_XFER_BUFSIZE has to be set to the buffer size used in TUD_DFU_DESCRIPTOR
   const uint16_t transfer_size = tu_le16toh( tu_unaligned_read16((const uint8_t*) func_desc + offsetof(tusb_desc_dfu_functional_t, wTransferSize)) );
@@ -234,8 +211,12 @@ bool dfu_moded_control_xfer_cb(uint8_t rhport, uint8_t stage, const tusb_control
     switch (request->bRequest) {
       case TUSB_REQ_SET_INTERFACE:
         if (stage == CONTROL_STAGE_SETUP) {
+          // alt is passed to the application callbacks as the partition index:
+          // an alternate setting the interface does not have is a Request Error
+          TU_VERIFY(request->wValue <= _dfu_ctx.alt_max);
+
           // Switch Alt interface and reset state machine
-          _dfu_ctx.alt = (uint8_t)request->wValue;
+          _dfu_ctx.alt = (uint8_t) request->wValue;
           reset_state();
           return tud_control_status(rhport, request);
         }
@@ -294,10 +275,10 @@ bool dfu_moded_control_xfer_cb(uint8_t rhport, uint8_t stage, const tusb_control
           TU_VERIFY(_dfu_ctx.attrs & DFU_ATTR_CAN_UPLOAD);
           TU_VERIFY(request->wLength <= CFG_TUD_DFU_XFER_BUFSIZE);
 
-          const uint16_t xfer_len = tud_dfu_upload_cb(_dfu_ctx.alt, request->wValue, get_xfer_buffer(),
+          const uint16_t xfer_len = tud_dfu_upload_cb(_dfu_ctx.alt, request->wValue, _transfer_buf,
                                                       request->wLength);
 
-          return tud_control_xfer(rhport, request, get_xfer_buffer(), xfer_len);
+          return tud_control_xfer(rhport, request, _transfer_buf, xfer_len);
         }
         break;
 
@@ -317,7 +298,7 @@ bool dfu_moded_control_xfer_cb(uint8_t rhport, uint8_t stage, const tusb_control
           if (request->wLength > 0) {
             // Download with payload -> transition to DOWNLOAD SYNC
             _dfu_ctx.state = DFU_DNLOAD_SYNC;
-            return tud_control_xfer(rhport, request, get_xfer_buffer(), request->wLength);
+            return tud_control_xfer(rhport, request, _transfer_buf, request->wLength);
           } else {
             // Download is complete -> transition to MANIFEST SYNC
             _dfu_ctx.state = DFU_MANIFEST_SYNC;
@@ -391,7 +372,7 @@ static bool process_download_get_status(uint8_t rhport, uint8_t stage, const tus
   } else if (stage == CONTROL_STAGE_ACK) {
     if (_dfu_ctx.flashing_in_progress) {
       _dfu_ctx.state = DFU_DNBUSY;
-      tud_dfu_download_cb(_dfu_ctx.alt, _dfu_ctx.block, get_xfer_buffer(), _dfu_ctx.length);
+      tud_dfu_download_cb(_dfu_ctx.alt, _dfu_ctx.block, _transfer_buf, _dfu_ctx.length);
     } else {
       _dfu_ctx.state = DFU_DNLOAD_IDLE;
     }

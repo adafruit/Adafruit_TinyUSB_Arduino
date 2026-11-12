@@ -55,8 +55,11 @@ A roster entry:
   agentrc's whole-bus lookup refuses while a serial-less 303a:1001 (the S3's Arduino DUT) is on the host. No `debug`:
   no GDB route.
 - `arduino.tests`: the tests the battery runs, all of the board's role (device or host, the build contract's board
-  table); a host board's `arduino.dev_attached` lists the devices on its USB port, each a `vid_pid` `vvvv:pppp` and
-  its `serial`.
+  table). The devices wired to a host board's USB port are agentrc's board registry's `dev_attached` (the `hil`
+  skill's Board registry), resolved into the entry by `probe`, and a registered board's come only from there: its
+  roster entry keeps no copy, refused where the registry lists none for it. A board without a registered `probe`
+  lists its own top-level `dev_attached` instead: each device a lowercase `vid_pid` `vvvv:pppp` and an optional
+  `serial`, a host board needing at least one with a serial.
 
 ci.lan's boards are also on tinyusb's roster (tinyusb `test/hil/tinyusb.json`) and tinyuf2's. This contract performs
 no rig-wide operation (hub power, port cycle, controller rebind).
@@ -75,9 +78,9 @@ A fixed battery per board, the roster's `arduino.tests`. Device boards (USB to t
 
 Host boards (Pico W, Pico 2: devices wired to their USB port):
 
-- `host_device_info`: `examples/Host/Simple/host_device_info` on the native host reports every `dev_attached` device,
-  VID:PID and serial, on the console (the probe's VCOM, Serial1), opened before the flash so the boot's enumeration
-  is kept. Descriptor-level coverage: no transfer to the devices.
+- `host_device_info`: `examples/Host/Simple/host_device_info` on the native host reports every attached device that
+  has a serial, VID:PID and serial, on the console (the probe's VCOM, Serial1), opened before the flash so the boot's
+  enumeration is kept. Descriptor-level coverage: no transfer to the devices.
 
 `-t` narrows the tests (each board runs those of its role) and `-b` the boards. The PR-scoped selector is the build
 contract's:
@@ -218,17 +221,20 @@ python3 $H/hil_remote.py session close <id>                         # restore th
 The lock helper is `hil_test.py lock (hold|release|status) ...`, agentrc's `hil_lock.py`, with lock dir
 `/tmp/tinyusb-hil-locks`.
 
-- `hil_test.py run` and `commission` lock each board themselves (protected, reason `hil_test.py`, `hil_test.py
-  commission`): never pre-hold for them. SIGTERM aborts them as SIGINT does: a board they touched stays held for
-  recovery (exit 4), its children ended or recorded pending in the run's report or the commission's `result.json`.
+- `hil_test.py run` and `commission` lock each board themselves (reason `hil_test.py`, `hil_test.py commission`):
+  never pre-hold for them. Their lock ends with them, whatever the outcome: a cleanup they could not prove (a failed
+  restore, a child not proven ended) is logged in the board's cleanup log (agentrc `hil` Board locks) and the board
+  released; the next run on the board, of any project, reports it (`previousCleanupFailure`). SIGTERM aborts them as
+  SIGINT does (exit 4).
 - A manual session holds the board under a reason unique to its attempt, `arduino-hil session <attempt dir> <token>`.
-  Every session command checks that hold, and refuses while the board's pending-session record (`arduino-hil`)
-  lists a child not proven ended.
+  Every session command checks that hold; commands under one hold run one at a time through its session mutex, and
+  each refuses while another process uses the board's probe (agentrc's `arduino` Busy check).
 - Cleanup state is the board's restoration sketch flashed and checked (device boards: `serial_echo` echoing; host
-  boards: `host_device_info` reporting every attached device), every child proven ended, and the hold released.
-- The battery restores it after each board. `session close` restores, checks and releases in one command, and
-  releases nothing when the restore fails. A session command exits 3 when the lock record shows no live holder under
-  the session's reason; an unreadable record, or a pending-session record listing a child not proven ended, still
+  boards: `host_device_info` reporting every attached device with a serial), every child proven ended, and the hold
+  released. A passing restore marks restored each open failure of the board whose children are proven ended.
+- The battery restores it after each board. `session close` restores, checks and releases in one command: a restore
+  that fails is logged and still releases (counted closed); only a release that fails keeps the hold. A session
+  command exits 3 when the lock record shows no live holder under the session's reason; an unreadable record still
   exits 2. After a 3, run `session close`: it closes the session, its restore unconfirmed (an earlier close's answer
   lost to a dropped ssh, or a holder that died); the board's next run or session flashes its own image.
 
@@ -237,18 +243,21 @@ The lock helper is `hil_test.py lock (hold|release|status) ...`, agentrc's `hil_
 - **`hil_test.py run`** writes `hil_report.json` (schema `adafruit-tinyusb-arduino-hil`, agentrc `hil_report_core`,
   with a Markdown view) in its run dir. It prints the same body as its last stdout line.
 - **Exits:** 0 every board passed, 1 a board failed or did not run (each cleaned up or untouched), 2 refused before any
-  hardware access, 4 a cleanup did not finish (the board handed to a cleanup holder) or the run was aborted.
+  hardware access, 4 a cleanup could not be proven (logged, the board released) or the run was aborted.
 - **Report rows**, one per board:
-  - `ran`, `pass`, `locked`, `recoveryBlocker`, `detail`, `firmware` (the record);
+  - `ran`, `pass`, `locked`, `recoveryBlocker`, `detail`, `firmware` (the record); `probeUsers` when another process
+    used the board's probe; when the board's cleanup log holds open failures, `previousCleanupFailure` (the latest)
+    and, with more than one, `openCleanupFailures`; and when an older engine left a pending record, `previousPending`;
   - `tests[]`, each with `test`, `pass`, `detail`, `device` and the detach evidence;
-  - `cleanup`, with `pass`, `state`, `evidence`, `holder` and `receipts`.
+  - `cleanup`, with `pass`, `state`, `evidence`, `released`, `receipts` and, when the board's lock did not end as its
+    verdict said, `lock`.
 - **Delegated output:** `hil_test.py report <run dir> [-b BOARD]...` prints `{pass, results, caveat, wedged,
   reportPath}`, each result carrying its verdict. That is the `hil-operator` reply, copied verbatim. `wedged` is the
   boards that ran with cleanup pending or unknown. A run that started nothing gets one not-run row per requested
   board.
 - **Verdicts:**
-  - blocker: a cleanup holder, a recovery blocker found at admission, a cleanup `pending` or `unknown`, or an aborted
-    run;
+  - blocker: a failed cleanup, a cleanup `pending` or `unknown`, a recovery blocker found at admission (an older
+    helper's live cleanup holder), or an aborted run;
   - not-run: probe missing, board locked, record refused;
   - pass: every test passed and the restoration sketch was restored;
   - otherwise fail.
@@ -257,62 +266,49 @@ The lock helper is `hil_test.py lock (hold|release|status) ...`, agentrc's `hil_
 
 ## Recovery
 
-Recovery needs a separate dispatch naming the board. A CI run's board is recovered on ci.lan from its state dir: the
-run dir is `<board>/run-<n>`, the tree to run commands in `<board>/tree` (staged, so `--staged manifest.json`). It
-applies to:
+A failed cleanup does not hold the board: it is logged and reported, and the next passing restore on the board marks
+it restored. Recovery is a separate dispatch naming the board, for:
 
-- a report row with `cleanup.holder` (exit 4), or a `commission` that exited 4: its
-  `build/hil-manual/commission-<board>-<time>/result.json` carries the holder token and receipts and stands in
-  for the report in step 3;
-- a protected record left by a run that died;
-- a board's `arduino-hil` pending-session record;
-- a session whose `close` failed (its hold kept).
+- a blocker row (exit 4), or a `commission` that exited 4: its `build/hil-manual/commission-<board>-<time>/result.json`
+  carries the receipts and stands in for the report in step 3;
+- a child of a failed run still running: ending it is outside this contract: report its receipt;
+- a recovery blocker at admission: an older helper's live cleanup holder (`hil_test.py lock status`), released only
+  through that helper's own procedure: report it;
+- a `session close` that could not release (its hold kept).
 
-The dispatch carries the board, the failed report (or session id), the holder token and the receipts. No
-`usb-kernel-recover` rung is part of this contract. On ci.lan, run each command in the failed run's attempt dir
-(`ssh ci.lan 'cd ~/hil-remote/adafruit-tinyusb-arduino/<id> && python3 .claude/skills/hil-contract/scripts/hil_test.py
-...'`), adding `--staged manifest.json` to `restore`. On a dev PC, run them from the checkout.
+The dispatch carries the board and the failed report (or session id). No `usb-kernel-recover` rung is part of this
+contract. A CI run's board is recovered on ci.lan from its state dir: the run dir is `<board>/run-<n>`, the tree to
+run commands in `<board>/tree` (staged, so `--staged manifest.json`). On ci.lan, run each command in the failed run's
+attempt dir (`ssh ci.lan 'cd ~/hil-remote/adafruit-tinyusb-arduino/<id> && python3
+.claude/skills/hil-contract/scripts/hil_test.py ...'`), adding `--staged manifest.json` to `restore`. On a dev PC, run
+them from the checkout. When the failed tree's own harness is the defect, run the restore from a newly staged tree of
+the fixed commit (a `hil_remote.py run` of the board stages one), with `--report` naming the failed run's report by
+absolute path.
 
-When the failed tree's own harness is the defect, run the restore from a newly staged tree of the fixed commit (a
-`hil_remote.py run` of the held boards stages one and reports them locked), with `--report` naming the failed run's
-report by absolute path; the hold, its token and the receipts stay the failed run's.
+1. `hil_test.py lock status`.
+2. `hil_test.py lock hold <board> --reason recovery-<id>`.
+3. `hil_test.py restore -b <board> --build-record build/hil/<board>.build.json --under-hold recovery-<id> --report
+   <run dir>/hil_report.json --release <roster>` (`--report <commission dir>/result.json` for a commission). It
+   refuses while any receipt of the failed run is not proven ended, `unknown` included: stop and report that receipt.
+   Exit 0 restored, 6 restore failed (logged, released): report it; 5 not released: keep the hold and report.
 
-1. `hil_test.py lock status`, and `hil_test.py report <run dir> -b <board>` for the row's holder token and receipts;
-   for a commission, read them from its `result.json` instead, since it writes no `hil_report.json`.
-2. Take the board for the restore, keeping it blocked throughout:
-   - A live cleanup holder (its record's reason is `hil_test.py`): restore under it, reason R = `hil_test.py`.
-   - A dead holder or a protected record: `hil_test.py lock hold --take-over <board> --reason recovery-<id>` prints
-     token T; R = `recovery-<id>`.
-3. `hil_test.py restore -b <board> --build-record build/hil/<board>.build.json --under-hold R --report
-   <run dir>/hil_report.json <roster>` (`--report <commission dir>/result.json` for a commission). It refuses while a
-   child of the failed run is not proven ended: stop and report that receipt, since ending a child is outside this
-   contract.
-4. Once the restore passed, `hil_test.py lock release --token <the holder's token, or T>`; that release refuses too
-   while a receipt is open. On failure, keep the hold and report.
+A host board whose restore flashed and verified yet misses an attached device fails like any restore; nothing in this
+contract power-cycles a device on a host board's port, so report that as the blocker for the human rather than
+retrying.
 
-A host board whose restore flashed and verified yet misses a `dev_attached` device keeps its hold like any failed
-restore. The Pico 2's Kingston stick once stopped answering the data stage of its first GET_DESCRIPTOR across MCU
-resets and reflashes (2026-11-02); nothing in this contract power-cycles a device on a host board's port, so report
-that as the blocker for the human rather than retrying.
-
-A failed `session close`: the session keeps its hold (its `reason` in `.hil-remote/<id>.session.json`). Once the
-session's pending children are proven ended (the next session command clears the record by itself), run
-`hil_remote.py session close <id>` again. It restores from the session's own `bundles/restore/` record, and its JSON
-is the last stdout line and `build/hil-manual/<board>-restore-<time>/result.json` in the attempt dir. If that close
-fails too, keep the hold and report.
-
-A pending-session record clears itself on the next session command once every receipt rechecks done. One holding an
-unrecheckable session (its supervisor died) needs a reviewed clear this contract does not give: a blocker for the
-human.
+`session close` restores from the session's own `bundles/restore/` record; its JSON is the last stdout line and
+`build/hil-manual/<board>-restore-<time>/result.json` in the attempt dir. A `closed: true` close whose restore failed
+(`restoreExit` 6) released the board and logged the failure: report it. A `closed: false` close could not release: run
+it again, and if it stays `closed: false`, keep the hold and report.
 
 ## Limits
 
 - **Coverage:** the battery checks three device sketches from this host's side and one host sketch's descriptor
   report on the selected boards. It covers no other example, class, core or MCU family, no host-mode transfer, and no
-  ESP32 host mode (the Arduino ESP32 config's host is MAX3421). A host board's check covers only its `dev_attached`
-  devices, which need a serial: the CH340 (1a86:7523, no iSerial) behind the Pico 2's hub is not checked. A board whose
-  core compiles its own copy of library headers (Build's `CORE_CONSUMED`) that differs from the checkout tests that
-  mix, not the checkout's headers alone.
+  ESP32 host mode (the Arduino ESP32 config's host is MAX3421). A host board's check covers only its attached
+  devices with a serial: the CH340 (1a86:7523, no iSerial) on the Pico 2's port is not checked. A board whose core
+  compiles its own copy of library headers (Build's `CORE_CONSUMED`) that differs from the checkout tests that mix,
+  not the checkout's headers alone.
 - **Host latency:** under concurrent sessions ci.lan has taken 0.4-16 s to open a DUT's CDC tty, before any request
   reached the device (usbmon, 2026-11-02). The open is not bounded by the test deadline; allow for it in any host-side
   timing claim.

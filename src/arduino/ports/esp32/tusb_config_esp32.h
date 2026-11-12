@@ -50,6 +50,9 @@ extern "C" {
 #error "ESP32 Arduino core version 2.0.8 or later is required"
 #endif
 
+// Required by ESP32 core 4.0 USBCDC to avoid linking the prebuilt CDC driver
+#define CFG_TUD_CDC_NOTIFY 1
+
 //--------------------------------------------------------------------
 // COMMON CONFIGURATION
 // Note: it is possible to use tinyusb + max3421e as host controller
@@ -62,11 +65,17 @@ extern "C" {
 #define CFG_TUSB_MCU OPT_MCU_ESP32S3
 #elif CONFIG_IDF_TARGET_ESP32P4
 #define CFG_TUSB_MCU OPT_MCU_ESP32P4
+#elif CONFIG_IDF_TARGET_ESP32S31
+#define CFG_TUSB_MCU OPT_MCU_ESP32S31
 #else
 #define CFG_TUSB_MCU OPT_MCU_ESP32
 #endif
 
-#if CONFIG_IDF_TARGET_ESP32P4
+// ARDUINO_USB_PORT 0 is the P4 HS port; cores without it keep HS
+#if CONFIG_IDF_TARGET_ESP32P4 &&                                               \
+    (!defined(ARDUINO_USB_PORT) || ARDUINO_USB_PORT == 0)
+#define CFG_TUD_MAX_SPEED OPT_MODE_HIGH_SPEED
+#elif CONFIG_IDF_TARGET_ESP32S31
 #define CFG_TUD_MAX_SPEED OPT_MODE_HIGH_SPEED
 #else
 #define CFG_TUD_MAX_SPEED OPT_MODE_FULL_SPEED

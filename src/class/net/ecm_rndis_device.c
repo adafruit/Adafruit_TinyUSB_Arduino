@@ -1,26 +1,7 @@
 /*
- * The MIT License (MIT)
- *
- * Copyright (c) 2020 Peter Lawrence
- * Copyright (c) 2019 Ha Thach (tinyusb.org)
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-FileCopyrightText: Copyright (c) 2020 Peter Lawrence
+ * SPDX-FileCopyrightText: Copyright (c) 2019 Ha Thach (tinyusb.org)
+ * SPDX-License-Identifier: MIT
  *
  * This file is part of the TinyUSB stack.
  */
@@ -87,6 +68,9 @@ static bool ecm_link_is_up = true;  // Store link state for ECM mode
 //--------------------------------------------------------------------+
 TU_ATTR_WEAK void tud_network_set_packet_filter_cb(uint16_t packet_filter) {
   (void) packet_filter;
+}
+
+TU_ATTR_WEAK void tud_network_init_cb(void) {
 }
 
 void tud_network_recv_renew(void) {
@@ -195,6 +179,8 @@ uint16_t netd_open(uint8_t rhport, tusb_desc_interface_t const * itf_desc, uint1
     // Open endpoint pair for RNDIS
     TU_ASSERT(usbd_open_edpt_pair(rhport, p_desc, 2, TUSB_XFER_BULK, &_netd_itf.ep_out, &_netd_itf.ep_in), 0);
 
+    tud_network_init_cb();
+
     // we are ready to transmit a packet
     can_xmit = true;
 
@@ -272,6 +258,7 @@ bool netd_control_xfer_cb (uint8_t rhport, uint8_t stage, tusb_control_request_t
 
                 // TODO should be merge with RNDIS's after endpoint opened
                 // Also should have opposite callback for application to disable network !!
+                tud_network_init_cb();
                 can_xmit = true; // we are ready to transmit a packet
                 tud_network_recv_renew(); // prepare for incoming packets
               }
@@ -325,7 +312,8 @@ bool netd_control_xfer_cb (uint8_t rhport, uint8_t stage, tusb_control_request_t
         request->bmRequestType_bit.direction == TUSB_DIR_OUT &&
         _netd_itf.itf_num == request->wIndex) {
       if (!_netd_itf.ecm_mode) {
-        rndis_class_set_handler(_netd_epbuf.ctrl, request->wLength);
+        // ctrl buffer only holds NETD_CONTROL_SIZE bytes; pass the count actually received
+        rndis_class_set_handler(_netd_epbuf.ctrl, tu_min16(request->wLength, NETD_CONTROL_SIZE));
       }
     }
   }
@@ -343,8 +331,11 @@ static void handle_incoming_packet(uint32_t len) {
     rndis_data_packet_t* r = (rndis_data_packet_t*)((void*)pnt);
     if (len >= sizeof(rndis_data_packet_t)) {
       if ((r->MessageType == REMOTE_NDIS_PACKET_MSG) && (r->MessageLength <= len)) {
-        if ((r->DataOffset + offsetof(rndis_data_packet_t, DataOffset) + r->DataLength) <= len) {
-          pnt = &_netd_epbuf.rx[r->DataOffset + offsetof(rndis_data_packet_t, DataOffset)];
+        // DataOffset and DataLength are host-controlled; validate the payload window fits
+        // within the received data without overflowing the uint32 addition (len >= header)
+        const uint32_t hdr = offsetof(rndis_data_packet_t, DataOffset);
+        if ((r->DataOffset <= len - hdr) && (r->DataLength <= len - hdr - r->DataOffset)) {
+          pnt = &_netd_epbuf.rx[hdr + r->DataOffset];
           size = r->DataLength;
         }
       }
