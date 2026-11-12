@@ -223,13 +223,9 @@ uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]) {
   uint32_t *serial_32 = (uint32_t *)serial_id;
   serial_32[0] = ch32_uuid[0];
   serial_32[1] = ch32_uuid[1];
-#if defined(CH32V4x7)
-  return 8; // TinyUF2's length, so bootloader and sketch share a serial
-#else
   serial_32[2] = ch32_uuid[2];
 
   return 12;
-#endif
 }
 
 #endif
