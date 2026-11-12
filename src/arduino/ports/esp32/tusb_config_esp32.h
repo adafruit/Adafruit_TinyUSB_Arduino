@@ -66,7 +66,9 @@ extern "C" {
 #define CFG_TUSB_MCU OPT_MCU_ESP32
 #endif
 
-#if CONFIG_IDF_TARGET_ESP32P4
+// ARDUINO_USB_PORT 0 is the P4 HS port; cores without it keep HS
+#if CONFIG_IDF_TARGET_ESP32P4 &&                                               \
+    (!defined(ARDUINO_USB_PORT) || ARDUINO_USB_PORT == 0)
 #define CFG_TUD_MAX_SPEED OPT_MODE_HIGH_SPEED
 #else
 #define CFG_TUD_MAX_SPEED OPT_MODE_FULL_SPEED
