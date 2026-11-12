@@ -1,25 +1,7 @@
 /*
- * The MIT License (MIT)
- *
- * Copyright (c) 2025 HiFiPhile (Zixun LI)
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-FileCopyrightText: Copyright (c) 2025 HiFiPhile (Zixun LI)
+ * SPDX-FileCopyrightText: Copyright (c) 2025 Ha Thach (tinyusb.org)
+ * SPDX-License-Identifier: MIT
  *
  * This file is part of the TinyUSB stack.
  */
@@ -288,7 +270,9 @@ static void ch_handle_ack(uint8_t ch_id, uint32_t ch_reg, tusb_dir_t dir) {
     }
   } else {
     // IN/RX direction
-    uint16_t const rx_count = channel_get_rx_count(ch_id);
+    // The PMA buffer holds a whole packet (max_packet_size for the first one, 2/32-byte blocks after that), so a
+    // device answering with more bytes than the transfer has room for would be copied past the buffer.
+    uint16_t const rx_count = tu_min16(channel_get_rx_count(ch_id), (uint16_t) (edpt->buflen - edpt->queued_len));
     uint16_t pma_addr = (uint16_t) btable_get_addr(ch_id, BTABLE_BUF_RX);
     tu_hwfifo_read(PMA_BUF_AT(pma_addr), edpt->buffer + edpt->queued_len, rx_count, NULL);
     edpt->queued_len += rx_count;

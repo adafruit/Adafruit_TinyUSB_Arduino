@@ -1,0 +1,21 @@
+{
+  "boards": [
+    {
+      "name": "raspberry_pi_pico",
+      "uid": "<the DUT's USB serial under Arduino firmware: hil_test.py commission prints it>",
+      "flasher": {
+        "name": "openocd",
+        "uid": "<the debug probe's USB serial>",
+        "vid_pid": "0x2e8a 0x000c",
+        "args": "-f interface/cmsis-dap.cfg -f target/rp2040.cfg -c \"adapter speed 5000\"",
+        "verify": true
+      },
+      "debug": {
+        "openocd": "-f interface/cmsis-dap.cfg -f target/rp2040.cfg -c \"adapter speed 5000\""
+      },
+      "arduino": {
+        "tests": ["cdc_echo", "hid_inout", "msc_ramdisk"]
+      }
+    }
+  ]
+}

@@ -1,25 +1,6 @@
 /*
- * The MIT License (MIT)
- *
- * Copyright (c) 2019 Ha Thach (tinyusb.org)
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * SPDX-FileCopyrightText: Copyright (c) 2019 Ha Thach (tinyusb.org)
+ * SPDX-License-Identifier: MIT
  *
  * This file is part of the TinyUSB stack.
  */
@@ -193,8 +174,11 @@ uint32_t tud_cdc_n_available(uint8_t itf) {
 
 uint32_t tud_cdc_n_read(uint8_t itf, void* buffer, uint32_t bufsize) {
   TU_VERIFY(itf < CFG_TUD_CDC, 0);
+  TU_SYSVIEW_CALL(CFG_TUSB_SYSVIEW_LEVEL_CLASS, TU_SV_ID_CDC_READ);
   cdcd_interface_t *p_cdc = &_cdcd_itf[itf];
-  return tu_edpt_stream_read(&p_cdc->rx_stream, buffer, bufsize);
+  uint32_t const ret = tu_edpt_stream_read(&p_cdc->rx_stream, buffer, bufsize);
+  TU_SYSVIEW_RET(CFG_TUSB_SYSVIEW_LEVEL_CLASS, TU_SV_ID_CDC_READ);
+  return ret;
 }
 
 bool tud_cdc_n_peek(uint8_t itf, uint8_t *chr) {
@@ -220,8 +204,11 @@ uint32_t tud_cdc_n_write(uint8_t itf, const void* buffer, uint32_t bufsize) {
 
 uint32_t tud_cdc_n_write_flush(uint8_t itf) {
   TU_VERIFY(itf < CFG_TUD_CDC, 0);
+  TU_SYSVIEW_CALL(CFG_TUSB_SYSVIEW_LEVEL_CLASS, TU_SV_ID_CDC_FLUSH);
   cdcd_interface_t *p_cdc = &_cdcd_itf[itf];
-  return tu_edpt_stream_write_xfer(&p_cdc->tx_stream);
+  uint32_t const ret = tu_edpt_stream_write_xfer(&p_cdc->tx_stream);
+  TU_SYSVIEW_RET(CFG_TUSB_SYSVIEW_LEVEL_CLASS, TU_SV_ID_CDC_FLUSH);
+  return ret;
 }
 
 uint32_t tud_cdc_n_write_available(uint8_t itf) {
@@ -342,9 +329,7 @@ uint16_t cdcd_open(uint8_t rhport, const tusb_desc_interface_t* itf_desc, uint16
           tu_edpt_stream_t *stream_tx = &p_cdc->tx_stream;
           tu_edpt_stream_open(stream_tx, rhport, desc_ep, CFG_TUD_CDC_TX_EPSIZE);
 
-  #if CFG_TUD_CDC_TX_PERSISTENT
-          tu_edpt_stream_write_xfer(stream_tx); // flush pending data
-  #else
+  #if !CFG_TUD_CDC_TX_PERSISTENT
           tu_edpt_stream_clear(stream_tx);
   #endif
         } else {

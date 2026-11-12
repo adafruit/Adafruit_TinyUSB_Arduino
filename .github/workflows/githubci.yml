@@ -63,7 +63,7 @@ jobs:
            - 'metro_m4_tinyusb'
            # Ch32v2
            - 'CH32V20x_EVT'
-           - 'ch32v20x_ch32_community'
+           - 'ch32_community_ch32v20x'
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -82,5 +82,24 @@ jobs:
         arduino-cli lib install ${{ env.ARDUINO_LIBS }}
         arduino-cli lib list
 
+    # the core compiles against its bundled TinyUSB (boards.txt -I), empty in WCH:ch32v 1.0.5: use this checkout
+    - name: Use this checkout as the CH32 core's TinyUSB
+      if: matrix.arduino-platform == 'CH32V20x_EVT'
+      run: |
+        arduino-cli core install WCH:ch32v --additional-urls https://github.com/openwch/board_manager_files/raw/main/package_ch32v_index.json
+        for lib in ~/.arduino15/packages/WCH/hardware/ch32v/*/libraries/Adafruit_TinyUSB_Arduino; do
+          rm -rf "$lib"
+          ln -s "$GITHUB_WORKSPACE" "$lib"
+        done
+
     - name: test platforms
-      run: python3 ci/build_platform.py ${{ matrix.arduino-platform }}
+      run: |
+        python3 - "${{ matrix.arduino-platform }}" <<'PY'
+        import sys
+        sys.path.insert(0, 'ci')
+        import build_platform
+        # The community core defaults to USB disabled; exercise its TinyUSB port.
+        build_platform.ALL_PLATFORMS['ch32_community_ch32v20x'][0] = 'ch32-community:ch32v:CH32V20x_EVT:usb=tinyusb_usbd'
+        build_platform.main()
+        sys.exit(build_platform.success)
+        PY
