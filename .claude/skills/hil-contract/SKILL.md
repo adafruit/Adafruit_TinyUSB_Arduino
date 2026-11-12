@@ -244,9 +244,9 @@ The lock helper is `hil_test.py lock (hold|release|status) ...`, agentrc's `hil_
 - **Exits:** 0 every board passed, 1 a board failed or did not run (each cleaned up or untouched), 2 refused before any
   hardware access, 4 a cleanup could not be proven (logged, the board released) or the run was aborted.
 - **Report rows**, one per board:
-  - `ran`, `pass`, `locked`, `recoveryBlocker`, `detail`, `firmware` (the record); when the board's cleanup log holds
-    open failures, `previousCleanupFailure` (the latest) and, with more than one, `openCleanupFailures`; and when an
-    older engine left a pending record, `previousPending`;
+  - `ran`, `pass`, `locked`, `recoveryBlocker`, `detail`, `firmware` (the record); `probeUsers` when another process
+    used the board's probe; when the board's cleanup log holds open failures, `previousCleanupFailure` (the latest)
+    and, with more than one, `openCleanupFailures`; and when an older engine left a pending record, `previousPending`;
   - `tests[]`, each with `test`, `pass`, `detail`, `device` and the detach evidence;
   - `cleanup`, with `pass`, `state`, `evidence`, `released`, `receipts` and, when the board's lock did not end as its
     verdict said, `lock`.
@@ -270,8 +270,7 @@ it restored. Recovery is a separate dispatch naming the board, for:
 
 - a blocker row (exit 4), or a `commission` that exited 4: its `build/hil-manual/commission-<board>-<time>/result.json`
   carries the receipts and stands in for the report in step 3;
-- a child of a failed run still running: its failure stays open, a restore marking it restored only once the child is
-  proven ended, and ending it is outside this contract: report its receipt;
+- a child of a failed run still running: ending it is outside this contract: report its receipt;
 - a recovery blocker at admission: an older helper's live cleanup holder (`hil_test.py lock status`), released only
   through that helper's own procedure: report it;
 - a `session close` that could not release (its hold kept).
