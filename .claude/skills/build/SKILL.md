@@ -46,8 +46,9 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
 
 - **Selection is the script's**, first match per path, and `paths[].reason` says why:
   - `src/arduino/ports/<mcu>/` and `src/portable/<vendor>/<driver>/` build that MCU family's representatives
-    (`REPRESENTATIVES`: rig boards first, then each distinct stack: RP2350 beside RP2040, SAMD21 beside SAMD51, the
-    RP2040 native-host build, the ESP32-P4's high-speed OTG), every example each one may build. `analog/max3421`,
+    (`REPRESENTATIVES`: rig boards first, then each distinct stack or core: RP2350 beside RP2040, SAMD21 beside
+    SAMD51, the RP2040 native-host build, the ESP32-P4's high-speed OTG, and WCH alongside community CH32), every
+    example each one may build. `analog/max3421`,
     all other `src/` code and `library.properties` build every family's representatives.
   - A port or driver no CI platform builds (`ports/stm32`, `st/stm32_fsdev`, `renesas/rusb2`) is uncovered.
   - The headers the cores compile their own sources against (`CORE_CONSUMED`: `Adafruit_TinyUSB_API.h`,
@@ -64,7 +65,9 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
     report workflow (`REPORT_WORKFLOW`), run from the default branch, runs its tests only; docs, agent and repo
     metadata build nothing; anything else is uncovered.
 - **Boards** (`BOARDS`): CI's matrix (`.github/workflows/githubci.yml`) with adafruit/ci-arduino `all_platforms.py`'s
-  FQBNs under the same names, plus the rig boards named as in tinyusb's HIL farm: `raspberry_pi_pico`,
+  FQBNs under the same names, except `ch32_community_ch32v20x`: both the workflow and `BOARDS` append
+  `usb=tinyusb_usbd` because ci-arduino's default disables USB. The contract tests check that override matches.
+  The table also includes the rig boards named as in tinyusb's HIL farm: `raspberry_pi_pico`,
   `adafruit_fruit_jam`, `metro_m4_express`, the native-host `raspberry_pi_pico_w` and `raspberry_pi_pico2` (`role`
   host), and `espressif_s3_devkitm` and `espressif_p4_function_ev`. Each rig board builds on the core ci-arduino
   installs for its CI platform (`filters`), which the HIL CI sets up (the HIL contract's CI). An ESP32 rig board
@@ -73,7 +76,13 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
   `build_platform.py`: `.<platform>.test.skip`, a `.skip.txt` line equal to the platform, and `.<platform>.test.only`
   when any `.*.test.only` exists; a rig board takes its CI platform's files (`filters`). A board whose core is not
   installed is exit 2 naming `arduino-cli core install`. Local cores need not be CI's versions; the record names what
-  built.
+  built. For CH32, install the appropriate core with its additional index URL:
+
+  ```bash
+  arduino-cli core install ch32-community:ch32v --additional-urls https://github.com/ch32-community/board_manager_files/raw/main/package_ch32-commmunity_index.json
+  arduino-cli core install WCH:ch32v --additional-urls https://github.com/openwch/board_manager_files/raw/main/package_ch32v_index.json
+  ```
+
 - **Dependencies** (`arduino` skill): `library.properties` `depends=` plus `EXTRA_DEPENDENCIES` (CI's `ARDUINO_LIBS`
   beyond it), and theirs, transitively, must be installed before a build: a missing one is exit 2 naming the
   `arduino-cli lib install` line. A compile that takes any other library, outside the core, fails its sketch; the

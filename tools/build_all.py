@@ -29,6 +29,10 @@ all_boards = [
 ]
 
 
+def select_boards(query):
+    return [board for board in all_boards if query.casefold() in board[0].casefold()]
+
+
 # return [succeeded, failed, skipped]
 def build_sketch(variant, sketch):
     ret = [0, 0, 0]
@@ -103,7 +107,7 @@ def build_variant(variant):
 if __name__ == '__main__':
     # build all variants if input not existed
     if len(sys.argv) > 1:
-        build_boards = list(filter(lambda x: sys.argv[1] in x[0], all_boards))
+        build_boards = select_boards(sys.argv[1])
     else:
         build_boards = all_boards
 

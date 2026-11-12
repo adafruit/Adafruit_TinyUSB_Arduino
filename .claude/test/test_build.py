@@ -7,8 +7,11 @@ import contextlib
 import io
 import json
 import re
+import runpy
 import sys
 import tempfile
+import textwrap
+import types
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -46,6 +49,33 @@ class Tables(unittest.TestCase):
         self.assertTrue(matrix)
         for platform in matrix:
             self.assertIn(platform, cb.BOARDS)
+
+    def test_community_ci_override_matches_local_build_and_propagates_failure(self):
+        wf = (ROOT / '.github/workflows/githubci.yml').read_text()
+        regular, community = wf.split('    - name: test platforms\n', 1)[1].split(
+            '    - name: test community CH32 TinyUSB\n', 1)
+        board = 'ch32_community_ch32v20x'
+        self.assertIn(f"if: matrix.arduino-platform != '{board}'", regular)
+        self.assertIn('python3 ci/build_platform.py ${{ matrix.arduino-platform }}', regular)
+        self.assertIn(f"if: matrix.arduino-platform == '{board}'", community)
+        script = textwrap.dedent(community.split("<<'PY'\n", 1)[1].rsplit('        PY', 1)[0])
+        for result in (0, 1):
+            with self.subTest(result=result):
+                builder = types.SimpleNamespace(ALL_PLATFORMS={board: ['USB-disabled', None, None]},
+                                                main=mock.Mock(), success=result)
+                with mock.patch.dict(sys.modules, {'build_platform': builder}), \
+                        mock.patch.object(sys, 'argv', ['-', board]), mock.patch.object(sys, 'path', sys.path[:]):
+                    with self.assertRaises(SystemExit) as exit_result:
+                        exec(compile(script, 'githubci.yml', 'exec'), {})
+                self.assertEqual(exit_result.exception.code, result)
+                builder.main.assert_called_once_with()
+                self.assertEqual(builder.ALL_PLATFORMS[board][0], cb.BOARDS[board]['fqbn'])
+
+    def test_legacy_filter_selects_both_ch32_cores(self):
+        select_boards = runpy.run_path(str(ROOT / 'tools/build_all.py'))['select_boards']
+        for query in ('ch32', 'CH32'):
+            self.assertEqual({b[0] for b in select_boards(query)},
+                             {'CH32V20x_EVT', 'ch32_community_ch32v20x'})
 
     def test_dependencies_are_cis_install_list(self):
         wf = (ROOT / '.github/workflows/githubci.yml').read_text()
@@ -116,6 +146,17 @@ class Selection(unittest.TestCase):
     def test_family_change_builds_that_familys_representatives(self):
         sel = eng.select(['src/arduino/ports/rp2040/Adafruit_TinyUSB_rp2040.cpp'])
         self.assertEqual(set(sel['builds']), set(cb.REPRESENTATIVES['rp2040']))
+
+    def test_ch32_port_change_builds_both_cores(self):
+        for path in ('src/arduino/ports/ch32/x.cpp', 'src/portable/wch/usbhs/dcd_usbhs.c'):
+            selected = eng.select([path], only_examples=['examples/CDC/serial_echo'])
+            self.assertEqual(set(selected['builds']), {'CH32V20x_EVT', 'ch32_community_ch32v20x'})
+
+    def test_community_webusb_examples_are_eligible(self):
+        for example in ('webusb_rgb', 'webusb_serial'):
+            sketch = f'examples/WebUSB/{example}'
+            self.assertTrue(eng.eligible('ch32_community_ch32v20x', sketch))
+            self.assertFalse(eng.eligible('CH32V20x_EVT', sketch))
 
     def test_shared_change_builds_every_representative(self):
         sel = eng.select(['src/device/usbd.c'], only_examples=['examples/CDC/serial_echo'])
