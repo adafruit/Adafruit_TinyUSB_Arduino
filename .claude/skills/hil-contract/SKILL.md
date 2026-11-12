@@ -226,8 +226,8 @@ The lock helper is `hil_test.py lock (hold|release|status) ...`, agentrc's `hil_
   released; the next run on the board, of any project, reports it (`previousCleanupFailure`). SIGTERM aborts them as
   SIGINT does (exit 4).
 - A manual session holds the board under a reason unique to its attempt, `arduino-hil session <attempt dir> <token>`.
-  Every session command checks that hold; another live invocation on the board refuses it (agentrc's `arduino`
-  Claims).
+  Every session command checks that hold; commands under one hold run one at a time through its session mutex, and
+  each refuses while another process uses the board's probe (agentrc's `arduino` Busy check).
 - Cleanup state is the board's restoration sketch flashed and checked (device boards: `serial_echo` echoing; host
   boards: `host_device_info` reporting every attached device with a serial), every child proven ended, and the hold
   released. A passing restore marks restored each open failure of the board whose children are proven ended.
@@ -244,12 +244,12 @@ The lock helper is `hil_test.py lock (hold|release|status) ...`, agentrc's `hil_
 - **Exits:** 0 every board passed, 1 a board failed or did not run (each cleaned up or untouched), 2 refused before any
   hardware access, 4 a cleanup could not be proven (logged, the board released) or the run was aborted.
 - **Report rows**, one per board:
-  - `ran`, `pass`, `locked`, `recoveryBlocker`, `detail`, `firmware` (the record); when the board's cleanup log holds
-    open failures, `previousCleanupFailure` (the latest) and, with more than one, `openCleanupFailures`; when an older
-    engine left a pending record, `previousPending`; and `claimNote` when a claim was not removed or a failure not
-    logged;
+  - `ran`, `pass`, `locked`, `recoveryBlocker`, `detail`, `firmware` (the record); `probeUsers` when another process
+    used the board's probe; when the board's cleanup log holds open failures, `previousCleanupFailure` (the latest)
+    and, with more than one, `openCleanupFailures`; and when an older engine left a pending record, `previousPending`;
   - `tests[]`, each with `test`, `pass`, `detail`, `device` and the detach evidence;
-  - `cleanup`, with `pass`, `state`, `evidence`, `released` and `receipts`.
+  - `cleanup`, with `pass`, `state`, `evidence`, `released`, `receipts` and, when the board's lock did not end as its
+    verdict said, `lock`.
 - **Delegated output:** `hil_test.py report <run dir> [-b BOARD]...` prints `{pass, results, caveat, wedged,
   reportPath}`, each result carrying its verdict. That is the `hil-operator` reply, copied verbatim. `wedged` is the
   boards that ran with cleanup pending or unknown. A run that started nothing gets one not-run row per requested
@@ -270,9 +270,7 @@ it restored. Recovery is a separate dispatch naming the board, for:
 
 - a blocker row (exit 4), or a `commission` that exited 4: its `build/hil-manual/commission-<board>-<time>/result.json`
   carries the receipts and stands in for the report in step 3;
-- a child of a failed run still running: once it outlives the claim's 30 s settle, every later run or session on the
-  board is refused until it ends (agentrc's `arduino` Claims; one whose state is `unknown` is logged, not refused),
-  and ending it is outside this contract: report its receipt;
+- a child of a failed run still running: ending it is outside this contract: report its receipt;
 - a recovery blocker at admission: an older helper's live cleanup holder (`hil_test.py lock status`), released only
   through that helper's own procedure: report it;
 - a `session close` that could not release (its hold kept).
@@ -289,10 +287,9 @@ absolute path.
 1. `hil_test.py lock status`.
 2. `hil_test.py lock hold <board> --reason recovery-<id>`.
 3. `hil_test.py restore -b <board> --build-record build/hil/<board>.build.json --under-hold recovery-<id> --report
-   <run dir>/hil_report.json --release <roster>` (`--report <commission dir>/result.json` for a commission). Stricter
-   than a run's claim, it refuses while any receipt of the failed run is not proven ended, `unknown` included: stop and
-   report that receipt. Exit 0 restored, 6 restore failed (logged, released): report it; 5 not released: keep the
-   hold and report.
+   <run dir>/hil_report.json --release <roster>` (`--report <commission dir>/result.json` for a commission). It
+   refuses while any receipt of the failed run is not proven ended, `unknown` included: stop and report that receipt.
+   Exit 0 restored, 6 restore failed (logged, released): report it; 5 not released: keep the hold and report.
 
 A host board whose restore flashed and verified yet misses an attached device fails like any restore; nothing in this
 contract power-cycles a device on a host board's port, so report that as the blocker for the human rather than
