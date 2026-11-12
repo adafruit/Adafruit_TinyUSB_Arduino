@@ -245,8 +245,7 @@ bool Adafruit_USBD_Device::begin(uint8_t rhport) {
   // follow USBCDC cdc descriptor
   uint8_t itfnum = allocInterface(2);
   uint8_t strid = addStringDescriptor("TinyUSB Serial");
-  uint16_t const mps =
-      (TUD_OPT_HIGH_SPEED ? 512 : 64); // TODO actual link speed
+  uint16_t const mps = (TUD_OPT_HIGH_SPEED ? 512 : 64);
   uint8_t const desc_cdc[TUD_CDC_DESC_LEN] = {
       TUD_CDC_DESCRIPTOR(itfnum, strid, 0x85, 64, 0x03, 0x84, mps)};
 
@@ -329,6 +328,34 @@ uint16_t const *Adafruit_USBD_Device::descriptor_string_cb(uint8_t index,
   return _desc_str;
 }
 
+#if TUD_OPT_HIGH_SPEED
+// A high-speed capable device reports descriptors for the negotiated speed, and
+// bulk max packet size is exactly 512 at high speed but at most 64 at full
+// speed (USB 2.0 5.8.3, 9.2.6.6). Descriptors are built for high speed.
+static void update_bulk_packet_size(uint8_t *desc_cfg, tusb_speed_t speed) {
+  uint16_t const total_len =
+      tu_le16toh(((tusb_desc_configuration_t const *)desc_cfg)->wTotalLength);
+  uint8_t const *desc_end = desc_cfg + total_len;
+
+  for (uint8_t *p = desc_cfg; p < desc_end; p += tu_desc_len(p)) {
+    if (tu_desc_type(p) != TUSB_DESC_ENDPOINT) {
+      continue;
+    }
+
+    tusb_desc_endpoint_t *desc_ep = (tusb_desc_endpoint_t *)p;
+    if (desc_ep->bmAttributes.xfer != TUSB_XFER_BULK) {
+      continue;
+    }
+
+    if (speed == TUSB_SPEED_HIGH) {
+      desc_ep->wMaxPacketSize = tu_htole16(512);
+    } else if (tu_edpt_packet_size(desc_ep) > 64) {
+      desc_ep->wMaxPacketSize = tu_htole16(64);
+    }
+  }
+}
+#endif
+
 //--------------------------------------------------------------------+
 // TinyUSB stack callbacks
 //--------------------------------------------------------------------+
@@ -346,6 +373,9 @@ uint8_t const *tud_descriptor_device_cb(void) {
 // enough for transfer to complete
 uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
   (void)index;
+#if TUD_OPT_HIGH_SPEED
+  update_bulk_packet_size(TinyUSBDevice._desc_cfg, tud_speed_get());
+#endif
   return TinyUSBDevice._desc_cfg;
 }
 

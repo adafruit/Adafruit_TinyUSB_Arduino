@@ -69,8 +69,7 @@ uint16_t Adafruit_USBD_CDC::getInterfaceDescriptor(uint8_t itfnum_deprecated,
   uint8_t _strid = 0;
 #endif
 
-  uint16_t const mps =
-      (TUD_OPT_HIGH_SPEED ? 512 : 64); // TODO actual link speed
+  uint16_t const mps = (TUD_OPT_HIGH_SPEED ? 512 : 64);
   uint8_t const desc[] = {
       TUD_CDC_DESCRIPTOR(itfnum, _strid, ep_notif, 8, ep_out, ep_in, mps)};
 

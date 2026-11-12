@@ -49,8 +49,7 @@ uint16_t Adafruit_USBD_MSC::getInterfaceDescriptor(uint8_t itfnum_deprecated,
   uint8_t const ep_in = TinyUSBDevice.allocEndpoint(TUSB_DIR_IN);
   uint8_t const ep_out = TinyUSBDevice.allocEndpoint(TUSB_DIR_OUT);
 
-  uint16_t const mps =
-      (TUD_OPT_HIGH_SPEED ? 512 : 64); // TODO actual link speed
+  uint16_t const mps = (TUD_OPT_HIGH_SPEED ? 512 : 64);
   uint8_t const desc[] = {
       TUD_MSC_DESCRIPTOR(itfnum, _strid, ep_out, ep_in, mps)};
   uint16_t const len = sizeof(desc);
