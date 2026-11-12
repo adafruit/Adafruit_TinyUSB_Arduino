@@ -24,8 +24,8 @@
 
 #include "tusb_option.h"
 
-#if CFG_TUD_ENABLED && (defined(ARDUINO_ARCH_CH32) || defined(CH32V20x) ||     \
-                        defined(CH32V30x) || defined(CH32V4x7))
+#if CFG_TUD_ENABLED &&                                                         \
+    (defined(ARDUINO_ARCH_CH32) || defined(CH32V20x) || defined(CH32V30x))
 
 #include "Arduino.h"
 #include "arduino/Adafruit_USBD_Device.h"
@@ -110,12 +110,6 @@ void yield(void) {
 // Porting API
 //--------------------------------------------------------------------+
 
-/** @brief Configure the selected CH32 USB clocks and initialize the device
- * stack.
- *  @param rhport TinyUSB root-hub port to initialize.
- *  @note CH32V4x7 requires a 25 MHz HSE; initialization stops if its PLL fails
- *        to lock. Other CH32 families retain their existing clock requirements.
- */
 void TinyUSB_Port_InitDevice(uint8_t rhport) {
 #if defined(CH32V4x7)
 #if HSE_VALUE != 25000000
@@ -207,9 +201,6 @@ void TinyUSB_Port_InitDevice(uint8_t rhport) {
   tusb_init(rhport, &rh_init);
 }
 
-/** @brief Request CH32V4x7 bootloader entry through the optional board hook.
- *  @note Does nothing when no supported board hook is present.
- */
 void TinyUSB_Port_EnterDFU(void) {
 #if defined(CH32V4x7)
   if (ch32TinyUSBEnterBootloader) {
@@ -227,21 +218,14 @@ void TinyUSB_Port_EnterDFU(void) {
   // while(1) {}
 }
 
-/** @brief Copy the MCU's unique ID into the USB serial-number buffer.
- *  @param serial_id Output buffer with room for 16 bytes.
- *  @return Number of bytes written: eight on CH32V4x7, twelve on other CH32s.
- *  @note CH32V4x7 matches TinyUF2's serial to retain its USB identity.
- */
 uint8_t TinyUSB_Port_GetSerialNumber(uint8_t serial_id[16]) {
   volatile uint32_t *ch32_uuid = ((volatile uint32_t *)0x1FFFF7E8UL);
-#if defined(CH32V4x7)
-  // TinyUF2's 8 bytes in memory order, so bootloader and sketch share a serial
-  memcpy(serial_id, (const void *)ch32_uuid, 8);
-  return 8;
-#else
   uint32_t *serial_32 = (uint32_t *)serial_id;
   serial_32[0] = ch32_uuid[0];
   serial_32[1] = ch32_uuid[1];
+#if defined(CH32V4x7)
+  return 8; // TinyUF2's length, so bootloader and sketch share a serial
+#else
   serial_32[2] = ch32_uuid[2];
 
   return 12;
