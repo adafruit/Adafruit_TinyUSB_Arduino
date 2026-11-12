@@ -202,7 +202,7 @@ class HostTest(Base):
         with mock.patch.object(E, 'console_tty', **tty), \
                 mock.patch.object(E, 'flash', lambda *a: calls.append('flash') or flash_why), \
                 mock.patch.object(serial, 'Serial', Port), mock.patch.object(ht.time, 'monotonic', tick):
-            row = E.step('raspberry_pi_pico_w', board, {'elf': 'x.elf'}, 'host_device_info', self.dir, None)
+            row = E.step('raspberry_pi_pico_w', board, {'elf': 'x.elf'}, 'host_device_info', self.dir, mock.Mock())
         return row, calls
 
     def test_console_is_drained_before_the_flash_and_every_device_found(self):
