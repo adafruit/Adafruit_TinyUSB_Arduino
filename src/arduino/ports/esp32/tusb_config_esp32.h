@@ -50,6 +50,9 @@ extern "C" {
 #error "ESP32 Arduino core version 2.0.8 or later is required"
 #endif
 
+// Required by ESP32 core 4.0 USBCDC to avoid linking the prebuilt CDC driver
+#define CFG_TUD_CDC_NOTIFY 1
+
 //--------------------------------------------------------------------
 // COMMON CONFIGURATION
 // Note: it is possible to use tinyusb + max3421e as host controller
