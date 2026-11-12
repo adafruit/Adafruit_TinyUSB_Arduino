@@ -1,6 +1,6 @@
 {
   "url": "https://github.com/hathach/tinyusb",
-  "commit": "d543126c5ca356f6ddc52646ee5a2dee84c65c31",
+  "commit": "53c1d147382cd3c0b3b42626e0e4321d641698aa",
   "files": [
     "src/class/audio/audio.h",
     "src/class/audio/audio_device.c",
@@ -139,6 +139,8 @@
     "src/portable/wch/dcd_ch32_usbfs.c",
     "src/portable/wch/dcd_ch32_usbhs.c",
     "src/portable/wch/hcd_ch32_usbfs.c",
+    "src/portable/wch/wch_hs2/dcd_wch_hs2.c",
+    "src/portable/wch/wch_hs2/wch_hs2_reg.h",
     "src/tusb.c",
     "src/tusb.h",
     "src/tusb_option.h"
