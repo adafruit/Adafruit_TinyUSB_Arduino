@@ -24,8 +24,13 @@ all_boards = [
     ['metroesp32s2',
      'espressif:esp32:adafruit_metro_esp32s2:CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=cdc,PSRAM=enabled,PartitionScheme=tinyuf2'],
     # [' ', 'espressif:esp32:adafruit_feather_esp32s3:FlashMode=qio,LoopCore=1,EventsCore=1,USBMode=default,CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=cdc,PartitionScheme=tinyuf2'],
-    ['CH32V20x_EVT', 'WCH:ch32v:CH32V20x_EVT:usb=tinyusb_usbd']
+    ['CH32V20x_EVT', 'WCH:ch32v:CH32V20x_EVT:usb=tinyusb_usbd'],
+    ['ch32_community_ch32v20x_tinyusb_usbd', 'ch32-community:ch32v:CH32V20x_EVT:usb=tinyusb_usbd']
 ]
+
+
+def select_boards(query):
+    return [board for board in all_boards if query.casefold() in board[0].casefold()]
 
 
 # return [succeeded, failed, skipped]
@@ -102,7 +107,7 @@ def build_variant(variant):
 if __name__ == '__main__':
     # build all variants if input not existed
     if len(sys.argv) > 1:
-        build_boards = list(filter(lambda x: sys.argv[1] in x[0], all_boards))
+        build_boards = select_boards(sys.argv[1])
     else:
         build_boards = all_boards
 

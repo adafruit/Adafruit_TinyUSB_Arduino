@@ -37,4 +37,4 @@ repos:
     language: python
     additional_dependencies: [pyserial==3.5]
     pass_filenames: false
-    files: ^(\.claude/|test/hil/)
+    files: ^(\.claude/|test/hil/|\.github/workflows/githubci\.yml$|tools/build_all\.py$)
