@@ -111,7 +111,7 @@ jobs:
 
     # build_platform.py reinstalls the core unpinned: a release since the step above would replace the symlinked one
     - name: Check the CH32 core built this checkout's TinyUSB
-      if: matrix.arduino-platform == 'CH32V20x_EVT' || matrix.arduino-platform == 'ch32_community_ch32v20x_tinyusb_usbd'
+      if: ${{ !cancelled() && (matrix.arduino-platform == 'CH32V20x_EVT' || matrix.arduino-platform == 'ch32_community_ch32v20x_tinyusb_usbd') }}
       run: |
         for lib in ~/.arduino15/packages/*/hardware/ch32v/*/libraries/Adafruit_TinyUSB_Arduino; do
           [ "$(readlink "$lib")" = "$GITHUB_WORKSPACE" ] || { echo "::error::$lib is not this checkout"; exit 1; }

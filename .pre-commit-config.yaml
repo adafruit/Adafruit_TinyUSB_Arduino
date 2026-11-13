@@ -37,5 +37,6 @@ repos:
     language: python
     additional_dependencies: [pyserial==3.5]
     pass_filenames: false
-    # plus the CI workflow and legacy build table test_build.py checks
+    # plus some non-agent inputs test_build.py checks; it also reads src/, examples/ and library.properties,
+    # left out so library commits do not run it
     files: ^(\.claude/|test/hil/|\.github/workflows/githubci\.yml$|tools/build_all\.py$)
