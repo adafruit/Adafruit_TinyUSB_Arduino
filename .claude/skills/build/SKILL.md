@@ -75,7 +75,8 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
   when any `.*.test.only` exists; a rig board takes its CI platform's files (`filters`). A board whose core is not
   installed is exit 2 naming `arduino-cli core install`. Local cores need not be CI's versions; the record names what
   built. A `--board` CH32 build needs only its own core; a ch32 port, `wch` driver or shared change selects both
-  representatives (`REPRESENTATIVES['ch32']`) and needs both cores, each installed from its own index:
+  representatives (`REPRESENTATIVES['ch32']`), an example-sketch change both CH32 boards where its filters allow,
+  and either needs both cores, each installed from its own index:
 
   ```bash
   arduino-cli core install ch32-community:ch32v --additional-urls https://github.com/ch32-community/board_manager_files/raw/main/package_ch32-commmunity_index.json

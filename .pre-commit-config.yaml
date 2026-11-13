@@ -37,6 +37,6 @@ repos:
     language: python
     additional_dependencies: [pyserial==3.5]
     pass_filenames: false
-    # plus some non-agent inputs test_build.py checks; it also reads src/, examples/ and library.properties,
-    # left out so library commits do not run it
+    # plus some non-agent inputs the tests check; test_build.py also reads src/, examples/ and library.properties,
+    # test_hil.py examples/MassStorage/msc_ramdisk, left out so library commits do not run them
     files: ^(\.claude/|test/hil/|\.github/workflows/githubci\.yml$|tools/build_all\.py$)
