@@ -54,7 +54,9 @@ class Tables(unittest.TestCase):
         self.assertEqual(cb.BOARDS[board]['fqbn'], legacy[board])
         self.assertIn(':usb=tinyusb_usbd', cb.BOARDS[board]['fqbn'])
         wf = (ROOT / '.github/workflows/githubci.yml').read_text()
-        step = wf.split('    - name: test platforms\n', 1)[1]
+        step = re.search(r'^    - name: test platforms\n(.*?)(?=^ {0,4}\S|\Z)', wf, re.M | re.S)   # to the next step
+        self.assertIsNotNone(step, "githubci.yml has no 'test platforms' step")
+        step = step[1]
         self.assertIn('run: python3 ci/build_platform.py ${{ matrix.arduino-platform }}', step)
         self.assertNotIn('if:', step)
         self.assertNotIn('ALL_PLATFORMS', wf)
@@ -136,7 +138,7 @@ class Selection(unittest.TestCase):
         self.assertEqual(set(sel['builds']), set(cb.REPRESENTATIVES['rp2040']))
 
     def test_ch32_port_change_builds_both_cores(self):
-        for path in ('src/arduino/ports/ch32/x.cpp', 'src/portable/wch/usbhs/dcd_usbhs.c'):
+        for path in ('src/arduino/ports/ch32/x.cpp', 'src/portable/wch/dcd_ch32_usbhs.c'):
             selected = eng.select([path], only_examples=['examples/CDC/serial_echo'])
             self.assertEqual(set(selected['builds']), {'CH32V20x_EVT', 'ch32_community_ch32v20x_tinyusb_usbd'})
 

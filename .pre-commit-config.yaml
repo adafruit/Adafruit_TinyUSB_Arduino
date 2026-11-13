@@ -37,4 +37,5 @@ repos:
     language: python
     additional_dependencies: [pyserial==3.5]
     pass_filenames: false
-    files: ^(\.claude/|test/hil/)
+    # plus the CI workflow and legacy build table test_build.py checks
+    files: ^(\.claude/|test/hil/|\.github/workflows/githubci\.yml$|tools/build_all\.py$)
