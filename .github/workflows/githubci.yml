@@ -99,7 +99,8 @@ jobs:
     - name: Use this checkout as the community CH32 core's TinyUSB
       if: matrix.arduino-platform == 'ch32_community_ch32v20x_tinyusb_usbd'
       run: |
-        arduino-cli core install ch32-community:ch32v --additional-urls https://github.com/ch32-community/board_manager_files/raw/main/package_ch32-commmunity_index.json
+        url=$(grep -oP '^CH32_COMMUNITY_INDEX_URL = "\K[^"]+' ci/build_platform.py)
+        arduino-cli core install ch32-community:ch32v --additional-urls "$url"
         for lib in ~/.arduino15/packages/ch32-community/hardware/ch32v/*/libraries/Adafruit_TinyUSB_Arduino; do
           rm -rf "$lib"
           ln -s "$GITHUB_WORKSPACE" "$lib"
@@ -107,3 +108,11 @@ jobs:
 
     - name: test platforms
       run: python3 ci/build_platform.py ${{ matrix.arduino-platform }}
+
+    # build_platform.py reinstalls the core unpinned: a release since the step above would replace the symlinked one
+    - name: Check the CH32 core built this checkout's TinyUSB
+      if: matrix.arduino-platform == 'CH32V20x_EVT' || matrix.arduino-platform == 'ch32_community_ch32v20x_tinyusb_usbd'
+      run: |
+        for lib in ~/.arduino15/packages/*/hardware/ch32v/*/libraries/Adafruit_TinyUSB_Arduino; do
+          [ "$(readlink "$lib")" = "$GITHUB_WORKSPACE" ] || { echo "::error::$lib is not this checkout"; exit 1; }
+        done
