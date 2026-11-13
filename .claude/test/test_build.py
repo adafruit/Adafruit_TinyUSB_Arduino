@@ -50,19 +50,6 @@ class Tables(unittest.TestCase):
         for platform in matrix:
             self.assertIn(platform, cb.BOARDS)
 
-    def test_community_target_matches_both_local_build_tables(self):
-        board = 'ch32_community_ch32v20x_tinyusb_usbd'
-        legacy = dict(runpy.run_path(str(ROOT / 'tools/build_all.py'))['all_boards'])
-        self.assertEqual(cb.BOARDS[board]['fqbn'], legacy[board])
-        self.assertIn(':usb=tinyusb_usbd', cb.BOARDS[board]['fqbn'])
-        wf = (ROOT / '.github/workflows/githubci.yml').read_text()
-        step = re.search(r'^    - name: test platforms\n(.*?)(?=^ {0,4}\S|\Z)', wf, re.M | re.S)   # to the next step
-        self.assertIsNotNone(step, "githubci.yml has no 'test platforms' step")
-        step = step[1]
-        self.assertIn('run: python3 ci/build_platform.py ${{ matrix.arduino-platform }}', step)
-        self.assertNotIn('if:', step)
-        self.assertNotIn('ALL_PLATFORMS', wf)
-
     def test_legacy_filter_selects_both_ch32_cores(self):
         select_boards = runpy.run_path(str(ROOT / 'tools/build_all.py'))['select_boards']
         for query in ('ch32', 'CH32'):

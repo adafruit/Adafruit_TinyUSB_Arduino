@@ -99,8 +99,7 @@ jobs:
     - name: Use this checkout as the community CH32 core's TinyUSB
       if: matrix.arduino-platform == 'ch32_community_ch32v20x_tinyusb_usbd'
       run: |
-        url=$(grep -oP '^CH32_COMMUNITY_INDEX_URL = "\K[^"]+' ci/build_platform.py)
-        arduino-cli core install ch32-community:ch32v --additional-urls "$url"
+        arduino-cli core install ch32-community:ch32v --additional-urls https://github.com/ch32-community/board_manager_files/raw/main/package_ch32-commmunity_index.json
         for lib in ~/.arduino15/packages/ch32-community/hardware/ch32v/*/libraries/Adafruit_TinyUSB_Arduino; do
           rm -rf "$lib"
           ln -s "$GITHUB_WORKSPACE" "$lib"
