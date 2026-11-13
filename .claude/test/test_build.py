@@ -6,8 +6,10 @@ is compiled; a real build is evidence only from a run of the script itself."""
 import contextlib
 import io
 import json
+import os
 import re
 import runpy
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -66,6 +68,38 @@ class Tables(unittest.TestCase):
         for query in ('ch32', 'CH32'):
             self.assertEqual({b[0] for b in select_boards(query)},
                              {'CH32V20x_EVT', 'ch32_community_ch32v20x_tinyusb_usbd'})
+
+    def test_ch32_checkout_guard_requires_the_selected_vendor(self):
+        wf = (ROOT / '.github/workflows/githubci.yml').read_text()
+        step = re.search(r"^    - name: Check the CH32 core built this checkout's TinyUSB\n(.*?)(?=^ {0,4}\S|\Z)",
+                         wf, re.M | re.S)
+        self.assertIsNotNone(step)
+        self.assertIn("matrix.arduino-platform == 'CH32V20x_EVT' && 'WCH' || 'ch32-community'", step[1])
+        script = '\n'.join(line[8:] for line in step[1].split('      run: |\n', 1)[1].splitlines())
+        for vendor in ('WCH', 'ch32-community'):
+            for layout in ('valid', 'missing', 'other-vendor', 'directory', 'wrong-link', 'dangling-link'):
+                with self.subTest(vendor=vendor, layout=layout), tempfile.TemporaryDirectory() as temp:
+                    home = Path(temp)
+                    workspace = home / 'workspace with spaces'
+                    workspace.mkdir()
+                    installed = vendor
+                    if layout == 'other-vendor':
+                        installed = 'ch32-community' if vendor == 'WCH' else 'WCH'
+                    library = (home / '.arduino15/packages' / installed
+                               / 'hardware/ch32v/1.0/libraries/Adafruit_TinyUSB_Arduino')
+                    library.parent.mkdir(parents=True)
+                    if layout == 'directory':
+                        library.mkdir()
+                    elif layout == 'wrong-link':
+                        library.symlink_to(home, target_is_directory=True)
+                    elif layout == 'dangling-link':
+                        library.symlink_to(home / 'missing', target_is_directory=True)
+                    elif layout != 'missing':
+                        library.symlink_to(workspace, target_is_directory=True)
+                    result = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', script], capture_output=True,
+                                            env={**os.environ, 'HOME': str(home), 'GITHUB_WORKSPACE': str(workspace),
+                                                 'CH32_PACKAGE': vendor})
+                    self.assertEqual(result.returncode == 0, layout == 'valid', result.stdout.decode())
 
     def test_dependencies_are_cis_install_list(self):
         wf = (ROOT / '.github/workflows/githubci.yml').read_text()
