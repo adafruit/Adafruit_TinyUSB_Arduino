@@ -54,7 +54,8 @@ class Tables(unittest.TestCase):
         select_boards = runpy.run_path(str(ROOT / 'tools/build_all.py'))['select_boards']
         for query in ('ch32', 'CH32'):
             self.assertEqual({b[0] for b in select_boards(query)},
-                             {'CH32V20x_EVT', 'ch32_community_ch32v20x_tinyusb_usbd'})
+                             {'CH32V20x_EVT', 'ch32_community_ch32v20x_tinyusb_usbd', 'metro_ch32v407',
+                              'metro_ch32v467'})
 
     def test_ch32_checkout_guard_requires_the_selected_vendor(self):
         wf = (ROOT / '.github/workflows/githubci.yml').read_text()
@@ -161,7 +162,8 @@ class Selection(unittest.TestCase):
     def test_ch32_port_change_builds_both_cores(self):
         for path in ('src/arduino/ports/ch32/x.cpp', 'src/portable/wch/dcd_ch32_usbhs.c'):
             selected = eng.select([path], only_examples=['examples/CDC/serial_echo'])
-            self.assertEqual(set(selected['builds']), {'CH32V20x_EVT', 'ch32_community_ch32v20x_tinyusb_usbd'})
+            self.assertEqual(set(selected['builds']), {'CH32V20x_EVT', 'ch32_community_ch32v20x_tinyusb_usbd',
+                                                       'metro_ch32v467'})
 
     def test_community_webusb_examples_are_eligible(self):
         for example in ('webusb_rgb', 'webusb_serial'):

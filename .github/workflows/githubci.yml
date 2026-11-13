@@ -67,6 +67,9 @@ jobs:
            # Ch32v2
            - 'CH32V20x_EVT'
            - 'ch32_community_ch32v20x_tinyusb_usbd'
+           # Metro CH32V4x7
+           - 'metro_ch32v407'
+           - 'metro_ch32v467'
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -97,7 +100,7 @@ jobs:
 
     # The community core also includes TinyUSB headers directly from its bundled library.
     - name: Use this checkout as the community CH32 core's TinyUSB
-      if: matrix.arduino-platform == 'ch32_community_ch32v20x_tinyusb_usbd'
+      if: matrix.arduino-platform == 'ch32_community_ch32v20x_tinyusb_usbd' || startsWith(matrix.arduino-platform, 'metro_ch32')
       run: |
         arduino-cli core install ch32-community:ch32v --additional-urls https://github.com/ch32-community/board_manager_files/raw/main/package_ch32-commmunity_index.json
         for lib in ~/.arduino15/packages/ch32-community/hardware/ch32v/*/libraries/Adafruit_TinyUSB_Arduino; do
@@ -110,7 +113,9 @@ jobs:
 
     # build_platform.py reinstalls the core unpinned: a release since the step above would replace the symlinked one
     - name: Check the CH32 core built this checkout's TinyUSB
-      if: ${{ !cancelled() && (matrix.arduino-platform == 'CH32V20x_EVT' || matrix.arduino-platform == 'ch32_community_ch32v20x_tinyusb_usbd') }}
+      if: >-
+        ${{ !cancelled() && (matrix.arduino-platform == 'CH32V20x_EVT' ||
+        matrix.arduino-platform == 'ch32_community_ch32v20x_tinyusb_usbd' || startsWith(matrix.arduino-platform, 'metro_ch32')) }}
       env:
         CH32_PACKAGE: ${{ matrix.arduino-platform == 'CH32V20x_EVT' && 'WCH' || 'ch32-community' }}
       run: |
