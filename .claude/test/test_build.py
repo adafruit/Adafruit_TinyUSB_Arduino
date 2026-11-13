@@ -5,6 +5,7 @@ VID:PID adapter. The mechanics (compiles, provenance, images, the HIL record) ar
 is compiled; a real build is evidence only from a run of the script itself."""
 import contextlib
 import io
+import itertools
 import json
 import os
 import re
@@ -63,9 +64,10 @@ class Tables(unittest.TestCase):
         self.assertIsNotNone(step)
         self.assertIn("matrix.arduino-platform == 'CH32V20x_EVT' && 'WCH' || 'ch32-community'", step[1])
         script = '\n'.join(line[8:] for line in step[1].split('      run: |\n', 1)[1].splitlines())
-        for vendor in ('WCH', 'ch32-community'):
+        for vendor, library_name in itertools.product(
+                ('WCH', 'ch32-community'), ('Adafruit_TinyUSB', 'Adafruit_TinyUSB_Arduino')):
             for layout in ('valid', 'missing', 'other-vendor', 'directory', 'wrong-link', 'dangling-link'):
-                with self.subTest(vendor=vendor, layout=layout), tempfile.TemporaryDirectory() as temp:
+                with self.subTest(vendor=vendor, library=library_name, layout=layout), tempfile.TemporaryDirectory() as temp:
                     home = Path(temp)
                     workspace = home / 'workspace with spaces'
                     workspace.mkdir()
@@ -73,7 +75,7 @@ class Tables(unittest.TestCase):
                     if layout == 'other-vendor':
                         installed = 'ch32-community' if vendor == 'WCH' else 'WCH'
                     library = (home / '.arduino15/packages' / installed
-                               / 'hardware/ch32v/1.0/libraries/Adafruit_TinyUSB_Arduino')
+                               / 'hardware/ch32v/1.0/libraries' / library_name)
                     library.parent.mkdir(parents=True)
                     if layout == 'directory':
                         library.mkdir()

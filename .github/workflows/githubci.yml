@@ -100,7 +100,9 @@ jobs:
       if: matrix.arduino-platform == 'ch32_community_ch32v20x_tinyusb_usbd'
       run: |
         arduino-cli core install ch32-community:ch32v --additional-urls https://github.com/ch32-community/board_manager_files/raw/main/package_ch32-commmunity_index.json
-        for lib in ~/.arduino15/packages/ch32-community/hardware/ch32v/*/libraries/Adafruit_TinyUSB_Arduino; do
+        # Accept the exact-header-name layout and older core releases.
+        for lib in ~/.arduino15/packages/ch32-community/hardware/ch32v/*/libraries/{Adafruit_TinyUSB,Adafruit_TinyUSB_Arduino}; do
+          [ -e "$lib" ] || continue
           rm -rf "$lib"
           ln -s "$GITHUB_WORKSPACE" "$lib"
         done
@@ -115,7 +117,7 @@ jobs:
         CH32_PACKAGE: ${{ matrix.arduino-platform == 'CH32V20x_EVT' && 'WCH' || 'ch32-community' }}
       run: |
         found=0
-        for lib in "$HOME/.arduino15/packages/$CH32_PACKAGE/hardware/ch32v/"*/libraries/Adafruit_TinyUSB_Arduino; do
+        for lib in "$HOME/.arduino15/packages/$CH32_PACKAGE/hardware/ch32v/"*/libraries/{Adafruit_TinyUSB,Adafruit_TinyUSB_Arduino}; do
           [ -e "$lib" ] || continue
           found=1
           [ "$(readlink "$lib")" = "$GITHUB_WORKSPACE" ] || { echo "::error::$lib is not this checkout"; exit 1; }
