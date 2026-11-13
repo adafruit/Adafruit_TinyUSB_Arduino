@@ -46,10 +46,10 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
 
 - **Selection is the script's**, first match per path, and `paths[].reason` says why:
   - `src/arduino/ports/<mcu>/` and `src/portable/<vendor>/<driver>/` build that MCU family's representatives
-    (`REPRESENTATIVES`: rig boards first, then each distinct stack or core: RP2350 beside RP2040, SAMD21 beside
-    SAMD51, the RP2040 native-host build, the ESP32-P4's high-speed OTG, and WCH alongside community CH32), every
-    example each one may build. `analog/max3421`,
-    all other `src/` code and `library.properties` build every family's representatives.
+    (`REPRESENTATIVES`: rig boards first, then each distinct stack or core: RP2350 beside RP2040, SAMD21 beside SAMD51,
+    the RP2040 native-host build, the ESP32-P4's high-speed OTG, and WCH alongside community CH32), every example each
+    one may build. `analog/max3421`, all other `src/` code and `library.properties` build every family's
+    representatives.
   - A port or driver no CI platform builds (`ports/stm32`, `st/stm32_fsdev`, `renesas/rusb2`) is uncovered.
   - The headers the cores compile their own sources against (`CORE_CONSUMED`: `Adafruit_TinyUSB_API.h`,
     `Adafruit_USBD_CDC.h`, `Adafruit_USBD_Interface.h` under `src/arduino/`) are uncovered: both cores include
@@ -74,7 +74,7 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
   `build_platform.py`: `.<platform>.test.skip`, a `.skip.txt` line equal to the platform, and `.<platform>.test.only`
   when any `.*.test.only` exists; a rig board takes its CI platform's files (`filters`). A board whose core is not
   installed is exit 2 naming `arduino-cli core install`. Local cores need not be CI's versions; the record names what
-  built. For CH32, install the appropriate core with its additional index URL:
+  built. CH32 builds need both cores (`REPRESENTATIVES['ch32']`), each installed from its own index:
 
   ```bash
   arduino-cli core install ch32-community:ch32v --additional-urls https://github.com/ch32-community/board_manager_files/raw/main/package_ch32-commmunity_index.json
