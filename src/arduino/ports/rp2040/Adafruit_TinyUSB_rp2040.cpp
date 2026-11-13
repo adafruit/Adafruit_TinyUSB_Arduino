@@ -37,6 +37,7 @@ extern "C" {
 #include "pico/time.h"
 }
 
+#include "Adafruit_TinyUSB.h"
 #include "arduino/Adafruit_TinyUSB_API.h"
 #include "tusb.h"
 
@@ -139,6 +140,20 @@ void TinyUSB_Device_Task(void) {
   // Since tud_task() is also invoked in ISR, we need to get the mutex first
   if (mutex_try_enter(&__usb_mutex, NULL)) {
     tud_task();
+    mutex_exit(&__usb_mutex);
+  }
+}
+
+void TinyUSB_Device_FlushCDC(void) {
+  // tud_cdc_n_write_flush() claims the CDC IN endpoint, which takes TinyUSB's
+  // endpoint mutex.  If the USB IRQ ran tud_task() while we held that, and the
+  // task claimed an endpoint too, the IRQ would wait forever for the code it
+  // interrupted.  Holding __usb_mutex makes the IRQ skip this tick instead.
+  if (mutex_try_enter(&__usb_mutex, NULL)) {
+    uint8_t const cdc_instance = Adafruit_USBD_CDC::getInstanceCount();
+    for (uint8_t instance = 0; instance < cdc_instance; instance++) {
+      tud_cdc_n_write_flush(instance);
+    }
     mutex_exit(&__usb_mutex);
   }
 }
