@@ -77,7 +77,7 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
   built. Each CH32 core installs from its own index:
 
   ```bash
-  arduino-cli core install ch32-community:ch32v --additional-urls https://github.com/ch32-community/board_manager_files/raw/main/package_ch32-commmunity_index.json
+  arduino-cli core install ch32-community:ch32v --additional-urls https://github.com/ch32-community/board_manager_files/raw/main/package_ch32-community_index.json
   arduino-cli core install WCH:ch32v --additional-urls https://github.com/openwch/board_manager_files/raw/main/package_ch32v_index.json
   ```
 
