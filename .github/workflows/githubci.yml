@@ -105,6 +105,17 @@ jobs:
           ln -s "$GITHUB_WORKSPACE" "$lib"
         done
 
+    # Remove this backport once Arduino-Pico releases the native-host fix.
+    # https://github.com/earlephilhower/arduino-pico/commit/a88e436a21e198039013b6af7691ac9fdbf63eea
+    - name: Backport the Arduino-Pico 6.4.0 native-host fix
+      if: matrix.arduino-platform == 'pico_rp2040_tinyusb_host'
+      run: |
+        arduino-cli core install rp2040:rp2040 --additional-urls https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
+        core="$HOME/.arduino15/packages/rp2040/hardware/rp2040/6.4.0"
+        if [ -d "$core" ]; then
+          patch --batch --fuzz=0 --directory="$core" --strip=1 < test/ci/arduino-pico-6.4.0-native-host.patch
+        fi
+
     - name: test platforms
       run: python3 ci/build_platform.py ${{ matrix.arduino-platform }}
 

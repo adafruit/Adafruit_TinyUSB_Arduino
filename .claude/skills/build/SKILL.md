@@ -57,7 +57,9 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
     core's usbstack flags), so no build here shows a change to them working.
   - A sketch dir under `examples/` builds on every board in the table whose ci-arduino filters allow it.
     `MassStorage/msc_esp32_file_browser` builds on none (its `.test.only` names funhouse, magtag and metroesp32s2,
-    in neither this table nor CI's matrix): no build here compiles it, and `test_build.py` pins that list.
+    in neither this table nor CI's matrix). `MassStorage/msc_sdio_ch32` is explicitly excluded by `.none.test.only`
+    because the matrix has no Metro CH32V4x7 SDIO target. No build here compiles either example, and
+    `test_build.py` pins that list.
   - This script builds its tests plus a `serial_echo` smoke build per image kind (`raspberry_pi_pico`,
     `metro_m4_express`, `espressif_s3_devkitm`); a HIL fixture (`test/hil/esp32_ts3usb30.cpp`) builds the HIL
     sketches of its boards; the HIL harness and rosters (`.claude/skills/hil-contract/scripts/`, `test/hil/`) and the
