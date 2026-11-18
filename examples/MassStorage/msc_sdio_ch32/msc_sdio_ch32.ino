@@ -9,8 +9,16 @@
 *********************************************************************/
 
 // Expose the Metro CH32V407/467 microSD socket as a USB drive, with CDC serial
-// echo alongside it. Requires the community CH32 core with CH32SDIO support
-// and SdFat - Adafruit Fork 2.3.103 or newer.
+// echo alongside it. Requires SdFat - Adafruit Fork 2.3.103 or newer and the
+// community CH32 core at commit d5cac2161c17e3aec14d0338fdc684b20c0ba517 or newer
+// (SD-card busy fix: https://github.com/ch32-community/arduino_core_ch32/pull/156).
+// Use a Boards Manager release containing that commit. For an unreleased fix,
+// first install the core through Boards Manager to get its compiler/Python tools.
+// Move its version directory under Arduino15/packages/ch32-community/hardware/
+// ch32v/ aside as a backup, then clone the repository into its original location:
+// https://github.com/ch32-community/arduino_core_ch32.git (use --recursive).
+// Check out the commit above (or newer)
+// and run git submodule update --init --recursive before restarting the IDE.
 //
 // Insert an already formatted card before resetting the board. The computer
 // owns the filesystem: do not also mount it with FsVolume or open files here.
