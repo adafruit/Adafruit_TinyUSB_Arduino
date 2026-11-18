@@ -319,7 +319,7 @@ uint16_t const *Adafruit_USBD_Device::descriptor_string_cb(uint8_t index,
       return NULL;
     }
 
-    chr_count = strcpy_utf16(_desc_str_arr[index], _desc_str + 1, 32);
+    chr_count = strcpy_utf16(_desc_str_arr[index], _desc_str + 1, 126);
     break;
   }
 
