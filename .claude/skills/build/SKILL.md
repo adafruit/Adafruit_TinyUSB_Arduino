@@ -47,9 +47,9 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
 - **Selection is the script's**, first match per path, and `paths[].reason` says why:
   - `src/arduino/ports/<mcu>/` and `src/portable/<vendor>/<driver>/` build that MCU family's representatives
     (`REPRESENTATIVES`: rig boards first, then each distinct stack or core: RP2350 beside RP2040, SAMD21 beside SAMD51,
-    the RP2040 native-host build, the ESP32-P4's high-speed OTG, and WCH alongside community CH32), every example each
-    one may build. `analog/max3421`, all other `src/` code and `library.properties` build every family's
-    representatives.
+    the RP2040 native-host build, the ESP32-P4's high-speed OTG, WCH alongside community CH32, and the Metro
+    CH32V467's USBHS), every example each one may build. `analog/max3421`, all other `src/` code and
+    `library.properties` build every family's representatives.
   - A port or driver no CI platform builds (`ports/stm32`, `st/stm32_fsdev`, `renesas/rusb2`) is uncovered.
   - The headers the cores compile their own sources against (`CORE_CONSUMED`: `Adafruit_TinyUSB_API.h`,
     `Adafruit_USBD_CDC.h`, `Adafruit_USBD_Interface.h` under `src/arduino/`) are uncovered: both cores include
