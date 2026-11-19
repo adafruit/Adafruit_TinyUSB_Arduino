@@ -148,6 +148,19 @@ void Adafruit_USBH_Host::task(uint32_t timeout_ms, bool in_isr) {
   tuh_task_ext(timeout_ms, in_isr);
 }
 
+// Built where the TinyUSB in use has the API enabled: the RP2040 port turns it
+// on. ESP32 cores build their own TinyUSB, whose headers come before this
+// library's and do not have it.
+#if defined(CFG_TUH_API_RHPORT_RECHECK) && CFG_TUH_API_RHPORT_RECHECK
+bool Adafruit_USBH_Host::recheck(void) { return tuh_rhport_recheck(_rhport); }
+bool Adafruit_USBH_Host::recheckBusy(void) {
+  return tuh_rhport_recheck_busy(_rhport);
+}
+#else
+bool Adafruit_USBH_Host::recheck(void) { return false; }
+bool Adafruit_USBH_Host::recheckBusy(void) { return false; }
+#endif
+
 // Invoked when received report from device via interrupt endpoint
 TU_ATTR_WEAK void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
                                              uint8_t const *report,

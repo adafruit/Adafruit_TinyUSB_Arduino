@@ -143,6 +143,12 @@ extern "C" {
 // Enable tuh_edpt_xfer() API
 // #define CFG_TUH_API_EDPT_XFER       1
 
+// Enable tuh_rhport_recheck() (USBHost.recheck()): LowPower sleep idles the
+// core running the Pico-PIO-USB host, which then misses a detach
+#ifndef CFG_TUH_API_RHPORT_RECHECK
+#define CFG_TUH_API_RHPORT_RECHECK 1
+#endif
+
 // Number of mass storage
 #define CFG_TUH_MSC 1
 

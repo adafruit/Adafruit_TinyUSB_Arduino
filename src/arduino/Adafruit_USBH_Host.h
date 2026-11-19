@@ -90,6 +90,23 @@ public:
   bool begin(uint8_t rhport);
   void task(uint32_t timeout_ms = UINT32_MAX, bool in_isr = false);
 
+  // Call after waking from a sleep that stopped the host (e.g. LowPower
+  // sleepFor()/dormantFor() on RP2040, which idles the core running the host):
+  // a device unplugged, replaced or power-cycled meanwhile is detected and
+  // enumerated again (tuh_umount_cb() then tuh_mount_cb()); an unchanged one
+  // only sees one control transfer. Call it from the code that runs task(),
+  // i.e. loop1() when the host runs on core1. The check is done by task():
+  // keep calling it, and wait for recheckBusy() to return false before using
+  // the device. See tuh_rhport_recheck().
+  // Needs CFG_TUH_API_RHPORT_RECHECK, which the RP2040 port enables; returns
+  // false elsewhere (e.g. ESP32, whose core provides TinyUSB).
+  bool recheck(void);
+
+  // True from recheck() until the check is complete, including any
+  // re-enumeration it started. Can take several seconds for a device that
+  // does not answer. Always false where recheck() is not available.
+  bool recheckBusy(void);
+
   //------------- internal usage -------------//
   static Adafruit_USBH_Host *_instance;
 
