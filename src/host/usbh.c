@@ -1985,7 +1985,11 @@ static void enum_new_device(hcd_event_t *event) {
   dev0_bus->hub_addr       = event->connection.hub_addr;
   dev0_bus->hub_port       = event->connection.hub_port;
   _usbh_data.enum_attempt  = 0;
-  usbh_defer_func_ms_async(ENUM_DEBOUNCING_DELAY_MS, enum_delay_async, ENUM_AFTER_DEBOUNCING_DELAY);
+  // a root port retry of a failed attach: give the device time to settle before resetting it again
+  const bool root_retry = (_usbh_data.root_retry_count > 0) && (_usbh_data.root_retry_rhport == dev0_bus->rhport) &&
+                          (dev0_bus->hub_addr == 0);
+  usbh_defer_func_ms_async(root_retry ? CFG_TUH_ENUM_RETRY_DELAY_MS : ENUM_DEBOUNCING_DELAY_MS, enum_delay_async,
+                           ENUM_AFTER_DEBOUNCING_DELAY);
 }
 
 // process device enumeration
@@ -2510,7 +2514,7 @@ static bool enum_retry(void) {
   _usbh_data.enum_attempt++;
   TU_LOG_USBH("Enumeration failed, retry attempt %u/%u\r\n", _usbh_data.enum_attempt + 1, CFG_TUH_ENUM_ATTEMPT_MAX);
   _usbh_data.enumerating_daddr = 0;
-  usbh_defer_func_ms_async(ENUM_DEBOUNCING_DELAY_MS, enum_delay_async, ENUM_AFTER_DEBOUNCING_DELAY);
+  usbh_defer_func_ms_async(CFG_TUH_ENUM_RETRY_DELAY_MS, enum_delay_async, ENUM_AFTER_DEBOUNCING_DELAY);
   return true;
 #else
   return false;
