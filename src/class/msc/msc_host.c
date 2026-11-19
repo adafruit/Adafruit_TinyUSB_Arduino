@@ -132,6 +132,20 @@ bool tuh_msc_ready(uint8_t dev_addr) {
   return !epin_busy && !epout_busy;
 }
 
+// Adafruit addition, not in TinyUSB: see msc_host.h
+bool tuh_msc_abort(uint8_t dev_addr) {
+  msch_interface_t* p_msc = get_itf(dev_addr);
+  TU_VERIFY(p_msc->configured);
+  // The HCD stops the transfers, so nothing more is written to the command's buffer
+  (void) tuh_edpt_abort_xfer(dev_addr, p_msc->ep_in);
+  (void) tuh_edpt_abort_xfer(dev_addr, p_msc->ep_out);
+  // A completion already queued for the command reaches msch_xfer_cb() in MSC_STAGE_IDLE, which ignores it
+  p_msc->stage       = MSC_STAGE_IDLE;
+  p_msc->complete_cb = NULL;
+  p_msc->buffer      = NULL;
+  return true;
+}
+
 //--------------------------------------------------------------------+
 // PUBLIC API: SCSI COMMAND
 //--------------------------------------------------------------------+

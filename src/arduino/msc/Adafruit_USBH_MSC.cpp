@@ -39,6 +39,7 @@
 Adafruit_USBH_MSC_BlockDevice::Adafruit_USBH_MSC_BlockDevice() {
   _daddr = _lun = 0;
   _busy = false;
+  _io_ok = false;
   _wr_cb = NULL;
 }
 
@@ -65,10 +66,19 @@ bool Adafruit_USBH_MSC_BlockDevice::mounted(void) {
 bool Adafruit_USBH_MSC_BlockDevice::isBusy(void) { return _busy; }
 
 bool Adafruit_USBH_MSC_BlockDevice::wait_for_io(void) {
+  uint32_t const start_ms = tusb_time_millis_api();
   while (_busy) {
     // Removal closes the MSC interface without completing the pending command.
     // Release the synchronous caller instead of waiting for a missing callback.
     if (!mounted()) {
+      _busy = false;
+      return false;
+    }
+    // A device that stops answering without a detach the host can see (e.g.
+    // swapped while the host was asleep) may never complete the command.
+    // Abort it first: the caller's buffer must not be written after we return.
+    if (tusb_time_millis_api() - start_ms >= ADAFRUIT_USBH_MSC_IO_TIMEOUT_MS) {
+      tuh_msc_abort(_daddr);
       _busy = false;
       return false;
     }
@@ -77,7 +87,7 @@ bool Adafruit_USBH_MSC_BlockDevice::wait_for_io(void) {
     }
   }
 
-  return true;
+  return _io_ok;
 }
 
 bool Adafruit_USBH_MSC_BlockDevice::_io_complete_cb(
@@ -88,7 +98,7 @@ bool Adafruit_USBH_MSC_BlockDevice::_io_complete_cb(
     return false;
   }
 
-  // TODO skip csw status: assuming io is successful
+  _io_ok = (cb_data->csw->status == MSC_CSW_STATUS_PASSED);
   _busy = false;
 
   switch (cb_data->cbw->command[0]) {

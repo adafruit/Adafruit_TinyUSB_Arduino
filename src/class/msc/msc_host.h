@@ -42,6 +42,12 @@ bool tuh_msc_mounted(uint8_t dev_addr);
 // Check if the interface is currently ready or busy transferring data
 bool tuh_msc_ready(uint8_t dev_addr);
 
+// Adafruit addition, not in TinyUSB: give up on the command in progress, e.g. after a timeout. Its transfers are
+// aborted and its complete_cb is never called, so the caller can reuse the command's buffer at once. The device is
+// left mid-command (Bulk-Only Transport needs Reset Recovery, which this driver does not do): later commands may fail
+// until the device is re-enumerated.
+bool tuh_msc_abort(uint8_t dev_addr);
+
 // Get the LUN count the device reported, clamped to CFG_TUH_MSC_MAXLUN
 uint8_t tuh_msc_get_maxlun(uint8_t dev_addr);
 

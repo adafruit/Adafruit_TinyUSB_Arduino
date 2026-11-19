@@ -32,6 +32,15 @@
 
 #include "SdFat_Adafruit_Fork.h"
 
+// Longest a sector read/write waits for its SCSI command to complete before it
+// fails (e.g. a device that stopped answering without detaching). The command
+// is then aborted (tuh_msc_abort()), so the buffer is free again; the drive may
+// need re-enumerating (unplug, or USBHost.recheck() if it was swapped) before
+// it works again.
+#ifndef ADAFRUIT_USBH_MSC_IO_TIMEOUT_MS
+#define ADAFRUIT_USBH_MSC_IO_TIMEOUT_MS 3000
+#endif
+
 class Adafruit_USBH_MSC_BlockDevice : public FsBlockDeviceInterface {
 public:
   Adafruit_USBH_MSC_BlockDevice();
@@ -66,6 +75,7 @@ private:
   // TODO use mutex to prevent race condition or atomic for better
   // implementation
   volatile bool _busy;
+  volatile bool _io_ok; // the last command's CSW reported success
 
   tuh_msc_complete_cb_t _wr_cb;
 
