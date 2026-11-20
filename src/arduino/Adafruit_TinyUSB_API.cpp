@@ -50,7 +50,8 @@ void TinyUSB_Device_Task(void) {
 }
 #endif
 
-#ifndef ARDUINO_ARCH_ESP32
+// RP2040 has its own implementation since it needs mutex for dual core
+#if !defined(ARDUINO_ARCH_ESP32) && !defined(ARDUINO_ARCH_RP2040)
 void TinyUSB_Device_FlushCDC(void) {
   uint8_t const cdc_instance = Adafruit_USBD_CDC::getInstanceCount();
   for (uint8_t instance = 0; instance < cdc_instance; instance++) {
