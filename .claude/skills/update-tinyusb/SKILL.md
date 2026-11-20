@@ -35,14 +35,14 @@ python3 $U verify
    of `tusb_config_esp32.h` or in `src/arduino/`; a fix that needs another vendored patch is the human's decision and
    extends the script. List `grep -rn "ESP32 out-of-sync" src` and report sites that look obsolete for the minimum
    ESP32 core `tusb_config_esp32.h` requires; removing them is separate scope.
-5. **Headers the RP2040 and SAMD cores bundle**: see CLAUDE.md's Code Rules; report a change forced on them.
+5. **Headers the RP2040 and SAMD cores bundle**: see AGENTS.md's Code Rules; report a change forced on them.
 6. **No release changes**: no `library.properties` / `library.json` version bump and no `TINYUSB_API_VERSION` change
    come with a sync.
 7. **Commit** the staged sync with the JSON's `commitMessage`, then the wrapper fixes. No pre-commit hook may change
    vendored bytes: if one does, restore them, narrow that hook's scope (codespell: an exact line in
    `.codespell/exclude-file.txt` for a genuine upstream typo, `ignore-words.txt` only for a false positive; another
    hook: its exclude), rerun the hooks, then `verify`.
-8. **Validate** the committed sync, wrapper fixes included, through CLAUDE.md's Build and Validate and then the HIL
+8. **Validate** the committed sync, wrapper fixes included, through AGENTS.md's Build and Validate and then the HIL
    contract; any later change or rebase needs fresh records.
 
 A sync does not call for an audit of every upstream change.
