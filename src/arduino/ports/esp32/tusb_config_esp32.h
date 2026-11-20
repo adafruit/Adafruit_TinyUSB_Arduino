@@ -108,9 +108,12 @@ extern "C" {
 
 //--------------------------------------------------------------------
 // DEVICE CONFIGURATION
-// only enabled if USB OTG is supported
+// only enabled if USB OTG is supported. ESP-IDF 6 (ESP32 core 4.0) no longer
+// defines CONFIG_USB_OTG_SUPPORTED; its sdkconfig has
+// CONFIG_SOC_USB_OTG_SUPPORTED, which ESP-IDF 5 also defines.
 //--------------------------------------------------------------------
-#if defined(CONFIG_USB_OTG_SUPPORTED) && CONFIG_USB_OTG_SUPPORTED
+#if (defined(CONFIG_USB_OTG_SUPPORTED) && CONFIG_USB_OTG_SUPPORTED) ||         \
+    (defined(CONFIG_SOC_USB_OTG_SUPPORTED) && CONFIG_SOC_USB_OTG_SUPPORTED)
 #define CFG_TUD_ENABLED 1
 #else
 #define CFG_TUD_ENABLED 0
