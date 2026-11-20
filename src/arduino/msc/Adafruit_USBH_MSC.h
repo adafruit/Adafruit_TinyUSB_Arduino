@@ -66,6 +66,7 @@ private:
   // TODO use mutex to prevent race condition or atomic for better
   // implementation
   volatile bool _busy;
+  volatile bool _io_ok; // the last command's CSW reported success
 
   tuh_msc_complete_cb_t _wr_cb;
 

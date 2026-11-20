@@ -90,6 +90,16 @@ public:
   bool begin(uint8_t rhport);
   void task(uint32_t timeout_ms = UINT32_MAX, bool in_isr = false);
 
+  // Stop the host stack on the port given to begin() (tuh_deinit()). Every
+  // device is removed first: tuh_umount_cb() and the class unmount callbacks
+  // are invoked. Call begin() again to restart it; attached devices are then
+  // enumerated again. Use it around a sleep that stops the host, e.g. LowPower
+  // sleepFor() on RP2040, which idles the core that runs the Pico-PIO-USB host:
+  // call end() before the sleep and begin() after it, both from the code that
+  // runs task() (loop1() when the host runs on core1).
+  // Returns false if the host controller driver cannot be stopped.
+  bool end(void);
+
   //------------- internal usage -------------//
   static Adafruit_USBH_Host *_instance;
 

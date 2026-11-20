@@ -39,6 +39,7 @@
 Adafruit_USBH_MSC_BlockDevice::Adafruit_USBH_MSC_BlockDevice() {
   _daddr = _lun = 0;
   _busy = false;
+  _io_ok = false;
   _wr_cb = NULL;
 }
 
@@ -77,7 +78,9 @@ bool Adafruit_USBH_MSC_BlockDevice::wait_for_io(void) {
     }
   }
 
-  return true;
+  // read _io_ok only after _busy was seen cleared (see _io_complete_cb())
+  __sync_synchronize();
+  return _io_ok;
 }
 
 bool Adafruit_USBH_MSC_BlockDevice::_io_complete_cb(
@@ -88,8 +91,9 @@ bool Adafruit_USBH_MSC_BlockDevice::_io_complete_cb(
     return false;
   }
 
-  // TODO skip csw status: assuming io is successful
-  _busy = false;
+  // passed, and all the data was transferred (sectors are whole blocks)
+  bool const io_ok = (cb_data->csw->status == MSC_CSW_STATUS_PASSED) &&
+                     (cb_data->csw->data_residue == 0);
 
   switch (cb_data->cbw->command[0]) {
   case SCSI_CMD_WRITE_10:
@@ -98,6 +102,13 @@ bool Adafruit_USBH_MSC_BlockDevice::_io_complete_cb(
     }
     break;
   }
+
+  // Set last: I/O that _wr_cb runs on this device sets _io_ok for itself, so
+  // this command's result must not be set before it.
+  _io_ok = io_ok;
+  // the waiter may be on the other core: _io_ok must be visible before _busy
+  __sync_synchronize();
+  _busy = false;
 
   return true;
 }
