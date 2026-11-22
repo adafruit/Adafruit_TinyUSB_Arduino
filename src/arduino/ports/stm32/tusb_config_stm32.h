@@ -45,7 +45,9 @@
 //--------------------------------------------------------------------
 #define CFG_TUD_ENABLED 1
 #define CFG_TUD_MAX_SPEED OPT_MODE_FULL_SPEED // TODO some are highspeed
+#ifndef CFG_TUD_ENDPOINT0_SIZE
 #define CFG_TUD_ENDPOINT0_SIZE 64
+#endif
 
 // Classes
 #define CFG_TUD_CDC 1
