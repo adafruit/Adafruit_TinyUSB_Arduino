@@ -1,8 +1,9 @@
 name: HIL Comment
 
 # The sticky HIL report on the PR a HIL run is for. It runs from the default branch, so a fork's PR gets it too:
-# the PR comes from the run's own metadata, the rig attempt from the jobs API, and every downloaded artifact is data
-# read by the default branch's hil_workflow.py, never executed.
+# the PR comes from the run's own metadata and the rig attempt from the jobs API, both, with the freshness check,
+# through agentrc's gh_pr_comment.py at the default branch's pin; every downloaded artifact is data read by the
+# default branch's hil_workflow.py, never executed.
 on:
   workflow_run:
     workflows: [HIL]
@@ -28,6 +29,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Fetch the pinned agentrc
+        run: |
+          dir=$(python3 "$H"/agentrc_pin.py fetch)
+          echo "G=$dir/skills/hil/scripts/gh_pr_comment.py" >> "$GITHUB_ENV"
+
       - name: Resolve the PR from the run's metadata
         id: resolve
         env:
@@ -37,7 +43,7 @@ jobs:
           HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
           PRS_JSON: ${{ toJSON(github.event.workflow_run.pull_requests) }}
         run: |
-          num=$(python3 "$H"/hil_workflow.py pr --repo "$GITHUB_REPOSITORY" --head-sha "$HEAD_SHA" \
+          num=$(python3 "$G" pr --repo "$GITHUB_REPOSITORY" --head-sha "$HEAD_SHA" \
                   --head-branch "$HEAD_BRANCH" --head-repo "$HEAD_REPO" --prs "$PRS_JSON")
           echo "number=$num" >> "$GITHUB_OUTPUT"
 
@@ -64,11 +70,16 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Fetch the pinned agentrc
+        run: |
+          dir=$(python3 "$H"/agentrc_pin.py fetch)
+          echo "G=$dir/skills/hil/scripts/gh_pr_comment.py" >> "$GITHUB_ENV"
+
       - name: The attempt the rig job ran in
         id: rig
         run: |
-          attempt=$(python3 "$H"/hil_workflow.py rig-attempt --repo "$GITHUB_REPOSITORY" --run-id "$RUN_ID" \
-                      --attempt "$RUN_ATTEMPT")
+          attempt=$(python3 "$G" job-attempt --repo "$GITHUB_REPOSITORY" --run-id "$RUN_ID" \
+                      --attempt "$RUN_ATTEMPT" --job hil-run)
           echo "attempt=$attempt" >> "$GITHUB_OUTPUT"
 
       # each into its own dir outside the checkout
@@ -115,8 +126,8 @@ jobs:
       - name: Check this run is the newest for the PR head
         id: fresh
         run: |
-          if why=$(python3 "$H"/hil_workflow.py fresh --repo "$GITHUB_REPOSITORY" --pr "$PR" --run-id "$RUN_ID" \
-                     --attempt "$RUN_ATTEMPT" --head-sha "$HEAD_SHA"); then
+          if why=$(python3 "$G" fresh --repo "$GITHUB_REPOSITORY" --pr "$PR" --run-id "$RUN_ID" \
+                     --attempt "$RUN_ATTEMPT" --head-sha "$HEAD_SHA" --workflow hil.yml 2>&1); then
             echo "post=true" >> "$GITHUB_OUTPUT"
           else
             code=$?

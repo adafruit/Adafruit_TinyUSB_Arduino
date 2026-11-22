@@ -60,7 +60,8 @@ class Tables(unittest.TestCase):
                              name)
 
     def test_the_pr_report_names_the_contracts_roster_tests_and_sketches(self):
-        """hil_workflow.py renders without agentrc, so it keeps its own copies of these."""
+        """hil_workflow.py renders with agentrc's gh_pr_comment alone, loading neither hil_test.py's engines nor
+        check_build.py, so it keeps its own copies of these."""
         self.assertEqual(hil_workflow.ROSTER, hil_test.REMOTE_ROSTER)
         self.assertEqual(list(hil_workflow.TESTS), list(hil_test.TESTS))
         for sketches in check_build.HIL_SKETCHES.values():
