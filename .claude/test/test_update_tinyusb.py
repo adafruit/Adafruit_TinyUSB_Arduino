@@ -528,6 +528,14 @@ class Sync(unittest.TestCase):
         self.assert_refused(['restore', 'src/tusb.c'], 'not clean')
         self.assertTrue(os.stat(self.lib / 'src/tusb.c').st_mode & 0o100)
 
+    def test_sync_ignores_a_hidden_mode_change_to_a_library_file(self):
+        git(self.lib, 'config', 'core.fileMode', 'false')
+        os.chmod(self.lib / 'src/arduino/w.cpp', 0o755)
+        for op in ('plan', 'apply'):
+            with self.subTest(op=op):
+                code, out = self.run_op(op, '--ref', self.base)
+                self.assertEqual((code, out['errors']), (0, []))
+
     def test_restore_reports_a_partial_write(self):
         self.drift({'src/tusb.c': b'local\n', 'src/class/a.c': b'local\n'})
         real = upd.write_file

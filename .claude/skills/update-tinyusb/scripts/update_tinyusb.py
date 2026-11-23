@@ -282,7 +282,7 @@ def snapshot(f):
 def check_restore(root, raw, before, want):
     """Why the named paths may not be restored now; run after the fetch, so an edit made meanwhile is refused."""
     paths = sorted(before)
-    errors = unclean(root, raw, *paths)
+    errors = unclean(root, raw, *paths, modes=True)
     errors += [f'{p} changed while preparing' for p in paths if snapshot(root / p) != before[p]]
     # a write through a symlink lands outside its path; through another non-directory or onto a non-regular file
     # it fails midway, or blocks on a FIFO
@@ -330,10 +330,11 @@ def cleared(root, path, removed):
     return True
 
 
-def unclean(root, raw, *pathspec):
+def unclean(root, raw, *pathspec, modes=False):
     """Uncommitted changes under pathspec or to the manifest, and a manifest that is no longer raw."""
-    # core.fileMode=false would hide an executable-bit edit that mismatches() counts as drift; paths may not be UTF-8
-    status = os.fsdecode(git('-C', str(root), '-c', 'core.fileMode=true', 'status', '--porcelain', '--ignored',
+    # modes: core.fileMode=false would hide an executable-bit edit restore counts as drift; paths may not be UTF-8
+    mode = ['-c', 'core.fileMode=true'] if modes else []
+    status = os.fsdecode(git('-C', str(root), *mode, 'status', '--porcelain', '--ignored',
                              '--untracked-files=all', '--', *pathspec, MANIFEST).stdout).splitlines()
     errors = [f'not clean: {line}' for line in status]
     tracked = os.fsdecode(git('-C', str(root), 'ls-files', '-v', '-z', '--', *pathspec, MANIFEST).stdout).split('\0')
