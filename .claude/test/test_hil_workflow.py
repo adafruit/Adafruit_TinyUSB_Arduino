@@ -174,6 +174,27 @@ class Render(Tmp):
         self.summary([board('raspberry_pi_pico', tests=[('cdc_echo', True), ('hid_inout', True)], firmware=None)])
         self.assertIn(row.replace('5.4.5', '5.4.4'), self.render())  # the core falls back to the build status
 
+    def test_the_core_column_shows_the_records_core_provenance(self):
+        plat = {'id': 'adafruit:samd', 'version': '1.7.17'}
+        commit, content = 'a' * 40, 'c' * 64
+        cases = [
+            (None, '`adafruit:samd 1.7.17, non-git: id/version only`'),
+            ({'commit': commit, 'dirty': False, 'content': content},
+             f'`adafruit:samd 1.7.17, commit {"a" * 12}, content {"c" * 12}`'),
+            ({'commit': commit, 'dirty': True, 'content': content},
+             f'`adafruit:samd 1.7.17, commit {"a" * 12}, modified, content {"c" * 12}`'),
+            ({'commit': commit, 'dirty': True, 'content': None, 'contentError': 'x'},
+             f'`adafruit:samd 1.7.17, commit {"a" * 12}, modified, content unavailable`'),
+            ({'commit': 7, 'dirty': 'yes', 'content': ['x']}, '`adafruit:samd 1.7.17, commit ?, content unavailable`'),
+        ]
+        for git, cell in cases:
+            with self.subTest(git=git):
+                self.assertEqual(W.core_of(None, {'firmware': {'platform': {**plat, 'git': git}}}), cell)
+        id_only = '`adafruit:samd 1.7.17`'   # a record without git, a malformed one, or a build status
+        self.assertEqual(W.core_of(None, {'firmware': {'platform': plat}}), id_only)
+        self.assertEqual(W.core_of(None, {'firmware': {'platform': {**plat, 'git': 'dirty'}}}), id_only)
+        self.assertEqual(W.core_of({'platform': {**plat, 'git': None}}, None), id_only)
+
     def test_failures_retries_and_waits_are_noted(self):
         self.selection(boards=('metro_m4_express', 'raspberry_pi_pico'))
         self.summary([board('raspberry_pi_pico', 'fail', tests=[('cdc_echo', False)], detail='echo failed',

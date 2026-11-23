@@ -105,6 +105,12 @@ def comment_lib():
     return agentrc_pin.load('skills/hil/scripts/gh_pr_comment.py')
 
 
+@functools.cache
+def hil_lib():
+    """agentrc's arduino_hil, for its core_provenance."""
+    return agentrc_pin.load('skills/arduino/scripts/arduino_hil.py')
+
+
 def listed(v):
     """v when it is a list, else empty: an artifact's nested types are untrusted too."""
     return v if isinstance(v, list) else []
@@ -149,10 +155,17 @@ def firmware_of(r):
 
 
 def core_of(status, r):
-    fw = firmware_of(r)
-    plat = fw.get('platform') if isinstance(fw.get('platform'), dict) else (status or {}).get('platform')
+    rec = firmware_of(r).get('platform')
+    plat = rec if isinstance(rec, dict) else (status or {}).get('platform')
     if not isinstance(plat, dict) or not plat.get('id'):
         return '—'
+    git = plat.get('git')
+    # only a build record's platform carries git (None for a non-git core); a build status's has id/version only
+    if plat is rec and 'git' in plat and (git is None or isinstance(git, dict)):
+        clean_git = None if git is None else {'commit': as_str(git.get('commit')), 'dirty': git.get('dirty') is True,
+                                              'content': as_str(git.get('content'))}
+        clean = {'id': as_str(plat['id']), 'version': as_str(plat.get('version')), 'git': clean_git}
+        return literal(hil_lib().core_provenance(clean), True)
     return literal(f'{plat["id"]} {plat.get("version") or "?"}', True)
 
 
@@ -234,6 +247,7 @@ def render(sel, statuses, summary, a):
 def cmd_render(a):
     try:
         G = comment_lib()
+        hil_lib()   # a PinError must exit 2 before rendering starts
     except agentrc_pin.PinError as e:
         print(f'error: {e.with_remedy()}', file=sys.stderr)
         return 2
