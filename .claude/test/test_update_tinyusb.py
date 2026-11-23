@@ -385,6 +385,114 @@ class Sync(unittest.TestCase):
         self.assertEqual((code, out['written']), (1, {'created': [], 'modified': ['src/tusb.c'], 'deleted': [],
                                                       'failed': upd.MANIFEST}))
 
+    # -- restore
+
+    def drift(self, files, mode=None):
+        put(self.lib, files)
+        for p, m in (mode or {}).items():
+            os.chmod(self.lib / p, m)
+        return commit(self.lib)
+
+    def test_restore_puts_back_bytes_and_mode_and_nothing_else(self):
+        self.drift({'src/tusb.c': b'local fix\n', 'src/class/a.c': b'other\n'}, {'src/tool.py': 0o644})
+        manifest = (self.lib / upd.MANIFEST).read_bytes()
+        code, out = self.run_op('restore', 'src/tool.py', 'src/tusb.c')
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out['written'], {'created': [], 'modified': ['src/tool.py', 'src/tusb.c']})
+        self.assertEqual((self.lib / 'src/tusb.c').read_bytes(), b'v1\n')
+        self.assertTrue(os.access(self.lib / 'src/tool.py', os.X_OK))
+        self.assertEqual((self.lib / 'src/class/a.c').read_bytes(), b'other\n')
+        self.assertEqual((self.lib / upd.MANIFEST).read_bytes(), manifest)
+        self.assertEqual(git(self.lib, 'diff', '--cached', '--name-only'), '')   # nothing staged
+
+    def test_restore_keeps_esp32_branch_and_crlf_and_recreates_missing(self):
+        self.drift({'src/tusb_option.h': OPTION, 'src/class/crlf.h': b'x\ny\n', 'src/class/a.c': None})
+        code, out = self.run_op('restore', 'src/tusb_option.h', 'src/class/crlf.h', 'src/class/a.c')
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out['written']['created'], ['src/class/a.c'])
+        self.assertEqual((self.lib / 'src/tusb_option.h').read_bytes(), OPTION_ESP32)
+        self.assertEqual((self.lib / 'src/class/crlf.h').read_bytes(), b'x\r\ny\r\n')
+        self.assertEqual(self.run_op('verify')[0], 0)
+
+    def test_restore_then_sync(self):
+        self.drift({'src/tusb.c': b'local fix\n'})
+        t = self.upstream_change({'src/tusb.c': b'v2\n'})
+        self.assert_refused(['plan', '--ref', t], 'src/tusb.c: changed')
+        self.assertEqual(self.run_op('restore', 'src/tusb.c')[0], 0)
+        commit(self.lib)
+        code, out = self.run_op('apply', '--ref', t)
+        self.assertEqual(code, 0, out)
+        commit(self.lib)
+        self.assertEqual(self.run_op('verify')[0], 0)
+
+    def test_restore_refuses_paths_it_does_not_own(self):
+        self.drift({'src/tusb.c': b'local fix\n'})
+        for p in ('src/portable/omitted/dcd.c', 'src/arduino/w.cpp', 'src/tusb_config.h', 'src/../x.c', 'src/new.c'):
+            self.assert_refused(['restore', p], 'not a vendored file')
+        self.assert_refused(['restore', 'src/class/a.c'], 'not drifted')
+        self.assert_refused(['restore', 'src/tusb.c', 'src/class/a.c'], 'not drifted')   # all or nothing
+
+    def test_restore_refuses_uncommitted_and_concurrent_edits(self):
+        put(self.lib, {'src/tusb.c': b'wip\n'})
+        self.assert_refused(['restore', 'src/tusb.c'], 'not clean')
+        commit(self.lib)
+        real = upd.Upstream.blobs
+
+        def edit_during_fetch(up, oids):
+            put(self.lib, {'src/tusb.c': b'concurrent\n'})
+            return real(up, oids)
+        with mock.patch.object(upd.Upstream, 'blobs', edit_during_fetch):
+            self.assert_refused(['restore', 'src/tusb.c'], 'not clean', unchanged=False)
+        self.assertEqual((self.lib / 'src/tusb.c').read_bytes(), b'concurrent\n')
+        git(self.lib, 'checkout', '--', 'src')
+
+        def manifest_during_fetch(up, oids):
+            self.manifest(self.base, self.files() + ['src/zz.c'])
+            commit(self.lib)
+            return real(up, oids)
+        with mock.patch.object(upd.Upstream, 'blobs', manifest_during_fetch):
+            self.assert_refused(['restore', 'src/tusb.c'], 'changed while preparing', unchanged=False)
+
+        def commit_during_fetch(up, oids):
+            self.drift({'src/tusb.c': b'committed meanwhile\n'})
+            return real(up, oids)
+        with mock.patch.object(upd.Upstream, 'blobs', commit_during_fetch):
+            self.assert_refused(['restore', 'src/tusb.c'], 'src/tusb.c changed while preparing', unchanged=False)
+        self.assertEqual((self.lib / 'src/tusb.c').read_bytes(), b'committed meanwhile\n')
+
+    def test_restore_refuses_a_symlink_or_a_file_on_the_path(self):
+        os.rename(self.lib / 'src/class', self.lib / 'elsewhere')
+        (self.lib / 'src/class').symlink_to('../elsewhere')
+        commit(self.lib)
+        self.assert_refused(['restore', 'src/class/a.c'], 'src/class/a.c: src/class is a symlink')
+        (self.lib / 'src/class').unlink()
+        put(self.lib, {'src/class': b'f\n'})
+        commit(self.lib)
+        self.assert_refused(['restore', 'src/class/a.c'], 'src/class/a.c: src/class is a file')
+
+    def test_restore_reports_a_partial_write(self):
+        self.drift({'src/tusb.c': b'local\n', 'src/class/a.c': b'local\n'})
+        real = upd.write_file
+
+        def fail_on_tusb(f, data, exe):
+            if f.name == 'tusb.c':
+                raise OSError('disk full')
+            real(f, data, exe)
+        with mock.patch.object(upd, 'write_file', fail_on_tusb):
+            code, out = self.run_op('restore', 'src/tusb.c', 'src/class/a.c')
+        self.assertEqual(code, 1)
+        self.assertEqual(out['written'], {'created': [], 'modified': ['src/class/a.c'], 'failed': 'src/tusb.c'})
+
+    def test_restore_from_source_leaves_the_clone_untouched(self):
+        self.drift({'src/tusb.c': b'local\n'})
+        put(self.up, {'src/dirty.c': b'wip\n'})
+        before = (git(self.up, 'for-each-ref'), git(self.up, 'status', '--porcelain'),
+                  (self.up / '.git/index').read_bytes())
+        code, out = self.run_op('restore', '--source', str(self.up), 'src/tusb.c')
+        self.assertEqual(code, 0, out)
+        self.assertEqual(before, (git(self.up, 'for-each-ref'), git(self.up, 'status', '--porcelain'),
+                                  (self.up / '.git/index').read_bytes()))
+
     def test_refuses_malformed_manifest(self):
         for raw in (b'[]', b'null', b'3'):
             put(self.lib, {upd.MANIFEST: raw})

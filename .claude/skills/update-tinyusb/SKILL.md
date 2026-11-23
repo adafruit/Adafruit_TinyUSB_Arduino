@@ -13,6 +13,7 @@ U=.claude/skills/update-tinyusb/scripts/update_tinyusb.py
 python3 $U plan [--ref REF] [--skip P ...] [--include P ...]
 python3 $U apply --ref <full SHA from plan> [--skip P ...] [--include P ...]
 python3 $U verify
+python3 $U restore <path> ...
 ```
 
 ## Steps
@@ -79,8 +80,8 @@ each finding on a sync, from review bots, HIL or your own review:
 ## When the script refuses
 
 - **Drift**: someone patched vendored code. Find why (`git log -p` on the file). When the target upstream commit
-  supersedes the patch or keeps its purpose, restore the recorded upstream bytes in a commit of its own before `plan`;
-  otherwise move the fix into `src/arduino/`, the port config or upstream before syncing.
+  supersedes the patch or keeps its purpose, `restore` the drifted paths and commit them on their own before
+  `plan`; otherwise move the fix into `src/arduino/`, the port config or upstream before syncing.
 - **ESP32 anchor**: updating the insertion is its own change, with its tests.
 - **A write failed**: restore the paths `written` names one by one after looking at them, never with a blanket
   checkout of `src/`.

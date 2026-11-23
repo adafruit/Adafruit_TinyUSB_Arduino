@@ -4,6 +4,7 @@
   update_tinyusb.py plan   [--ref REF] [--source PATH] [--include P ...] [--skip P ...]
   update_tinyusb.py apply  --ref SHA [--source PATH] [--include P ...] [--skip P ...]
   update_tinyusb.py verify [--source PATH]
+  update_tinyusb.py restore [--source PATH] PATH ...
 
 plan reports what apply would do for REF (default master) and writes nothing; verify checks the working tree against
 upstream.json, which records the upstream url, the synced commit and the vendored files. A vendored file is upstream's
@@ -11,7 +12,9 @@ blob byte for byte with its executable bit, except src/tusb_option.h, which also
 upstream files under src/ are included unless --skip names them (newOutsideVendored lists those in a directory with no
 vendored file); files the library never took stay out unless --include names them. The url is fetched into a
 temporary repository; --source reads a local clone's objects instead (full SHAs only; its refs, index and files are
-untouched).
+untouched). restore puts the named vendored files back to the recorded commit's bytes and mode, the ESP32 branch
+included, and touches nothing else: each must be committed drift, not an uncommitted edit, and upstream.json stays
+as it is.
 
 Prints one JSON line. Exit 0 ok; 1 verify mismatch or a write failed (written lists the paths written and the one it
 failed at); 2 refused, nothing written.
@@ -234,6 +237,66 @@ def verify(root, args):
     return (0 if ok else 1), {'ok': ok, 'base': base, **diff}
 
 
+def restore(root, args):
+    raw, man = load_manifest(root)
+    paths = sorted(set(args.paths))
+    errors = [f'{p}: not a vendored file in {MANIFEST}' for p in paths if p not in man['files']]
+    if errors:
+        return 2, {'ok': False, 'errors': errors}
+    before = {p: snapshot(root / p) for p in paths}
+    with tempfile.TemporaryDirectory() as tmp:
+        up = Upstream(tmp, man['url'], args.source)
+        [base] = up.fetch([(man['commit'], True)], shallow=True)
+        tree = up.tree(base)
+        require_upstream(paths, tree, base)
+        blobs = up.blobs([tree[p][2] for p in paths])
+    want = expected(paths, tree, blobs[tree[OPTION_H][2]] if OPTION_H in paths else None)
+    out = {'ok': False, 'base': base, 'errors': errors}
+    errors += check_restore(root, raw, before, want)
+    if errors:
+        return 2, out
+    outputs = [(p, (esp32_patch(blobs[tree[p][2]]) if p == OPTION_H else blobs[tree[p][2]], want[p][1])) for p in paths]
+    existing = {p for p in paths if os.path.lexists(root / p)}
+    out['written'], error = write(root, [], outputs, existing, raw, raw)
+    del out['written']['deleted']
+    if error:
+        errors.append(error)
+        return 1, out
+    errors += [f'{p}: {kind} after writing' for kind, ps in mismatches(root, want).items() if kind != 'unexpected'
+               for p in ps]
+    out['ok'] = not errors
+    return (1 if errors else 0), out
+
+
+def snapshot(f):
+    """A file's bytes and mode, or what stands there instead, to notice a change committed while fetching."""
+    if f.is_symlink() or not f.is_file():
+        return ('link', os.readlink(f)) if f.is_symlink() else os.path.lexists(f)
+    return f.read_bytes(), f.stat().st_mode
+
+
+def check_restore(root, raw, before, want):
+    """Why the named paths may not be restored now; run after the fetch, so an edit made meanwhile is refused."""
+    paths = sorted(before)
+    status = git('-C', str(root), 'status', '--porcelain', '--ignored', '--untracked-files=all', '--', *paths,
+                 MANIFEST).stdout.decode().splitlines()
+    errors = [f'not clean: {line}' for line in status]
+    try:
+        if (root / MANIFEST).read_bytes() != raw:
+            errors.append(f'{MANIFEST} changed while preparing')
+    except OSError:
+        errors.append(f'{MANIFEST} changed while preparing')
+    errors += [f'{p} changed while preparing' for p in paths if snapshot(root / p) != before[p]]
+    for p in paths:   # a write through either would land outside its path
+        bad = [f'{a.as_posix()} is a symlink' if (root / a).is_symlink() else f'{a.as_posix()} is a file'
+               for a in [Path(p), *Path(p).parents][:-1]
+               if (root / a).is_symlink() or (a != Path(p) and (root / a).is_file())]
+        errors += [f'{p}: {why}' for why in bad[-1:]]
+    diff = mismatches(root, want)
+    drifted = set(diff['changed'] + diff['missing'])
+    return errors + [f'{p}: not drifted from the recorded upstream commit' for p in paths if p not in drifted]
+
+
 def select(files, new, tt, skip, include, target):
     """The next vendored set, and the errors the --skip/--include choices raise."""
     errors = [f'{p}: upstream added a protected path; the library owns it' if protected(p)
@@ -359,10 +422,12 @@ def sync(root, args, apply):
 def main(argv, root=ROOT):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='op', required=True)
-    for name in ('plan', 'apply', 'verify'):
+    for name in ('plan', 'apply', 'verify', 'restore'):
         p = sub.add_parser(name)
         p.add_argument('--source', help='local tinyusb clone to read objects from instead of fetching')
-        if name != 'verify':
+        if name == 'restore':
+            p.add_argument('paths', nargs='+', metavar='PATH')
+        elif name != 'verify':
             p.add_argument('--ref', required=name == 'apply', default='master')
             p.add_argument('--include', action='extend', nargs='+', default=[], metavar='PATH')
             p.add_argument('--skip', action='extend', nargs='+', default=[], metavar='PATH')
@@ -370,7 +435,8 @@ def main(argv, root=ROOT):
     try:
         if not (root / 'src' / 'arduino').is_dir():
             raise Refused(f'{root} is not an Adafruit TinyUSB Arduino checkout')
-        code, out = verify(root, args) if args.op == 'verify' else sync(root, args, args.op == 'apply')
+        ops = {'verify': verify, 'restore': restore}
+        code, out = ops[args.op](root, args) if args.op in ops else sync(root, args, args.op == 'apply')
     except Refused as e:
         code, out = 2, {'ok': False, 'errors': [str(e)]}
     print(json.dumps({'operation': args.op, **out}))
