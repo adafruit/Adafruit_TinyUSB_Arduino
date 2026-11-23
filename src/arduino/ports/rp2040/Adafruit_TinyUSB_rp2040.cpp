@@ -150,7 +150,7 @@ void TinyUSB_Device_Task(void) {
 #include "class/cdc/cdc_device.h"
 
 // Core 6.4.0 stdio_flush() calls tud_cdc_write_flush() in host mode too;
-// without this ld pulls libpico's device stack (fixed by
-// earlephilhower/arduino-pico#3639).
+// without this ld pulls libpico's device stack. Remove once a core release with
+// earlephilhower/arduino-pico#3639 is the minimum supported (#640).
 uint32_t tud_cdc_n_write_flush(uint8_t) { return 0; }
 #endif
