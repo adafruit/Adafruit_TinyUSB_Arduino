@@ -46,8 +46,10 @@ BOARDS = {
     'CH32V20x_EVT': {'fqbn': 'WCH:ch32v:CH32V20x_EVT:usb=tinyusb_usbd', 'family': 'ch32'},
     'ch32_community_ch32v20x_tinyusb_usbd': {'fqbn': 'ch32-community:ch32v:CH32V20x_EVT:usb=tinyusb_usbd',
                                              'family': 'ch32'},
-    'metro_ch32v407': {'fqbn': 'ch32-community:ch32v:CH32V4x7_BOARDS:pnum=ADAFRUIT_METRO_CH32V407', 'family': 'ch32'},
-    'metro_ch32v467': {'fqbn': 'ch32-community:ch32v:CH32V4x7_BOARDS:pnum=ADAFRUIT_METRO_CH32V467', 'family': 'ch32'},
+    'ch32_community_metro_ch32v407': {'fqbn': 'ch32-community:ch32v:CH32V4x7_BOARDS:pnum=ADAFRUIT_METRO_CH32V407',
+                                      'family': 'ch32'},
+    'ch32_community_metro_ch32v467': {'fqbn': 'ch32-community:ch32v:CH32V4x7_BOARDS:pnum=ADAFRUIT_METRO_CH32V467',
+                                      'family': 'ch32'},
     # rig boards: `span` is where a HIL image may load (XIP base: RP2040/RP2350 datasheets; sizes: the board's flash,
     # SAMD51 keeps the UF2 bootloader below 0x4000)
     'raspberry_pi_pico': {'fqbn': 'rp2040:rp2040:rpipico:flash=2097152_0,freq=120,dbgport=Disabled,dbglvl=None,'
@@ -82,7 +84,7 @@ REPRESENTATIVES = {
     'samd': ['metro_m4_express', 'metro_m0_tinyusb'],
     'nrf': ['nrf52840'],
     'esp32': ['feather_esp32s3', 'espressif_p4_function_ev'],
-    'ch32': ['CH32V20x_EVT', 'ch32_community_ch32v20x_tinyusb_usbd', 'metro_ch32v467'],
+    'ch32': ['CH32V20x_EVT', 'ch32_community_ch32v20x_tinyusb_usbd', 'ch32_community_metro_ch32v467'],
 }
 PORTABLE_FAMILY = {
     'raspberrypi/rp2040': 'rp2040', 'raspberrypi/pio_usb': 'rp2040', 'microchip/samd': 'samd',
