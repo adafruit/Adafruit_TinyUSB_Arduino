@@ -1,26 +1,21 @@
 #!/usr/bin/env python3
 """The HIL workflows' glue (SKILL.md beside this directory, CI): hil.yml's selection and per-board build status, and
-hil_comment.yml's PR, rig attempt, report and freshness check. Stdlib only, `gh` for the API; hil_comment.yml runs it
-from the default branch, every artifact read as untrusted data.
+the report hil_comment.yml posts. Stdlib only; the report reads every artifact as untrusted data through agentrc's
+gh_pr_comment.py (the agentrc agentrc_pin.py selects), which hil_comment.yml also runs for the PR, the rig attempt and
+the freshness check.
 
   hil_workflow.py select --event E --repository R --run-id N --tested SHA --out FILE [--boards "B ..."]
       the boards a run tests: none outside UPSTREAM; a dispatch's named roster boards; a pull request's from
       check_build.py --select-only against HEAD^1. Writes the selection and boards/matrix to $GITHUB_OUTPUT.
   hil_workflow.py status --board B --attempt N --outcome O [--versions FILE] --out FILE
       one hosted build leg's outcome, with the platform and the core and arduino-cli versions setup recorded.
-  hil_workflow.py pr --repo R --head-sha SHA --head-branch BR --head-repo R2 --prs JSON
-      the open PR of R a HIL run is for, from trusted workflow_run metadata; prints its number or nothing (none, or
-      ambiguous); exit 2 when the API cannot tell.
-  hil_workflow.py rig-attempt --repo R --run-id N --attempt N
-      the attempt the hil-run job of run N attempt N ran in; prints nothing when it did not run.
   hil_workflow.py render --selection DIR --status DIR --run DIR --run-id N --rig-attempt N --pr-head SHA
                          --run-url URL --conclusion C --out FILE
-  hil_workflow.py fresh --repo R --pr N --run-id N --attempt N --head-sha SHA
-      exit 0 when run N attempt N is the newest HIL run of the PR's current head, 1 stale (why on stdout), 2 when the
-      API cannot tell.
+      exit 2 when no usable agentrc is selected.
 """
 
 import argparse
+import functools
 import json
 import math
 import os
@@ -28,26 +23,19 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from urllib.parse import quote
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import agentrc_pin  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[4]
 UPSTREAM = 'adafruit/Adafruit_TinyUSB_Arduino'
 ROSTER = 'test/hil/ci.json'
-WORKFLOW = 'hil.yml'
-RIG_JOB = 'hil-run'
 STATUS_DIR = re.compile(r'hil-status-([A-Za-z0-9_]+)-([1-9][0-9]*)')   # one build leg's artifact, per attempt
 TITLE = '## Hardware-in-the-loop (HIL) Test Report'
-MAX_JSON = 1 << 20   # bytes of one artifact file read
-MAX_TEXT = 300       # characters of one report string shown
-MAX_COMMENT = 60000  # GitHub caps a comment at 65536
 TESTS = ('cdc_echo', 'hid_inout', 'msc_ramdisk', 'host_device_info')   # hil_test.py's, in report order
 VERDICT = {'pass': '✅ pass', 'fail': '❌ fail', 'blocker': '⛔ blocker', 'not-run': '⚪ not run'}
 COVERAGE = ('The battery runs `serial_echo`, `hid_generic_inout` and `msc_ramdisk` on device boards and '
             '`host_device_info` on host boards; no other example, class or family is tested here.')
-
-
-class ApiError(Exception):
-    pass
 
 
 # ---- hosted: selection and build status
@@ -109,106 +97,12 @@ def cmd_status(a):
     return 0
 
 
-# ---- the default branch: PR, rig attempt, freshness
-
-def gh(path, paginate_key=None):
-    """The API's JSON at `path`; with paginate_key, that list across every page."""
-    argv = ['gh', 'api', '-H', 'Accept: application/vnd.github+json', path]
-    if paginate_key:
-        argv[2:2] = ['--paginate', '--jq', f'.{paginate_key}[]']
-    p = subprocess.run(argv, capture_output=True, text=True)
-    if p.returncode:
-        raise ApiError(f'gh api {path}: {p.stderr.strip()[-300:]}')
-    try:
-        return [json.loads(ln) for ln in p.stdout.splitlines() if ln.strip()] if paginate_key else json.loads(p.stdout)
-    except ValueError as e:
-        raise ApiError(f'gh api {path}: {e}')
-
-
-def cmd_pr(a):
-    """Same-repo PRs are listed in the run's pull_requests; a fork's is found by its head repo, branch and SHA."""
-    try:
-        prs = json.loads(a.prs or '[]')
-    except ValueError:
-        prs = []
-    numbers = [p.get('number') for p in prs if isinstance(p, dict) and
-               ((p.get('base') or {}).get('repo') or {}).get('url', '').endswith(f'/repos/{a.repo}')]
-    if not numbers and a.head_branch and a.head_repo:
-        try:
-            head = quote(f'{a.head_repo.split("/")[0]}:{a.head_branch}', safe='')   # a branch may hold '#', '+', '&'
-            pulls = gh(f'repos/{a.repo}/pulls?state=open&per_page=100&head={head}')
-        except ApiError as e:   # unknown, not absent: the comment job must not pass as if no PR existed
-            print(e, file=sys.stderr)
-            return 2
-        numbers = [p['number'] for p in pulls if p.get('head', {}).get('sha') == a.head_sha and
-                   p.get('base', {}).get('repo', {}).get('full_name') == a.repo]
-    if len(numbers) == 1:
-        print(numbers[0])
-    elif numbers:
-        print(f'ambiguous: PRs {numbers} share this run: no comment', file=sys.stderr)
-    return 0
-
-
-def cmd_rig_attempt(a):
-    try:
-        jobs = gh(f'repos/{a.repo}/actions/runs/{a.run_id}/attempts/{a.attempt}/jobs?per_page=100', 'jobs')
-    except ApiError as e:
-        print(e, file=sys.stderr)
-        return 2
-    rig = [j for j in jobs if j.get('name') == RIG_JOB]
-    if rig and rig[0].get('conclusion') not in (None, 'skipped'):
-        print(rig[0].get('run_attempt') or a.attempt)
-    return 0
-
-
-def is_run_of(run, pr, head):
-    """Whether pull_request run `run` may be PR `pr`'s, whose head is `head` (tinyusb code_size_ci.py): GitHub lists
-    a same-repo PR in pull_requests and leaves a fork's empty, so an unlisted run counts when it built the head."""
-    numbers = [p['number'] for p in run.get('pull_requests') or []]
-    if numbers:
-        return pr in numbers
-    return run.get('head_branch') == head.get('ref') and \
-        (run.get('head_repository') or {}).get('full_name') == (head.get('repo') or {}).get('full_name')
-
-
-def cmd_fresh(a):
-    try:
-        head = gh(f'repos/{a.repo}/pulls/{a.pr}')['head']
-        why = None
-        if head['sha'] != a.head_sha:
-            why = 'the PR head moved on'
-        else:
-            runs = [r for r in gh(f'repos/{a.repo}/actions/workflows/{WORKFLOW}/runs?head_sha={a.head_sha}'
-                                  f'&event=pull_request&per_page=100', 'workflow_runs') if is_run_of(r, a.pr, head)]
-            latest = max(runs, key=lambda r: r['run_number'], default=None)
-            if latest is None:
-                why = 'no HIL run of the PR head found'
-            elif latest['id'] != a.run_id:
-                why = f'a newer HIL run exists: {latest["id"]}'
-            elif gh(f'repos/{a.repo}/actions/runs/{a.run_id}')['run_attempt'] != a.attempt:
-                why = 'a newer attempt exists'
-    except (ApiError, KeyError, TypeError) as e:
-        print(f'unknown: {e}')
-        return 2
-    print(f'stale: {why}' if why else 'current')
-    return 1 if why else 0
-
-
 # ---- render
 
-def read_json(base, rel):
-    """An artifact file as data: a regular file inside base, not a link, at most MAX_JSON bytes; None otherwise."""
-    base = Path(base)
-    p = base / rel
-    try:
-        if p.is_symlink() or not p.is_file() or base.resolve() not in p.resolve().parents:
-            return None
-        if p.stat().st_size > MAX_JSON:
-            return None
-        data = json.loads(p.read_text())
-        return data if isinstance(data, dict) else None
-    except (OSError, ValueError, RecursionError):
-        return None
+@functools.cache
+def comment_lib():
+    """agentrc's gh_pr_comment, from the agentrc agentrc_pin.py selects."""
+    return agentrc_pin.load('skills/hil/scripts/gh_pr_comment.py')
 
 
 def listed(v):
@@ -222,16 +116,7 @@ def as_str(v):
 
 
 def literal(v, table=False):
-    """Text on one line as an inline code span, so no Markdown, HTML, mention or link in it renders; pipes escaped
-    in a table cell (GFM unescapes them inside the span)."""
-    text = ' '.join(str(v).split())[:MAX_TEXT]
-    if not text:
-        return ''
-    fence = '`' * (max(map(len, re.findall('`+', text)), default=0) + 1)
-    pad = ' ' if text[0] in '` ' or text[-1] in '` ' else ''
-    if table:
-        text = text.replace('|', '\\|')
-    return f'{fence}{pad}{text}{pad}{fence}'
+    return comment_lib().literal(v, table)
 
 
 def duration(s):
@@ -347,18 +232,21 @@ def render(sel, statuses, summary, a):
 
 
 def cmd_render(a):
-    sel = read_json(a.selection, 'hil-selection.json')
+    try:
+        G = comment_lib()
+    except agentrc_pin.PinError as e:
+        print(f'error: {e.with_remedy()}', file=sys.stderr)
+        return 2
+    sel = G.read_artifact_json(a.selection, 'hil-selection.json')
     statuses = {}   # the newest attempt's per board: every attempt's artifact is its own dir
     for d in sorted(Path(a.status).iterdir()) if Path(a.status).is_dir() else []:
         m = STATUS_DIR.fullmatch(d.name)
-        s = read_json(a.status, f'{d.name}/{m[1]}.json') if m and not d.is_symlink() else None
+        s = G.read_artifact_json(a.status, f'{d.name}/{m[1]}.json') if m and not d.is_symlink() else None
         if s and s.get('board') == m[1] and s.get('attempt') == int(m[2]) and \
                 s['attempt'] > statuses.get(m[1], {}).get('attempt', 0):
             statuses[m[1]] = s
-    summary = read_json(a.run, 'summary.json') if a.rig_attempt else None
-    text = '\n'.join(render(sel, statuses, summary, a)) + '\n'
-    if len(text) > MAX_COMMENT:   # at a line end: a code span never crosses one, so none is left open
-        text = text[:text.rfind('\n', 0, MAX_COMMENT) + 1] + '\n…truncated: see the run\'s artifacts.\n'
+    summary = G.read_artifact_json(a.run, 'summary.json') if a.rig_attempt else None
+    text = G.cap('\n'.join(render(sel, statuses, summary, a)) + '\n')
     Path(a.out).write_text(text)
     print(text)
     return 0
@@ -380,33 +268,17 @@ def parse(argv):
     s.add_argument('--outcome', required=True)
     s.add_argument('--versions')
     s.add_argument('--out', required=True)
-    s = sub.add_parser('pr')
-    for k in ('--repo', '--head-sha'):
-        s.add_argument(k, required=True)
-    for k in ('--head-branch', '--head-repo', '--prs'):
-        s.add_argument(k, default='')
-    s = sub.add_parser('rig-attempt')
-    s.add_argument('--repo', required=True)
-    s.add_argument('--run-id', required=True, type=int)
-    s.add_argument('--attempt', required=True, type=int)
     s = sub.add_parser('render')
     for k in ('--selection', '--status', '--run', '--run-id', '--pr-head', '--run-url', '--out'):
         s.add_argument(k, required=True)
     s.add_argument('--rig-attempt', default='')
     s.add_argument('--conclusion', default='')
-    s = sub.add_parser('fresh')
-    s.add_argument('--repo', required=True)
-    s.add_argument('--pr', required=True, type=int)
-    s.add_argument('--run-id', required=True, type=int)
-    s.add_argument('--attempt', required=True, type=int)
-    s.add_argument('--head-sha', required=True)
     return ap.parse_args(argv)
 
 
 def main(argv=None):
     a = parse(sys.argv[1:] if argv is None else argv)
-    return {'select': cmd_select, 'status': cmd_status, 'pr': cmd_pr, 'rig-attempt': cmd_rig_attempt,
-            'render': cmd_render, 'fresh': cmd_fresh}[a.cmd](a)
+    return {'select': cmd_select, 'status': cmd_status, 'render': cmd_render}[a.cmd](a)
 
 
 if __name__ == '__main__':
