@@ -145,3 +145,12 @@ void TinyUSB_Device_Task(void) {
 }
 
 #endif
+
+#if defined ARDUINO_ARCH_RP2040 && defined USE_TINYUSB_HOST
+#include "class/cdc/cdc_device.h"
+
+// Core 6.4.0 stdio_flush() calls tud_cdc_write_flush() in host mode too;
+// without this ld pulls libpico's device stack (fixed by
+// earlephilhower/arduino-pico#3639).
+uint32_t tud_cdc_n_write_flush(uint8_t) { return 0; }
+#endif
