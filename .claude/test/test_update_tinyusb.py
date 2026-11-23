@@ -493,6 +493,15 @@ class Sync(unittest.TestCase):
         commit(self.lib)
         self.assert_refused(['restore', 'src/class/a.c'], 'src/class/a.c: src/class is a file')
 
+    def test_restore_refuses_a_hard_linked_file(self):
+        self.drift({'src/tusb.c': b'local fix\n'})
+        other = self.lib.parent / 'linked.c'
+        os.link(self.lib / 'src/tusb.c', other)
+        mode = other.stat().st_mode
+        self.assert_refused(['restore', 'src/tusb.c'], 'src/tusb.c: has 2 hard links')
+        for f in (self.lib / 'src/tusb.c', other):
+            self.assertEqual((f.read_bytes(), f.stat().st_mode), (b'local fix\n', mode))
+
     def test_restore_refuses_a_directory_at_the_path_before_writing(self):
         self.drift({'src/class/a.c': b'local\n', 'src/tusb.c': None, 'src/tusb.c/x.c': b'x\n'})
         self.assert_refused(['restore', 'src/class/a.c', 'src/tusb.c'], 'src/tusb.c: src/tusb.c is a directory')

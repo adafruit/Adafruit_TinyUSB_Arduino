@@ -292,6 +292,10 @@ def check_restore(root, raw, before, want):
             if kind:
                 errors.append(f'{p}: {a.as_posix()} is a {kind}')
                 break
+        else:   # write_file rewrites the inode in place, so every other link to it would change too
+            links = (root / p).lstat().st_nlink if (root / p).is_file() else 1
+            if links > 1:
+                errors.append(f'{p}: has {links} hard links, a write would change them too')
     diff = mismatches(root, want)
     drifted = set(diff['changed'] + diff['missing'])
     return errors + [f'{p}: not drifted from the recorded upstream commit' for p in paths if p not in drifted]
