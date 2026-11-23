@@ -200,6 +200,11 @@ def require_upstream(files, tree, sha):
         raise Refused(f'{len(absent)} files of {MANIFEST} are not in upstream {sha[:12]}: {absent[:5]}')
 
 
+def vendored_bytes(path, tree, blobs):
+    data = blobs[tree[path][2]]
+    return esp32_patch(data) if path == OPTION_H else data
+
+
 def expected(files, tree, option):
     """{path: (blob id, executable)} each vendored file must hold at that tree; option is upstream's tusb_option.h."""
     out = {}
@@ -255,10 +260,9 @@ def restore(root, args):
     errors += check_restore(root, raw, before, want)
     if errors:
         return 2, out
-    outputs = [(p, (esp32_patch(blobs[tree[p][2]]) if p == OPTION_H else blobs[tree[p][2]], want[p][1])) for p in paths]
+    outputs = [(p, (vendored_bytes(p, tree, blobs), want[p][1])) for p in paths]
     existing = {p for p in paths if os.path.lexists(root / p)}
     out['written'], error = write(root, [], outputs, existing, raw, raw)
-    del out['written']['deleted']
     if error:
         errors.append(error)
         return 1, out
@@ -278,20 +282,13 @@ def snapshot(f):
 def check_restore(root, raw, before, want):
     """Why the named paths may not be restored now; run after the fetch, so an edit made meanwhile is refused."""
     paths = sorted(before)
-    status = git('-C', str(root), 'status', '--porcelain', '--ignored', '--untracked-files=all', '--', *paths,
-                 MANIFEST).stdout.decode().splitlines()
-    errors = [f'not clean: {line}' for line in status]
-    try:
-        if (root / MANIFEST).read_bytes() != raw:
-            errors.append(f'{MANIFEST} changed while preparing')
-    except OSError:
-        errors.append(f'{MANIFEST} changed while preparing')
+    errors = unclean(root, raw, *paths)
     errors += [f'{p} changed while preparing' for p in paths if snapshot(root / p) != before[p]]
     for p in paths:   # a write through either would land outside its path
-        bad = [f'{a.as_posix()} is a symlink' if (root / a).is_symlink() else f'{a.as_posix()} is a file'
-               for a in [Path(p), *Path(p).parents][:-1]
-               if (root / a).is_symlink() or (a != Path(p) and (root / a).is_file())]
-        errors += [f'{p}: {why}' for why in bad[-1:]]
+        for a in reversed([Path(p), *Path(p).parents][:-1]):
+            if (root / a).is_symlink() or (a != Path(p) and (root / a).is_file()):
+                errors.append(f'{p}: {a.as_posix()} is a {"symlink" if (root / a).is_symlink() else "file"}')
+                break
     diff = mismatches(root, want)
     drifted = set(diff['changed'] + diff['missing'])
     return errors + [f'{p}: not drifted from the recorded upstream commit' for p in paths if p not in drifted]
@@ -323,17 +320,21 @@ def cleared(root, path, removed):
     return True
 
 
-def check_local(root, raw, have, added, removed):
-    """Why the checkout may not be written now; run after every fetch, so an edit made meanwhile is refused."""
-    status = git('-C', str(root), 'status', '--porcelain', '--ignored', '--untracked-files=all', '--',
-                 'src', MANIFEST).stdout.decode().splitlines()
+def unclean(root, raw, *pathspec):
+    """Uncommitted changes under pathspec or to the manifest, and a manifest that is no longer raw."""
+    status = git('-C', str(root), 'status', '--porcelain', '--ignored', '--untracked-files=all', '--', *pathspec,
+                 MANIFEST).stdout.decode().splitlines()
     errors = [f'not clean: {line}' for line in status]
     try:
         changed = (root / MANIFEST).read_bytes() != raw
     except OSError:
         changed = True
-    if changed:
-        errors.append(f'{MANIFEST} changed while preparing')
+    return errors + ([f'{MANIFEST} changed while preparing'] if changed else [])
+
+
+def check_local(root, raw, have, added, removed):
+    """Why the checkout may not be written now; run after every fetch, so an edit made meanwhile is refused."""
+    errors = unclean(root, raw, 'src')
     errors += [f'{p}: {kind} against the recorded upstream commit' for kind, ps in mismatches(root, have).items()
                for p in ps]
     removed_set = set(removed)
@@ -402,8 +403,7 @@ def sync(root, args, apply):
         sides = ((bt, files), (tt, nxt))
         blobs = up.blobs([tt[p][2] for p in writes] + [t[OPTION_H][2] for t, fs in sides if OPTION_H in fs])
         have, want = (expected(sorted(fs), t, blobs[t[OPTION_H][2]] if OPTION_H in fs else None) for t, fs in sides)
-        outputs = [(p, (esp32_patch(blobs[tt[p][2]]) if p == OPTION_H else blobs[tt[p][2]], want[p][1]))
-                   for p in writes]
+        outputs = [(p, (vendored_bytes(p, tt, blobs), want[p][1])) for p in writes]
 
     errors += check_local(root, raw, have, out['added'], out['removed'])
     if errors or not apply:

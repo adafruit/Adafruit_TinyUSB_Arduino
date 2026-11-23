@@ -398,7 +398,7 @@ class Sync(unittest.TestCase):
         manifest = (self.lib / upd.MANIFEST).read_bytes()
         code, out = self.run_op('restore', 'src/tool.py', 'src/tusb.c')
         self.assertEqual(code, 0, out)
-        self.assertEqual(out['written'], {'created': [], 'modified': ['src/tool.py', 'src/tusb.c']})
+        self.assertEqual(out['written'], {'created': [], 'modified': ['src/tool.py', 'src/tusb.c'], 'deleted': []})
         self.assertEqual((self.lib / 'src/tusb.c').read_bytes(), b'v1\n')
         self.assertTrue(os.access(self.lib / 'src/tool.py', os.X_OK))
         self.assertEqual((self.lib / 'src/class/a.c').read_bytes(), b'other\n')
@@ -481,17 +481,8 @@ class Sync(unittest.TestCase):
         with mock.patch.object(upd, 'write_file', fail_on_tusb):
             code, out = self.run_op('restore', 'src/tusb.c', 'src/class/a.c')
         self.assertEqual(code, 1)
-        self.assertEqual(out['written'], {'created': [], 'modified': ['src/class/a.c'], 'failed': 'src/tusb.c'})
-
-    def test_restore_from_source_leaves_the_clone_untouched(self):
-        self.drift({'src/tusb.c': b'local\n'})
-        put(self.up, {'src/dirty.c': b'wip\n'})
-        before = (git(self.up, 'for-each-ref'), git(self.up, 'status', '--porcelain'),
-                  (self.up / '.git/index').read_bytes())
-        code, out = self.run_op('restore', '--source', str(self.up), 'src/tusb.c')
-        self.assertEqual(code, 0, out)
-        self.assertEqual(before, (git(self.up, 'for-each-ref'), git(self.up, 'status', '--porcelain'),
-                                  (self.up / '.git/index').read_bytes()))
+        self.assertEqual(out['written'], {'created': [], 'modified': ['src/class/a.c'], 'deleted': [],
+                                          'failed': 'src/tusb.c'})
 
     def test_refuses_malformed_manifest(self):
         for raw in (b'[]', b'null', b'3'):

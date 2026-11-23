@@ -68,10 +68,9 @@ each finding on a sync, from review bots, HIL or your own review:
   reuse a verified assessment for code that has not changed. Many or uncertain findings get a `finding-verifier` per
   area, and a hardware or protocol fact goes through `read-doc`. Note the introducing commit when established
   (`git log <base>..<target> -- <path>`), new or pre-existing; a confirmed finding does not wait on it.
-- **Confirmed**, with a concrete trigger: a hathach/tinyusb follow-up through agentrc's `followup-issue` skill, which
-  searches first: an open issue covering it takes a comment with the new evidence, or nothing; otherwise a new issue
-  labelled `follow-up`, plus the `Port ...` label of a port-specific defect, linking the sync PR. Publishing needs a
-  grant covering hathach/tinyusb; without one, give the human the issue-ready text.
+- **Confirmed**, with a concrete trigger: a hathach/tinyusb follow-up through agentrc's `followup-issue` skill, labelled
+  `follow-up` plus the `Port ...` label of a port-specific defect and linking the sync PR; publishing needs a grant
+  covering hathach/tinyusb.
 - **Plausible or refuted**: an explicit disposition, posted only where the task may publish; a plausible finding is
   never answered as refuted.
 - **Owner from the code path**, not from where the symptom showed: wrapper, port and core-glue defects are this
@@ -83,5 +82,5 @@ each finding on a sync, from review bots, HIL or your own review:
   supersedes the patch or keeps its purpose, `restore` the drifted paths and commit them on their own before
   `plan`; otherwise move the fix into `src/arduino/`, the port config or upstream before syncing.
 - **ESP32 anchor**: updating the insertion is its own change, with its tests.
-- **A write failed**: restore the paths `written` names one by one after looking at them, never with a blanket
+- **A write failed**: recover the paths `written` names one by one after looking at them, never with a blanket
   checkout of `src/`.
