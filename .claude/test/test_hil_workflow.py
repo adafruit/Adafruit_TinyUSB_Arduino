@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""hil_workflow.py, the HIL workflows' glue: selection, build status, the PR and rig attempt of a run, the report
-rendered from untrusted artifacts, and the freshness check. `gh` and check_build.py are stubbed: stubs prove the
-plumbing only; the workflows are verified by a real CI run."""
+"""hil_workflow.py, the HIL workflows' glue: selection, build status and the report rendered from untrusted artifacts
+through agentrc's gh_pr_comment (the agentrc agentrc_pin.py selects), whose PR, job attempt and freshness lookups
+hil_comment.yml runs and agentrc tests. check_build.py is stubbed: stubs prove the plumbing only; the workflows are
+verified by a real CI run."""
 import contextlib
 import io
 import json
@@ -17,6 +18,8 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / '.claude' / 'skills' / 'hil-contract' / 'scripts'))
 import hil_workflow as W  # noqa: E402
+
+G = W.comment_lib()   # a missing or too old agentrc fails here, naming the remedy
 
 HEAD = 'a' * 40
 MERGE = 'b' * 40
@@ -99,77 +102,16 @@ class Status(Tmp):
         self.assertEqual(json.loads(out.read_text())['platform'], {'id': None, 'version': None})
 
 
-class Api(unittest.TestCase):
-    def gh(self, replies):
-        def fake(path, paginate_key=None):
-            for prefix, reply in replies.items():
-                if path.startswith(prefix):
-                    if isinstance(reply, Exception):
-                        raise reply
-                    return reply
-            raise AssertionError(path)
-        return mock.patch.object(W, 'gh', fake)
-
-    def test_pr_of_a_same_repo_run_comes_from_its_metadata(self):
-        prs = [{'number': 7, 'base': {'repo': {'url': f'https://api.github.com/repos/{W.UPSTREAM}'}}},
-               {'number': 8, 'base': {'repo': {'url': 'https://api.github.com/repos/other/repo'}}}]
-        with self.gh({}):
-            self.assertEqual(run('pr', '--repo', W.UPSTREAM, '--head-sha', HEAD, '--prs', json.dumps(prs))[1], '7\n')
-
-    def test_pr_of_a_fork_run_is_the_open_pr_of_its_head(self):
-        pulls = [{'number': 5, 'head': {'sha': HEAD}, 'base': {'repo': {'full_name': W.UPSTREAM}}},
-                 {'number': 6, 'head': {'sha': 'c' * 40}, 'base': {'repo': {'full_name': W.UPSTREAM}}}]
-        with self.gh({f'repos/{W.UPSTREAM}/pulls?': pulls}):
-            out = run('pr', '--repo', W.UPSTREAM, '--head-sha', HEAD, '--head-branch', 'fix', '--head-repo', 'u/fork',
-                      '--prs', '[]')[1]
-        self.assertEqual(out, '5\n')
-        with mock.patch.object(W, 'gh', return_value=pulls) as gh:   # the head selector is one query value
-            out = run('pr', '--repo', W.UPSTREAM, '--head-sha', HEAD, '--head-branch', 'a#b+c&d', '--head-repo',
-                      'u/fork', '--prs', '[]')[1]
-        self.assertEqual(out, '5\n')
-        self.assertEqual(gh.call_args[0][0], f'repos/{W.UPSTREAM}/pulls?state=open&per_page=100&head=u%3Aa%23b%2Bc%26d')
-
-    def test_an_ambiguous_or_missing_pr_gets_no_comment(self):
-        pulls = [{'number': n, 'head': {'sha': HEAD}, 'base': {'repo': {'full_name': W.UPSTREAM}}} for n in (5, 6)]
-        with self.gh({f'repos/{W.UPSTREAM}/pulls?': pulls}):
-            code, out, err = run('pr', '--repo', W.UPSTREAM, '--head-sha', HEAD, '--head-branch', 'b',
-                                 '--head-repo', 'u/f')
-        self.assertEqual((code, out), (0, ''))
-        self.assertIn('ambiguous', err)
-        with self.gh({f'repos/{W.UPSTREAM}/pulls?': W.ApiError('down')}):
-            self.assertEqual(run('pr', '--repo', W.UPSTREAM, '--head-sha', HEAD, '--head-branch', 'b',
-                                 '--head-repo', 'u/f')[:2], (2, ''))
-
-    def test_rig_attempt_is_the_hil_run_jobs_own(self):
-        jobs = f'repos/{W.UPSTREAM}/actions/runs/9/attempts/3/jobs'
-        with self.gh({jobs: [{'name': 'select', 'run_attempt': 3},
-                             {'name': 'hil-run', 'run_attempt': 2, 'conclusion': 'success'}]}):
-            self.assertEqual(run('rig-attempt', '--repo', W.UPSTREAM, '--run-id', '9', '--attempt', '3')[1], '2\n')
-        with self.gh({jobs: [{'name': 'hil-run', 'run_attempt': 3, 'conclusion': 'skipped'}]}):
-            self.assertEqual(run('rig-attempt', '--repo', W.UPSTREAM, '--run-id', '9', '--attempt', '3')[1], '')
-        with self.gh({jobs: W.ApiError('down')}):
-            self.assertEqual(run('rig-attempt', '--repo', W.UPSTREAM, '--run-id', '9', '--attempt', '3')[0], 2)
-
-    def fresh(self, replies):
-        with self.gh(replies):
-            return run('fresh', '--repo', W.UPSTREAM, '--pr', '7', '--run-id', '9', '--attempt', '2',
-                       '--head-sha', HEAD)[:2]
-
-    def test_fresh(self):
-        pull = {f'repos/{W.UPSTREAM}/pulls/7': {'head': {'sha': HEAD, 'ref': 'fix', 'repo': {'full_name': 'u/f'}}}}
-        runs = f'repos/{W.UPSTREAM}/actions/workflows/{W.WORKFLOW}/runs'
-        mine = {'id': 9, 'run_number': 4, 'pull_requests': [{'number': 7}]}
-        other_pr = {'id': 12, 'run_number': 6, 'pull_requests': [{'number': 8}]}
-        fork = {'id': 11, 'run_number': 5, 'pull_requests': [], 'head_branch': 'fix',
-                'head_repository': {'full_name': 'u/f'}}
-        self.assertEqual(self.fresh({**pull, runs: [mine, other_pr], f'repos/{W.UPSTREAM}/actions/runs/9':
-                                     {'run_attempt': 2}}), (0, 'current\n'))
-        self.assertEqual(self.fresh({**pull, runs: [mine, fork]}), (1, 'stale: a newer HIL run exists: 11\n'))
-        self.assertEqual(self.fresh({**pull, runs: [mine], f'repos/{W.UPSTREAM}/actions/runs/9': {'run_attempt': 3}}),
-                         (1, 'stale: a newer attempt exists\n'))
-        moved = {f'repos/{W.UPSTREAM}/pulls/7': {'head': {'sha': 'c' * 40}}}
-        self.assertEqual(self.fresh(moved), (1, 'stale: the PR head moved on\n'))
-        self.assertEqual(self.fresh({f'repos/{W.UPSTREAM}/pulls/7': W.ApiError('down')})[0], 2)
+class CommentWorkflow(unittest.TestCase):
+    def test_the_comment_job_asks_for_the_rig_job_of_hil_yml(self):
+        """job-attempt and fresh name hil.yml and its rig job, whose attempt names the summary artifact."""
+        comment = (ROOT / '.github/workflows/hil_comment.yml').read_text()
+        self.assertIn('--job hil-run', comment)
+        self.assertIn('--workflow hil.yml', comment)
+        self.assertIn('name: hil-run-${{ steps.rig.outputs.attempt }}', comment)
+        hil = (ROOT / '.github/workflows/hil.yml').read_text()
+        self.assertIn('\n  hil-run:\n', hil)
+        self.assertIn('name: hil-run-${{ github.run_attempt }}', hil)
 
 
 def board(name, verdict='pass', tests=(('cdc_echo', True),), **over):
@@ -315,7 +257,7 @@ class Render(Tmp):
         (self.tmp / 'run' / 'summary.json').symlink_to(outside)
         self.assertIn('left no readable summary', self.render())
         (self.tmp / 'run' / 'summary.json').unlink()
-        (self.tmp / 'run' / 'summary.json').write_text('x' * (W.MAX_JSON + 1))
+        (self.tmp / 'run' / 'summary.json').write_text('x' * (G.MAX_JSON + 1))
         self.assertIn('left no readable summary', self.render())
         self.write('status/hil-status-raspberry_pi_pico-2/raspberry_pi_pico.json',
                    {'board': 'metro_m4_express', 'attempt': 2, 'outcome': 'success'})   # names another board
@@ -358,11 +300,11 @@ class Render(Tmp):
     def test_a_huge_report_is_truncated(self):
         self.selection(boards=tuple(f'b{i}' for i in range(400)))
         self.summary([board(f'b{i}', 'fail', detail='x' * 400) for i in range(400)])
-        with mock.patch.object(W, 'MAX_COMMENT', 1 << 30):
+        with mock.patch.object(G, 'cap', lambda text: text):
             full = self.render()
-        self.assertEqual(full[W.MAX_COMMENT - 1:W.MAX_COMMENT + 1], 'xx')   # the limit falls inside a code span
+        self.assertEqual(full[G.MAX_COMMENT - 1:G.MAX_COMMENT + 1], 'xx')   # the limit falls inside a code span
         text = self.render()
-        self.assertLessEqual(len(text), W.MAX_COMMENT + 100)
+        self.assertLessEqual(len(text), G.MAX_COMMENT)
         body, marker = text.split('\n…truncated', 1)
         self.assertIn('see the run', marker)
         for ln in body.splitlines():   # every line kept whole, so no code span is left open

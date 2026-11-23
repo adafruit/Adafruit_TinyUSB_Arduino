@@ -29,15 +29,19 @@ INSTALL_HINT = ('install agentrc with its arduino skill (python3 <agentrc checko
                 'or set AGENTRC_DIR to such a checkout')
 MANIFEST = 'manifest.json'
 PROFILE_API = 1   # arduino_build.py's PROFILE_API: the engines' profile interface these profiles implement
-# the agentrc engines the contracts run; their FILES closures are what a staged rig tree carries and a record binds
+# the agentrc scripts the contracts and the HIL report run; their FILES closures are what a staged rig tree carries
+# and a record binds
 ENGINES = ('skills/arduino/scripts/arduino_build.py', 'skills/arduino/scripts/arduino_hil.py',
-           'skills/arduino/scripts/arduino_remote.py')
+           'skills/arduino/scripts/arduino_remote.py', 'skills/hil/scripts/gh_pr_comment.py')
 
 
 class PinError(Exception):
     def __init__(self, msg, remedy=''):
         super().__init__(msg)
         self.remedy = remedy
+
+    def with_remedy(self):
+        return f'{self} ({self.remedy})' if self.remedy else str(self)
 
 
 def ci():
@@ -276,7 +280,7 @@ def main(argv):
             print(__doc__, file=sys.stderr)
             return 2
     except PinError as e:
-        print(f'error: {e}' + (f' ({e.remedy})' if e.remedy else ''), file=sys.stderr)
+        print(f'error: {e.with_remedy()}', file=sys.stderr)
         return 1
     return 0
 

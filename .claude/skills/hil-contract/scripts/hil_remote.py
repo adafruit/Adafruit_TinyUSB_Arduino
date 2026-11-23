@@ -41,7 +41,7 @@ def main(argv=None):
         hil_test.engine()
         remote = agentrc_pin.load('skills/arduino/scripts/arduino_remote.py')
     except agentrc_pin.PinError as e:
-        print(f'error: {e}' + (f' ({e.remedy})' if e.remedy else ''), file=sys.stderr)
+        print(f'error: {e.with_remedy()}', file=sys.stderr)
         return 2
     return remote.run(hil_test, argv)
 
