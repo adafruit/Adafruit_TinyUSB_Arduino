@@ -1,4 +1,11 @@
 {
   "url": "https://github.com/hathach/agentrc.git",
-  "commit": "6ad58d39a7f6e31560f4c0283217e43d361f190f"
+  "commit": "e6cd302c7e5f310d0fb3d302b5dfedc1022a6dff",
+  "cache_namespace": "adafruit-tinyusb-arduino",
+  "profile_api": 1,
+  "features": [],
+  "extra_engines": [
+    "skills/arduino/scripts/arduino_ci.py",
+    "skills/hil/scripts/gh_pr_comment.py"
+  ]
 }
