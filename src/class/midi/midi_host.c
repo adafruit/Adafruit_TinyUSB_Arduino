@@ -185,6 +185,11 @@ uint16_t midih_open(uint8_t rhport, uint8_t dev_addr, const tusb_desc_interface_
   TU_VERIFY(idx < CFG_TUH_MIDI, 0);
   midih_interface_t *p_midi = &_midi_host[idx];
   p_midi->itf_count = 0;
+  // a failed open leaves daddr 0 but may have opened a stream or counted cables: start the slot without them
+  tu_edpt_stream_close(&p_midi->ep_stream.rx);
+  tu_edpt_stream_close(&p_midi->ep_stream.tx);
+  p_midi->rx_cable_count = 0;
+  p_midi->tx_cable_count = 0;
 
   tuh_midi_descriptor_cb_t desc_cb = { 0 };
   desc_cb.jack_num = 0;
@@ -209,9 +214,11 @@ uint16_t midih_open(uint8_t rhport, uint8_t dev_addr, const tusb_desc_interface_
     p_desc = tu_desc_next(p_desc);
     desc_itf = (const tusb_desc_interface_t *)p_desc;
     p_midi->itf_count = 1;
-    // skip non-interface and non-midi streaming descriptors
+    // skip non-interface and non-midi streaming descriptors. A short interface descriptor ends the walk before its
+    // class fields are read, and is rejected below.
     while (tu_desc_in_bounds(p_desc, desc_end) && (desc_itf->bDescriptorType != TUSB_DESC_INTERFACE ||
-                                                   (desc_itf->bInterfaceClass == TUSB_CLASS_AUDIO &&
+                                                   (tu_desc_len(p_desc) >= sizeof(tusb_desc_interface_t) &&
+                                                    desc_itf->bInterfaceClass == TUSB_CLASS_AUDIO &&
                                                     desc_itf->bInterfaceSubClass != AUDIO_SUBCLASS_MIDI_STREAMING))) {
       if (desc_itf->bDescriptorType == TUSB_DESC_INTERFACE && desc_itf->bAlternateSetting == 0) {
         p_midi->itf_count++;
@@ -219,7 +226,8 @@ uint16_t midih_open(uint8_t rhport, uint8_t dev_addr, const tusb_desc_interface_
       p_desc = tu_desc_next(p_desc);
       desc_itf = (const tusb_desc_interface_t *)p_desc;
     }
-    TU_VERIFY(p_desc < desc_end, 0);
+    // the loop also stops at a malformed descriptor, which is not the MIDI Streaming interface
+    TU_VERIFY(tu_desc_in_bounds(p_desc, desc_end) && tu_desc_len(p_desc) >= sizeof(tusb_desc_interface_t), 0);
     TU_VERIFY(TUSB_CLASS_AUDIO == desc_itf->bInterfaceClass, 0);
   }
   TU_VERIFY(AUDIO_SUBCLASS_MIDI_STREAMING == desc_itf->bInterfaceSubClass, 0);
@@ -288,6 +296,11 @@ uint16_t midih_open(uint8_t rhport, uint8_t dev_addr, const tusb_desc_interface_
           desc_cb.desc_epin      = p_ep;
           ep_stream              = &p_midi->ep_stream.rx;
         }
+        // tuh_edpt_open() bounds bulk to TUH_EPSIZE_BULK_MAX, interrupt and isochronous can still exceed _midi_epbuf,
+        // or not be the power of 2 the stream needs
+        TU_VERIFY(p_ep->bmAttributes.xfer == TUSB_XFER_BULK || (tu_edpt_packet_size(p_ep) <= TUH_EPSIZE_BULK_MAX &&
+                                                                 tu_is_power_of_two(tu_edpt_packet_size(p_ep))),
+                  0);
         TU_ASSERT(tuh_edpt_open(dev_addr, p_ep), 0);
         tu_edpt_stream_open(ep_stream, dev_addr, p_ep, tu_edpt_packet_size(p_ep));
         tu_edpt_stream_clear(ep_stream);

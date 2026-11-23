@@ -129,6 +129,21 @@ typedef struct {
 static ncm_interface_t ncm_interface;
 CFG_TUD_MEM_SECTION static ncm_epbuf_t ncm_epbuf;
 
+// Receive NTBs whose datagrams the glue logic still references after tud_network_recv_cb() (zero-copy). Kept apart
+// from ncm_interface, which netd_init() clears: a reset must not recycle an NTB the network stack still points into.
+static struct {
+  uint8_t count[RECV_NTB_N]; // tud_network_recv_hold() calls not yet released
+  bool done[RECV_NTB_N];     // all datagrams handed out: the last release returns the NTB to the free list
+} ncm_recv_hold;
+
+// Link state requested by tud_network_link_state(), applied by ncm_link_state_task() in the usbd task.
+// Kept outside ncm_interface so that netd_reset() does not drop a request whose deferred call is still queued.
+static struct {
+  volatile bool is_up;    // latest requested link state
+  volatile uint8_t rhport;
+  volatile bool pending;  // a deferred ncm_link_state_task() call is queued
+} ncm_link_req;
+
 //--------------------------------------------------------------------+
 // Weak stubs: invoked if no strong implementation is available
 //--------------------------------------------------------------------+
@@ -214,8 +229,7 @@ static void notification_xmit(uint8_t rhport, bool force_next) {
         .wLength = 8
       }
     };
-    const uint32_t bus_bitrate = (tud_speed_get() == TUSB_SPEED_HIGH) ? 480000000U : 12000000U;
-    const uint32_t link_bitrate = (CFG_TUD_NET_LINK_BITRATE) ? (CFG_TUD_NET_LINK_BITRATE) : bus_bitrate;
+    const uint32_t link_bitrate = tud_network_link_bitrate();
     notify_speed_change.downlink = link_bitrate;
     notify_speed_change.uplink   = link_bitrate;
 
@@ -512,6 +526,18 @@ static recv_ntb_t *recv_get_next_ready_ntb(void) {
 } // recv_get_next_ready_ntb
 
 /**
+ * Index of a receive NTB in ncm_epbuf.recv[], or -1.
+ */
+static int recv_ntb_index(const recv_ntb_t *ntb) {
+  for (int i = 0; i < RECV_NTB_N; ++i) {
+    if (ntb == &ncm_epbuf.recv[i].ntb) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/**
  * Put NTB into the receiver free list.
  */
 static void recv_put_ntb_into_free_list(recv_ntb_t *free_ntb) {
@@ -595,6 +621,10 @@ static bool recv_validate_datagram(const recv_ntb_t *ntb, uint32_t len) {
   }
   if (nth16->dwSignature != NTH16_SIGNATURE) {
     TU_LOG_DRV("(EE) ill signature: 0x%08x\n", (unsigned) nth16->dwSignature);
+    return false;
+  }
+  if (!TUD_VALIDATE_BASIC(len <= CFG_TUD_NCM_OUT_NTB_MAX_SIZE)) {
+    TU_LOG_DRV("(EE) ill len: %lu > %d\n", len, CFG_TUD_NCM_OUT_NTB_MAX_SIZE);
     return false;
   }
   if (len < sizeof(nth16_t) + sizeof(ndp16_t) + 2 * sizeof(ndp16_datagram_t)) {
@@ -707,8 +737,13 @@ static void recv_transfer_datagram_to_glue_logic(void) {
           // -> next datagram
           ++ncm_interface.recv_glue_ntb_datagram_ndx;
         } else {
-          // end of datagrams reached
-          recv_put_ntb_into_free_list(ncm_interface.recv_glue_ntb);
+          // end of datagrams reached: free the NTB now, or on the last release of a held datagram
+          const int idx = recv_ntb_index(ncm_interface.recv_glue_ntb);
+          if (idx >= 0 && ncm_recv_hold.count[idx] != 0) {
+            ncm_recv_hold.done[idx] = true;
+          } else {
+            recv_put_ntb_into_free_list(ncm_interface.recv_glue_ntb);
+          }
           ncm_interface.recv_glue_ntb = NULL;
         }
       }
@@ -801,6 +836,50 @@ void tud_network_recv_renew(void) {
 } // tud_network_recv_renew
 
 /**
+ * Keep the NTB holding the datagram passed to tud_network_recv_cb() allocated after the callback returns, so the
+ * datagram can be used in place. Call it from tud_network_recv_cb() only.
+ *
+ * Returns NULL, and the datagram must be copied, when holding it could leave no NTB to receive into: every other NTB
+ * is already held. At least one NTB thus always returns to the free list, even while the network stack keeps
+ * datagrams (out-of-order TCP segments, IP fragments), so reception cannot deadlock. With one receive NTB it always
+ * returns NULL.
+ */
+void *tud_network_recv_hold(void) {
+  const int idx = recv_ntb_index(ncm_interface.recv_glue_ntb);
+  if (idx < 0 || ncm_recv_hold.count[idx] == UINT8_MAX) {
+    return NULL;
+  }
+
+  int held = 0;
+  for (int i = 0; i < RECV_NTB_N; ++i) {
+    if (i != idx && ncm_recv_hold.count[i] != 0) {
+      ++held;
+    }
+  }
+  if (held >= RECV_NTB_N - 1) {
+    return NULL;
+  }
+
+  ncm_recv_hold.count[idx]++;
+  return ncm_interface.recv_glue_ntb;
+} // tud_network_recv_hold
+
+/**
+ * Release a hold taken by tud_network_recv_hold(). Once all datagrams of the NTB were handed out and its last hold is
+ * released, the NTB returns to the free list. Task context only.
+ */
+void tud_network_recv_release(void *handle) {
+  const int idx = recv_ntb_index((const recv_ntb_t *) handle);
+  TU_ASSERT(idx >= 0 && ncm_recv_hold.count[idx] != 0,);
+
+  if (--ncm_recv_hold.count[idx] == 0 && ncm_recv_hold.done[idx]) {
+    ncm_recv_hold.done[idx] = false;
+    recv_put_ntb_into_free_list((recv_ntb_t *) handle);
+    recv_try_to_start_new_reception(ncm_interface.rhport);
+  }
+} // tud_network_recv_release
+
+/**
  * Same as tud_network_recv_renew() but knows \a rhport
  */
 static void tud_network_recv_renew_r(uint8_t rhport) {
@@ -811,8 +890,8 @@ static void tud_network_recv_renew_r(uint8_t rhport) {
 } // tud_network_recv_renew
 
 /**
- * usbd-task trampoline for tud_network_link_state(), packing rhport and is_up
- * into a single pointer-sized argument.
+ * usbd-task trampoline for tud_network_link_state(): applies the latest
+ * requested link state from ncm_link_req.
  *
  * Runs entirely in the usbd task context, so it cannot race the notify
  * xfer-completion callback over the notification state machine. Re-arming
@@ -823,9 +902,17 @@ static void tud_network_recv_renew_r(uint8_t rhport) {
  * the host stuck at NO-CARRIER after a link-state change.
  */
 static void ncm_link_state_task(void *param) {
-  uintptr_t const arg = (uintptr_t) param;
-  uint8_t const rhport = (uint8_t) (arg >> 1);
-  bool const is_up = (arg & 1u) != 0;
+  (void) param;
+
+  // Clear pending and read the request under the usbd spinlock, which
+  // tud_network_link_state() also holds while storing a request and testing
+  // pending: on a multi-core target a request is then either read here or
+  // sees pending == false and queues a new call, never lost between the two.
+  usbd_spin_lock(false);
+  ncm_link_req.pending = false;
+  uint8_t const rhport = ncm_link_req.rhport;
+  bool const is_up = ncm_link_req.is_up;
+  usbd_spin_unlock(false);
 
   if (ncm_interface.link_is_up == is_up) {
     return; // no change in link state
@@ -853,12 +940,31 @@ static void ncm_link_state_task(void *param) {
  * Defers onto the usbd task so a caller running in a different task than
  * tud_task() cannot race the notification state machine against the notify
  * xfer-completion callback.
+ *
+ * The request is stored and a deferred call is queued only if none is
+ * pending, so repeated calls keep at most one link-state event in the usbd
+ * queue and a caller in tud_task() context (e.g. tud_network_recv_cb()) does not fill
+ * the queue it is the only reader of. The queued call applies the latest
+ * requested state; intermediate states requested before it runs are skipped.
  */
 void tud_network_link_state(uint8_t rhport, bool is_up) {
   TU_LOG_DRV("tud_network_link_state(%d, %d)\n", rhport, is_up);
 
-  uintptr_t const arg = ((uintptr_t) rhport << 1) | (is_up ? 1u : 0u);
-  usbd_defer_func(ncm_link_state_task, (void *) arg, false);
+  // Store the request and test-and-set pending under the usbd spinlock (see
+  // ncm_link_state_task()); queue the deferred call outside the lock.
+  usbd_spin_lock(false);
+  ncm_link_req.rhport = rhport;
+  ncm_link_req.is_up = is_up;
+  bool const need_queue = !ncm_link_req.pending;
+  ncm_link_req.pending = true;
+  usbd_spin_unlock(false);
+
+  if (need_queue && !usbd_defer_func(ncm_link_state_task, NULL, false)) {
+    // not queued (OS_NONE: queue full): let the next request try again
+    usbd_spin_lock(false);
+    ncm_link_req.pending = false;
+    usbd_spin_unlock(false);
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -880,16 +986,30 @@ void netd_init(void) {
   for (int i = 0; i < XMIT_NTB_N; ++i) {
     ncm_interface.xmit_free_ntb[i] = &ncm_epbuf.xmit[i].ntb;
   }
+  int nfree = 0;
   for (int i = 0; i < RECV_NTB_N; ++i) {
-    ncm_interface.recv_free_ntb[i] = &ncm_epbuf.recv[i].ntb;
+    if (ncm_recv_hold.count[i] != 0) {
+      // still referenced by the network stack: freed by its last tud_network_recv_release()
+      ncm_recv_hold.done[i] = true;
+    } else {
+      ncm_interface.recv_free_ntb[nfree++] = &ncm_epbuf.recv[i].ntb;
+    }
   }
   ncm_interface.link_is_up = tud_network_default_link_state_cb();
+
+  // tud_deinit() deletes the usbd queue with any queued link-state call: clear pending so the next
+  // request queues a call. A call still queued across a bus reset then runs once more, applying the
+  // latest request again.
+  ncm_link_req.pending = false;
 } // netd_init
 
 /**
  * Deinit driver
  */
 bool netd_deinit(void) {
+  // Stop reception: a tud_network_recv_release() after tud_deinit() still returns its NTB to the free list, but must
+  // not start a transfer on the deinitialized controller. Holds are kept for netd_init().
+  ncm_interface.itf_data_alt = 0;
   return true;
 }
 
@@ -979,6 +1099,8 @@ bool netd_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint32_
       recv_put_ntb_into_ready_list(ncm_interface.recv_tinyusb_ntb);
     }
     ncm_interface.recv_tinyusb_ntb = NULL;
+    // re-arm with a free NTB (if any) before the glue logic processes this one, so reception overlaps processing
+    recv_try_to_start_new_reception(rhport);
     tud_network_recv_renew_r(rhport);
   } else if (ep_addr == ncm_interface.ep_in) {
     // transmission of an NTB finished
@@ -1045,6 +1167,8 @@ bool netd_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t 
           if (stage != CONTROL_STAGE_SETUP) {
             return true;
           }
+          // device-to-host: an OUT data stage would write host data into the const ntb_parameters
+          TU_VERIFY(request->bmRequestType_bit.direction == TUSB_DIR_IN, false);
           // transfer NTB parameters to host.
           tud_control_xfer(rhport, request, (void *) (uintptr_t) &ntb_parameters, sizeof(ntb_parameters));
         } break;
@@ -1067,6 +1191,8 @@ bool netd_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t 
           }
 
           TU_VERIFY(request->wLength >=4, false);
+          // device-to-host: an OUT data stage would write host data into ntb_input_size after this returns
+          TU_VERIFY(request->bmRequestType_bit.direction == TUSB_DIR_IN, false);
 
           uint8_t resp_len = (request->wLength >= 8 && (ncm_interface.bm_capabilities & NCM_NETWORK_CAPS_NTB_INPUT_SIZE)) ? 8 : 4;
 

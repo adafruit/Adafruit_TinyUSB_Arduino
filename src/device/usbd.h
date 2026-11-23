@@ -148,6 +148,11 @@ bool tud_control_status(uint8_t rhport, tusb_control_request_t const * request);
 // Application Callbacks
 //--------------------------------------------------------------------+
 
+// DWC2 only, with CFG_TUD_DWC2_DMA_SETUP_GUARD_SIZE > 0: invoked from tud_task() when an EP0 SETUP DMA address rewind
+// into the guard region is detected (more than three back-to-back SETUP packets, one shorter than 5 bytes: a defective
+// or malicious host). The device is then disconnected and re-initialized.
+void tud_dwc2_setup_dma_error_cb(uint8_t rhport);
+
 // Invoked when received GET DEVICE DESCRIPTOR request
 // Application return pointer to descriptor
 uint8_t const * tud_descriptor_device_cb(void);
@@ -174,6 +179,11 @@ uint8_t const* tud_descriptor_device_qualifier_cb(void);
 // Application return pointer to descriptor, whose contents must exist long enough for transfer to complete
 // Configuration descriptor in the other speed e.g if high speed then this is for full speed and vice versa
 uint8_t const* tud_descriptor_other_speed_configuration_cb(uint8_t index);
+
+// Invoked when host sends SET_ADDRESS request (informational, e.g. for logging).
+// Note: address may not be effective yet as some DCDs apply it after status stage.
+// Not invoked on MCUs that handle SET_ADDRESS in hardware (e.g. nRF5x).
+void tud_address_cb(uint8_t address);
 
 // Invoked when device is mounted (configured)
 void tud_mount_cb(void);

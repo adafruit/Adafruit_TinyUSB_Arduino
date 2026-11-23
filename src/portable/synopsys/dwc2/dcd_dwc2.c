@@ -36,6 +36,7 @@ typedef struct {
   tu_fifo_t* ff;
   uint16_t total_len;
   uint16_t max_size;
+  uint16_t rx_remaining; // slave OUT: bytes the transfer has left, a longer packet is cut to it
   uint8_t interval;
   uint8_t iso_retry; // ISO retry counter
 } xfer_ctl_t;
@@ -52,10 +53,21 @@ typedef struct {
   uint16_t periodic_sum; // sum of (packet + 1) of all periodic OUT endpoints
 } dfifo_rx_t;
 
+// Opt-in SETUP DMA guard, see CFG_TUD_DWC2_DMA_SETUP_GUARD_SIZE and the setup buffer layout below
+#define DWC2_SETUP_GUARD_ENABLE (CFG_TUD_DWC2_DMA_ENABLE && CFG_TUD_DWC2_DMA_SETUP_GUARD_SIZE > 0)
+
 typedef struct {
+  #if DWC2_SETUP_GUARD_ENABLE
+  tusb_rhport_init_t rh_init;
+  bool setup_dma_recovery_pending;
+  #endif
+
   // EP0 transfers are limited to 1 packet - larger sizes has to be split
   uint16_t ep0_pending[2];  // Index determines direction as tusb_dir_t type
   uint16_t dfifo_top;      // top free location in DFIFO in words
+  uint16_t tx_allocated;   // bitmap of IN endpoints holding a TX FIFO in this configuration
+  uint16_t rx_periodic;    // bitmap of periodic OUT endpoints counted in rx.periodic_sum
+  uint8_t  tx_fifo_count;  // implemented TX FIFOs, 0 = not limited
   dfifo_rx_t rx;
 
   // SOF enabling flag - required for SOF to not get disabled in ISR when SOF was enabled by
@@ -64,16 +76,35 @@ typedef struct {
 
 static dcd_data_t _dcd_data;
 
-// DMA receives up to 3 back-to-back SETUP packets (3 x 8 bytes), Slave mode only needs 1 packet (8 bytes)
+/*
+ * DMA receives up to 3 back-to-back SETUP packets (3 x 8 bytes), Slave mode only needs 1 packet (8 bytes).
+ *
+ * Opt-in workaround (CFG_TUD_DWC2_DMA_SETUP_GUARD_SIZE > 0) for the Synopsys DWC2 Buffer-DMA erratum
+ * "Device Controller does not drop short SETUP packets": more than three back-to-back SETUP packets, with at least
+ * one malformed packet shorter than 5 bytes, can rewind DOEPDMA0 below the address programmed by software, so the
+ * next SETUP is written before the DMA area, corrupting unrelated memory. A guard is reserved before the normal
+ * three-packet area and DOEPDMA0 is programmed at setup_buffer_data:
+ *
+ *   setup_buffer:      [ GUARD_SIZE guard ][ 3 x 8-byte SETUP packets ]
+ *                                            ^
+ *                                            setup_buffer_data / DOEPDMA0
+ *
+ * The guard only absorbs the rewind until the Back2BackSETup interrupt is serviced: a finite guard cannot contain an
+ * unbounded stream of malicious SETUP packets while the interrupt is blocked. Size it from the worst interrupt latency.
+ */
 #if CFG_TUD_DWC2_DMA_ENABLE
-  #define DWC2_SETUP_BUFFER_SIZE 24
+  #define DWC2_SETUP_BUFFER_OFFSET CFG_TUD_DWC2_DMA_SETUP_GUARD_SIZE
+  #define DWC2_SETUP_BUFFER_SIZE   (DWC2_SETUP_BUFFER_OFFSET + 24)
+  TU_VERIFY_STATIC(CFG_TUD_DWC2_DMA_SETUP_GUARD_SIZE % 8 == 0, "CFG_TUD_DWC2_DMA_SETUP_GUARD_SIZE must be a multiple of 8");
 #else
-  #define DWC2_SETUP_BUFFER_SIZE 8
+  #define DWC2_SETUP_BUFFER_OFFSET 0
+  #define DWC2_SETUP_BUFFER_SIZE   8
 #endif
 
 CFG_TUD_MEM_SECTION static struct {
   TUD_EPBUF_DEF(setup_buffer, DWC2_SETUP_BUFFER_SIZE);
 } _dcd_usbbuf;
+static uint8_t * const setup_buffer_data = _dcd_usbbuf.setup_buffer + DWC2_SETUP_BUFFER_OFFSET;
 
 static tud_configure_dwc2_t _tud_cfg = CFG_TUD_CONFIGURE_DWC2_DEFAULT;
 
@@ -162,7 +193,7 @@ static void dma_setup_prepare(uint8_t rhport) {
 
   // Receive back-to-back setup packets
   dwc2->epout[0].doeptsiz = (3 << DOEPTSIZ_STUPCNT_Pos);
-  dwc2->epout[0].doepdma = (uintptr_t) _dcd_usbbuf.setup_buffer;
+  dwc2->epout[0].doepdma = (uintptr_t) setup_buffer_data;
   dwc2->epout[0].doepctl |= DOEPCTL_EPENA | DOEPCTL_USBAEP;
 }
 
@@ -259,10 +290,29 @@ static uint16_t calc_device_grxfsiz(const dfifo_rx_t* rx, uint8_t ep_count, bool
   return (uint16_t) (13 + 1 + pkt_sz + 2 * ep_count);
 }
 
-// TX FIFO number is the IN endpoint number; ep_in_count == 0 means not limited
+// Number of TX FIFOs, 0 = not limited. With dedicated TX FIFOs there is one per IN endpoint of the hardware
+// configuration, GHWCFG4.INEps + 1 (DIEPTXFn exists for n = 1..INEps, Databook v4.20a), e.g. nRF54H20 has 8 IN of
+// 16 endpoints. ep_in_count overrides a register that overstates it (ESP32-S2/S3: 5 FIFOs). GD32VF103 has no usable
+// GHWCFG registers, and shared-FIFO cores (AT32F415) do not index a FIFO per endpoint.
+static uint8_t dfifo_tx_count(uint8_t rhport) {
+  uint8_t count = _dwc2_controller[rhport].ep_in_count;
+  #if !TU_CHECK_MCU(OPT_MCU_GD32VF103)
+  const dwc2_regs_t* dwc2 = DWC2_REG(rhport);
+  const dwc2_ghwcfg4_t ghwcfg4 = {.value = dwc2->ghwcfg4};
+  if (ghwcfg4.dedicated_fifos) {
+    const uint8_t in_eps = (uint8_t) (ghwcfg4.num_dev_in_eps + 1);
+    if (count == 0 || in_eps < count) {
+      count = in_eps;
+    }
+  }
+  #endif
+  return count;
+}
+
+// TX FIFO number is the IN endpoint number
 TU_ATTR_ALWAYS_INLINE static inline bool dfifo_tx_exists(uint8_t rhport, uint8_t fnum) {
-  const uint8_t ep_in_count = _dwc2_controller[rhport].ep_in_count;
-  return ep_in_count == 0 || fnum < ep_in_count;
+  (void) rhport;
+  return _dcd_data.tx_fifo_count == 0 || fnum < _dcd_data.tx_fifo_count;
 }
 
 static bool dfifo_alloc(uint8_t rhport, uint8_t ep_addr, uint16_t packet_size, uint8_t xfer_type) {
@@ -282,7 +332,11 @@ static bool dfifo_alloc(uint8_t rhport, uint8_t ep_addr, uint16_t packet_size, u
     if (xfer_type == TUSB_XFER_BULK) {
       rx.bulk = tu_max16(rx.bulk, fifo_size);
     } else if (xfer_type == TUSB_XFER_ISOCHRONOUS || xfer_type == TUSB_XFER_INTERRUPT) {
-      rx.periodic_sum = (uint16_t) (rx.periodic_sum + fifo_size + 1);
+      // An endpoint re-opened without close (SET_INTERFACE) is counted once per configuration. Re-opening it with a
+      // larger packet is not supported: an isochronous one reserves its largest with dcd_edpt_iso_alloc().
+      if (!tu_bit_test(_dcd_data.rx_periodic, epnum)) {
+        rx.periodic_sum = (uint16_t) (rx.periodic_sum + fifo_size + 1);
+      }
       if (fifo_size > rx.periodic[0]) {
         rx.periodic[1] = rx.periodic[0];
         rx.periodic[0] = fifo_size;
@@ -308,6 +362,9 @@ static bool dfifo_alloc(uint8_t rhport, uint8_t ep_addr, uint16_t packet_size, u
       dwc2->grxfsiz = new_sz; // Enlarge RX FIFO
     }
     _dcd_data.rx = rx;
+    if (xfer_type == TUSB_XFER_ISOCHRONOUS || xfer_type == TUSB_XFER_INTERRUPT) {
+      _dcd_data.rx_periodic |= (uint16_t) TU_BIT(epnum);
+    }
   } else {
     if (!dfifo_tx_exists(rhport, epnum)) {
       // Only interrupt IN may open without one, e.g. arduino-esp32's never-sent CDC notification 0x85 on ESP32-S2/S3;
@@ -323,18 +380,21 @@ static bool dfifo_alloc(uint8_t rhport, uint8_t ep_addr, uint16_t packet_size, u
       fifo_size *= 2;
     }
 
+    // Both TXFD and TXSA are in unit of 32-bit words. DIEPTXF starts at FIFO #1.
+    volatile uint32_t* txf = (epnum == 0) ? &dwc2->dieptxf0 : &dwc2->dieptxf[epnum - 1];
+
+    // An endpoint re-opened without close (e.g. video SET_INTERFACE on a bulk endpoint) keeps its FIFO. Re-opening it
+    // with a larger packet is not supported.
+    if (tu_bit_test(_dcd_data.tx_allocated, epnum)) {
+      TU_ASSERT(fifo_size <= (uint16_t) (*txf >> DIEPTXF_INEPTXFD_Pos));
+      return true;
+    }
+
     // Check if free space is available
     TU_ASSERT(_dcd_data.dfifo_top >= fifo_size + dwc2->grxfsiz);
     _dcd_data.dfifo_top -= fifo_size;
-    // TU_LOG(DWC2_DEBUG, "    TX FIFO %u: allocated %u words at offset %u\r\n", epnum, fifo_size, dfifo_top);
-
-    // Both TXFD and TXSA are in unit of 32-bit words.
-    if (epnum == 0) {
-      dwc2->dieptxf0 = ((uint32_t) fifo_size << DIEPTXF0_TX0FD_Pos) | _dcd_data.dfifo_top;
-    } else {
-      // DIEPTXF starts at FIFO #1.
-      dwc2->dieptxf[epnum - 1] = ((uint32_t) fifo_size << DIEPTXF_INEPTXFD_Pos) | _dcd_data.dfifo_top;
-    }
+    _dcd_data.tx_allocated |= (uint16_t) TU_BIT(epnum);
+    *txf = ((uint32_t) fifo_size << DIEPTXF_INEPTXFD_Pos) | _dcd_data.dfifo_top;
   }
 
   return true;
@@ -345,6 +405,9 @@ static void dfifo_device_init(uint8_t rhport) {
   dwc2_regs_t* dwc2 = DWC2_REG(rhport);
   tu_memclr(&_dcd_data.rx, sizeof(_dcd_data.rx));
   _dcd_data.rx.largest = CFG_TUD_ENDPOINT0_SIZE / 4;
+  _dcd_data.rx_periodic = 0;
+  _dcd_data.tx_allocated = 0;
+  _dcd_data.tx_fifo_count = dfifo_tx_count(rhport);
 
   // Scatter/Gather DMA mode is not yet supported. Buffer DMA only need 1 words per endpoint direction
   const bool is_dma = dma_device_enabled(dwc2);
@@ -488,6 +551,9 @@ static void edpt_schedule_packets(uint8_t rhport, const uint8_t epnum, const uin
   deptsiz.xfer_size = total_bytes;
   deptsiz.packet_count = num_packets;
   dep->tsiz = deptsiz.value;
+  if (dir == TUSB_DIR_OUT) {
+    xfer->rx_remaining = total_bytes;
+  }
 
   // control
   dwc2_depctl_t depctl = {.value = dep->ctl};
@@ -513,7 +579,7 @@ static void edpt_schedule_packets(uint8_t rhport, const uint8_t epnum, const uin
     // EP0 OUT status stage has no buffer, but a SETUP received while it is armed is still DMA-written to DOEPDMA0,
     // which must always point to memory for SETUP packets (Programming Guide v4.20a): use the setup buffer
     if (epnum == 0 && dir == TUSB_DIR_OUT && total_bytes == 0) {
-      dma_addr = (uintptr_t) _dcd_usbbuf.setup_buffer;
+      dma_addr = (uintptr_t) setup_buffer_data;
     }
     dep->diepdma = dma_addr;
     dep->diepctl = depctl.value; // enable endpoint
@@ -554,6 +620,9 @@ bool dcd_init(uint8_t rhport, const tusb_rhport_init_t* rh_init) {
   dwc2_clock_init(rhport, rh_init->role);
 
   tu_memclr(&_dcd_data, sizeof(_dcd_data));
+  #if DWC2_SETUP_GUARD_ENABLE
+  _dcd_data.rh_init = *rh_init; // kept for re-initialization after a SETUP DMA rewind
+  #endif
 
   // Core Initialization
   dwc2_regs_t* dwc2 = DWC2_REG(rhport);
@@ -617,6 +686,55 @@ bool dcd_deinit(uint8_t rhport) {
   dwc2_core_deinit(rhport);
   return true;
 }
+
+#if DWC2_SETUP_GUARD_ENABLE
+TU_ATTR_WEAK void tud_dwc2_setup_dma_error_cb(uint8_t rhport) {
+  (void) rhport;
+}
+
+static void dma_setup_recover(void* param) {
+  const uint8_t rhport = (uint8_t) (uintptr_t) param;
+  const tusb_rhport_init_t rh_init = _dcd_data.rh_init;
+
+  // Queued from task context so the ISR needs a single event slot (this deferred call) to start recovery
+  dcd_event_bus_signal(rhport, DCD_EVENT_UNPLUGGED, false);
+  tud_dwc2_setup_dma_error_cb(rhport);
+
+  // let the host observe the disconnect, then reset and re-initialize the core, which reconnects for enumeration
+  tusb_time_delay_ms_api(10);
+  if (!dcd_deinit(rhport) || !dcd_init(rhport, &rh_init)) {
+    TU_LOG1("DWC2: SETUP DMA recovery failed\r\n");
+    return;
+  }
+  dcd_int_enable(rhport);
+}
+
+static void dma_setup_error(uint8_t rhport) {
+  if (_dcd_data.setup_dma_recovery_pending) {
+    return;
+  }
+  _dcd_data.setup_dma_recovery_pending = true;
+  TU_LOG1("DWC2: SETUP DMA address rewind\r\n");
+
+  // Fail closed in the ISR so no further host traffic can extend the memory corruption; defer the blocking recovery.
+  // Mask the core's global interrupt as well: queue and spinlock operations re-enable the port interrupt
+  // (dcd_int_enable), but GAHBCFG.GINT stays cleared until dcd_init() sets it, so no stale interrupt, IN or OUT,
+  // is serviced and an uncleared one cannot storm while recovery is pending. A failed dcd_init() leaves it masked.
+  dwc2_regs_t* dwc2 = DWC2_REG(rhport);
+  dwc2->gahbcfg &= ~GAHBCFG_GINT;
+  dcd_int_disable(rhport);
+  dcd_disconnect(rhport);
+  usbd_defer_func(dma_setup_recover, (void*) (uintptr_t) rhport, true);
+}
+
+// DOEPDMA0 inside the guard can only come from a rewind: the guard is never programmed as a DMA target. An address
+// below setup_buffer_data alone is not enough, a SETUP received during a control OUT data stage advances DOEPDMA0
+// from the data buffer, which may sit at a lower address.
+TU_ATTR_ALWAYS_INLINE static inline bool dma_setup_rewound(const dwc2_regs_t* dwc2) {
+  const uintptr_t doepdma = (uintptr_t) dwc2->epout[0].doepdma;
+  return doepdma >= (uintptr_t) _dcd_usbbuf.setup_buffer && doepdma < (uintptr_t) setup_buffer_data;
+}
+#endif
 
 void dcd_int_enable(uint8_t rhport) {
   dwc2_int_set(rhport, TUSB_ROLE_DEVICE, true);
@@ -808,6 +926,11 @@ bool dcd_edpt_xfer_fifo(uint8_t rhport, uint8_t ep_addr, tu_fifo_t* ff, uint16_t
   xfer_ctl_t* xfer = XFER_CTL_BASE(epnum, dir);
   bool ret;
 
+#if CFG_TUD_DWC2_DMA_ENABLE
+  // Slave mode only: Buffer DMA needs a linear buffer, a NULL one would make the core DMA to address 0 (AHB error)
+  TU_ASSERT(!dma_device_enabled(DWC2_REG(rhport)));
+#endif
+
   usbd_spin_lock(is_isr);
 
   if (xfer->max_size == 0 || (dir == TUSB_DIR_IN && !dfifo_tx_exists(rhport, epnum))) {
@@ -819,7 +942,6 @@ bool dcd_edpt_xfer_fifo(uint8_t rhport, uint8_t ep_addr, tu_fifo_t* ff, uint16_t
     xfer->iso_retry = xfer->interval; // Reset ISO retry counter to interval value
 
     // Schedule packets to be sent within interrupt
-    // TODO xfer fifo may only available for slave mode
     edpt_schedule_packets(rhport, epnum, dir);
     ret = true;
   }
@@ -923,6 +1045,10 @@ static void handle_bus_reset(uint8_t rhport) {
     gintmsk |= GINTMSK_IISOIXFRM;
   }
   if(dma_device_enabled(dwc2)) {
+    #if DWC2_SETUP_GUARD_ENABLE
+    // Do not rely on Setup Phase Done to detect a SETUP DMA rewind: the same short-packet erratum can suppress it
+    dwc2->doepmsk |= DOEPMSK_B2BSTUP;
+    #endif
     gintmsk |= GINTMSK_OEPINT;
     dma_setup_prepare(rhport);
   } else {
@@ -1037,7 +1163,7 @@ static void handle_rxflvl_irq(uint8_t rhport) {
 
     case GRXSTS_PKTSTS_SETUP_RX: {
       // Setup packet received
-      uint32_t * setup = (uint32_t*)(uintptr_t) _dcd_usbbuf.setup_buffer;
+      uint32_t * setup = (uint32_t*)(uintptr_t) setup_buffer_data;
       // We can receive up to three setup packets in succession, but only the last one is valid.
       setup[0] = (*rx_fifo);
       setup[1] = (*rx_fifo);
@@ -1051,7 +1177,7 @@ static void handle_rxflvl_irq(uint8_t rhport) {
       if (edpt_is_enabled(&dwc2->epin[0])) {
         edpt_disable(rhport, 0x80, false, true);
       }
-      dcd_event_setup_received(rhport, _dcd_usbbuf.setup_buffer, true);
+      dcd_event_setup_received(rhport, setup_buffer_data, true);
       break;
     }
 
@@ -1061,20 +1187,31 @@ static void handle_rxflvl_irq(uint8_t rhport) {
       xfer_ctl_t* xfer = XFER_CTL_BASE(epnum, TUSB_DIR_OUT);
 
       if (byte_count != 0) {
-        // Read packet off RxFIFO
-        if (xfer->ff != NULL) {
-          tu_hwfifo_read_to_fifo(rx_fifo, xfer->ff, byte_count, NULL);
-        } else {
-          tu_hwfifo_read(rx_fifo, xfer->buffer, byte_count, NULL);
-          xfer->buffer += byte_count;
+        // Read packet off RxFIFO. The core takes a full packet whatever the transfer has left: keep what fits, drain
+        // the rest
+        const uint16_t xact_len = tu_min16(byte_count, xfer->rx_remaining);
+        if (xact_len > 0) {
+          if (xfer->ff != NULL) {
+            tu_hwfifo_read_to_fifo(rx_fifo, xfer->ff, xact_len, NULL);
+          } else {
+            tu_hwfifo_read(rx_fifo, xfer->buffer, xact_len, NULL);
+            xfer->buffer += xact_len;
+          }
+          xfer->rx_remaining -= xact_len;
+        }
+        for (uint16_t count = (uint16_t) tu_round_up(xact_len, sizeof(uint32_t)); count < byte_count;
+             count += sizeof(uint32_t)) {
+          (void) *rx_fifo;
         }
       }
 
-      // short packet (including ZLP when byte_count == 0), minus remaining bytes (xfer_size)
+      // short packet (including ZLP when byte_count == 0) ends the transfer: report what was stored, not
+      // total_len - XFRSIZ, which wraps on a packet longer than the transfer has left. EP0 also never armed its pending
+      // bytes
       if (byte_count < xfer->max_size) {
-        const dwc2_ep_tsize_t tsiz = {.value = epout->tsiz};
-        xfer->total_len -= tsiz.xfer_size;
+        xfer->total_len -= xfer->rx_remaining;
         if (epnum == 0) {
+          xfer->total_len -= _dcd_data.ep0_pending[TUSB_DIR_OUT];
           _dcd_data.ep0_pending[TUSB_DIR_OUT] = 0;
         }
       }
@@ -1147,10 +1284,20 @@ static void handle_epin_slave(uint8_t rhport, uint8_t epnum, dwc2_diepint_t diep
 static void handle_epout_dma(uint8_t rhport, uint8_t epnum, dwc2_doepint_t doepint_bm) {
   dwc2_regs_t* dwc2 = DWC2_REG(rhport);
 
+  dwc2_dep_t* epout0 = &dwc2->epout[0];
+
+  #if DWC2_SETUP_GUARD_ENABLE
+  // Check on Back2BackSETup itself because a malformed SETUP can suppress the later Setup Phase Done interrupt,
+  // and keep Setup Phase Done as a fallback for an already-latched rewind
+  if (epnum == 0 && (doepint_bm.setup_b2b || doepint_bm.setup_phase_done) && dma_setup_rewound(dwc2)) {
+    dma_setup_error(rhport);
+    return;
+  }
+  #endif
+
   if (doepint_bm.setup_phase_done) {
     // Cleanup previous pending EP0 IN transfer if any
     dwc2_dep_t* epin0 = &dwc2->epin[0];
-    dwc2_dep_t* epout0 = &dwc2->epout[0];
     if (edpt_is_enabled(epin0)) {
       edpt_disable(rhport, 0x80, false, true);
     }
@@ -1271,6 +1418,11 @@ static void handle_ep_irq(uint8_t rhport, uint8_t dir) {
           handle_epin_dma(rhport, epnum, intr.diepint_bm);
         } else {
           handle_epout_dma(rhport, epnum, intr.doepint_bm);
+          #if DWC2_SETUP_GUARD_ENABLE
+          if (_dcd_data.setup_dma_recovery_pending) {
+            return; // stale completions must not reach usbd before the core is reset
+          }
+          #endif
         }
         #endif
       } else {
@@ -1447,6 +1599,12 @@ void dcd_int_handler(uint8_t rhport) {
     // OEPINT is read-only, clear using DOEPINTn
     handle_ep_irq(rhport, TUSB_DIR_OUT);
   }
+
+  #if DWC2_SETUP_GUARD_ENABLE
+  if (_dcd_data.setup_dma_recovery_pending) {
+    return; // core is reset by the deferred recovery
+  }
+  #endif
 #endif
 
   // Incomplete isochronous IN transfer interrupt handling (masked when PTI is enabled).

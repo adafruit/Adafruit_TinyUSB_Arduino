@@ -76,7 +76,8 @@ enum {
   TUH_CFGID_RPI_PIO_USB_CONFIGURATION = 100, // cfg_param: pio_usb_configuration_t
   TUH_CFGID_MAX3421 = 200,
   TUH_CFGID_FSDEV = 300,
-  TUH_CFGID_DWC2 = 400
+  TUH_CFGID_DWC2 = 400,
+  TUH_CFGID_WCH_USBFS = 500
 };
 
 typedef struct {
@@ -96,11 +97,16 @@ typedef struct {
                    // is not unlimited, so a caller setting only use_hs_phy keeps the pacing.
 } tuh_configure_dwc2_t;
 
+typedef struct {
+  uint8_t max_nak; // max NAK per control/bulk endpoint per frame to save CPU usage (0=unlimited)
+} tuh_configure_wch_usbfs_t;
+
 typedef union {
   // For TUH_CFGID_RPI_PIO_USB_CONFIGURATION use pio_usb_configuration_t
   tuh_configure_max3421_t max3421;
   tuh_configure_fsdev_t fsdev;
   tuh_configure_dwc2_t dwc2;
+  tuh_configure_wch_usbfs_t wch_usbfs;
 } tuh_configure_param_t;
 
 //--------------------------------------------------------------------+
@@ -262,6 +268,17 @@ bool tuh_bus_info_get(uint8_t daddr, tuh_bus_info_t* bus_info);
    TU_VERIFY(_async_api(__VA_ARGS__, NULL, (uintptr_t) &result), XFER_RESULT_TIMEOUT); \
    return result
 
+// IN transfers: with TUP_HCD_EDPT_IN_WHOLE_PACKET (e.g. dwc2 DMA, samd) the controller writes a full packet whatever
+// the transfer has left, so a device answering more than asked writes past a buffer that is not whole packets:
+// - tuh_edpt_xfer(): buflen that is not whole packets of the endpoint is not guaranteed (the driver logs a warning)
+// - control IN (tuh_control_xfer(), tuh_descriptor_get*()): the buffer must hold TUH_CTRL_BUFSIZE(wLength) bytes,
+//   wLength rounded up to 64 (the largest EP0 size), e.g. a 256-byte buffer for any read up to 256 bytes
+#if TUP_HCD_EDPT_IN_WHOLE_PACKET
+  #define TUH_CTRL_BUFSIZE(_len) TU_ROUND_UP(_len, 64)
+#else
+  #define TUH_CTRL_BUFSIZE(_len) (_len)
+#endif
+
 // Submit a control transfer
 //  - async: complete callback invoked when finished.
 //  - sync : blocking if complete callback is NULL.
@@ -278,8 +295,10 @@ bool tuh_edpt_open(uint8_t daddr, tusb_desc_endpoint_t const * desc_ep);
 // Close a non-control endpoint, it will abort any pending transfer
 bool tuh_edpt_close(uint8_t daddr, uint8_t ep_addr);
 
-// Abort a queued transfer. Note: it can only abort transfer that has not been started
-// Return true if a queued transfer is aborted, false if there is no transfer to abort
+// Abort a queued transfer. Return false if there is no transfer to abort or the HCD cannot abort it: the transfer may
+// still be active, so do not reuse its buffer until it completes (a non-control endpoint stays busy until then).
+// True does not guarantee the transfer has stopped: one that finished just before the abort may still be reported.
+// Aborting an ongoing control transfer always completes it with XFER_RESULT_ABORTED, even if the HCD could not stop it.
 bool tuh_edpt_abort_xfer(uint8_t daddr, uint8_t ep_addr);
 
 // Set Address (control transfer)

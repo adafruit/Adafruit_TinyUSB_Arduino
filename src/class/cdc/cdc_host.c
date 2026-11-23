@@ -81,8 +81,12 @@ typedef struct {
 typedef struct {
   TUH_EPBUF_DEF(tx, CFG_TUH_CDC_TX_EPSIZE);
   TUH_EPBUF_DEF(rx, CFG_TUH_CDC_RX_EPSIZE);
-  TUH_EPBUF_DEF(ctrl, 8);
+  TUH_EPBUF_DEF(ctrl, TUH_CTRL_BUFSIZE(8)); // control IN of up to 8 bytes: whole packets, see TUH_CTRL_BUFSIZE
 } cdch_epbuf_t;
+
+// Each bulk transfer is wMaxPacketSize long, which tuh_edpt_open() bounds to TUH_EPSIZE_BULK_MAX
+TU_VERIFY_STATIC(CFG_TUH_CDC_RX_EPSIZE >= TUH_EPSIZE_BULK_MAX, "CFG_TUH_CDC_RX_EPSIZE must be >= TUH_EPSIZE_BULK_MAX");
+TU_VERIFY_STATIC(CFG_TUH_CDC_TX_EPSIZE >= TUH_EPSIZE_BULK_MAX, "CFG_TUH_CDC_TX_EPSIZE must be >= TUH_EPSIZE_BULK_MAX");
 
 static cdch_interface_t cdch_data[CFG_TUH_CDC];
 CFG_TUH_MEM_SECTION static cdch_epbuf_t cdch_epbuf[CFG_TUH_CDC];
@@ -358,10 +362,14 @@ static cdch_interface_t* get_itf_by_xfer(const tuh_xfer_t * xfer) {
   return NULL;
 }
 
+// slot reserved by the cdch_open() in progress, released if that open fails
+static cdch_interface_t *open_new_itf;
+
 static cdch_interface_t * make_new_itf(uint8_t daddr, tusb_desc_interface_t const * itf_desc) {
   for(uint8_t i=0; i<CFG_TUH_CDC; i++) {
     if (cdch_data[i].daddr == 0) {
       cdch_interface_t * p_cdc = &cdch_data[i];
+      open_new_itf              = p_cdc;
       p_cdc->daddr              = daddr;
       p_cdc->bInterfaceNumber   = itf_desc->bInterfaceNumber;
       p_cdc->bInterfaceSubClass = itf_desc->bInterfaceSubClass;
@@ -724,6 +732,7 @@ static bool open_ep_stream_pair(cdch_interface_t *p_cdc, tusb_desc_endpoint_t co
     TU_ASSERT(tuh_edpt_open(p_cdc->daddr, desc_ep));
     const uint8_t     ep_dir = tu_edpt_dir(desc_ep->bEndpointAddress);
     tu_edpt_stream_t *stream = (ep_dir == TUSB_DIR_IN) ? &p_cdc->stream.rx : &p_cdc->stream.tx;
+    // fits the endpoint buffer: tuh_edpt_open() bounds a bulk size to TUH_EPSIZE_BULK_MAX, see TU_VERIFY_STATIC above
     tu_edpt_stream_open(stream, p_cdc->daddr, desc_ep, tu_edpt_packet_size(desc_ep));
     tu_edpt_stream_clear(stream);
 
@@ -733,8 +742,7 @@ static bool open_ep_stream_pair(cdch_interface_t *p_cdc, tusb_desc_endpoint_t co
   return true;
 }
 
-uint16_t cdch_open(uint8_t rhport, uint8_t daddr, const tusb_desc_interface_t *itf_desc, uint16_t max_len) {
-  (void)rhport;
+static uint16_t open_itf(uint8_t daddr, const tusb_desc_interface_t *itf_desc, uint16_t max_len) {
   // For CDC: only support ACM subclass
   // Note: Protocol 0xFF can be RNDIS device
   if (TUSB_CLASS_CDC == itf_desc->bInterfaceClass &&
@@ -761,6 +769,22 @@ uint16_t cdch_open(uint8_t rhport, uint8_t daddr, const tusb_desc_interface_t *i
   }
 
   return 0;
+}
+
+uint16_t cdch_open(uint8_t rhport, uint8_t daddr, const tusb_desc_interface_t *itf_desc, uint16_t max_len) {
+  (void)rhport;
+  open_new_itf = NULL;
+  const uint16_t drv_len = open_itf(daddr, itf_desc, max_len);
+  if (drv_len == 0 && open_new_itf != NULL) {
+    // usbh calls no close for an interface it did not bind: release the slot this open reserved, not one an earlier
+    // open of the same interface number (another alternate setting) holds
+    tu_edpt_stream_close(&open_new_itf->stream.tx);
+    tu_edpt_stream_close(&open_new_itf->stream.rx);
+    open_new_itf->daddr            = 0;
+    open_new_itf->bInterfaceNumber = 0;
+  }
+  open_new_itf = NULL;
+  return drv_len;
 }
 
 static void set_config_complete(cdch_interface_t *p_cdc, bool success) {
@@ -903,12 +927,17 @@ static void cdch_set_line_coding_stage1_baudrate_complete(tuh_xfer_t *xfer) {
 
   if (xfer->result == XFER_RESULT_SUCCESS) {
     p_cdc->line.coding.bit_rate = p_cdc->requested_line.coding.bit_rate; // update baudrate
-    TU_ASSERT(driver->set_data_format(p_cdc, cdch_set_line_coding_stage2_data_format_complete, xfer->user_data),);
-  } else {
-    xfer->complete_cb = p_cdc->user_complete_cb;
-    if (xfer->complete_cb != NULL) {
-      xfer->complete_cb(xfer);
+    if (driver->set_data_format(p_cdc, cdch_set_line_coding_stage2_data_format_complete, xfer->user_data)) {
+      return;
     }
+    // the caller still gets a completion, e.g. enumeration waits for it to complete SET_CONFIG (#4064)
+    TU_LOG_DRV("  stage2 set data format failed to queue\r\n");
+    xfer->result = XFER_RESULT_FAILED;
+  }
+
+  xfer->complete_cb = p_cdc->user_complete_cb;
+  if (xfer->complete_cb != NULL) {
+    xfer->complete_cb(xfer);
   }
 }
 
@@ -1885,10 +1914,12 @@ static uint16_t ch34x_get_divisor_prescaler(cdch_interface_t *p_cdc) {
         b = 0;
         c = 11719;
       }
-      a = (uint8_t) (c / baval);
-      if (a == 0 || a == 0xFF) {
+      // below 46 baud the divisor does not fit in 8 bits, reject it instead of truncating
+      const uint32_t div = c / baval;
+      if (div == 0 || div >= 0xFF) {
         return 0;
       }
+      a = (uint8_t) div;
       if ((c / a - baval) > (baval - c / (a + 1))) {
         a++;
       }

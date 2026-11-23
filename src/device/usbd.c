@@ -47,6 +47,10 @@ TU_ATTR_WEAK uint8_t const* tud_descriptor_other_speed_configuration_cb(uint8_t 
   return NULL;
 }
 
+TU_ATTR_WEAK void tud_address_cb(uint8_t address) {
+  (void) address;
+}
+
 TU_ATTR_WEAK void tud_mount_cb(void) {
 }
 
@@ -134,11 +138,20 @@ typedef struct {
 } usbd_device_t;
 
 static usbd_device_t    _usbd_dev;
-static volatile uint8_t _usbd_queued_setup;
+// stamp of the newest SETUP queued: written only by dcd_event_handler(), the task only compares against it
+static volatile uint8_t _usbd_setup_seq;
+// set by an unplug, cleared by the next bus reset (written only by dcd_event_handler()): a SETUP reported in
+// between was received before the unplug, since a new connection always starts with a bus reset
+static volatile bool _usbd_unplugged;
 
 CFG_TUD_MEM_SECTION static struct {
   TUD_EPBUF_DEF(buf, CFG_TUD_ENDPOINT0_BUFSIZE);
 } _ctrl_epbuf;
+
+// A data stage chunk is armed into this buffer: a controller (e.g. dwc2) accepts a full EP0 packet whatever the chunk has
+// left, so the buffer must hold whole packets
+TU_VERIFY_STATIC(CFG_TUD_ENDPOINT0_BUFSIZE % CFG_TUD_ENDPOINT0_SIZE == 0,
+                 "CFG_TUD_ENDPOINT0_BUFSIZE must be a multiple of CFG_TUD_ENDPOINT0_SIZE");
 
 //--------------------------------------------------------------------+
 // Class Driver
@@ -458,6 +471,11 @@ TU_ATTR_WEAK bool dcd_edpt_xfer_fifo(uint8_t rhport, uint8_t ep_addr, tu_fifo_t 
   return false;
 }
 
+TU_ATTR_WEAK bool dcd_edpt_abort_xfer(uint8_t rhport, uint8_t ep_addr) {
+  (void) rhport; (void) ep_addr;
+  return false;
+}
+
 TU_ATTR_WEAK bool dcd_configure(uint8_t rhport, uint32_t cfg_id, const void* cfg_param) {
   (void) rhport; (void) cfg_id; (void) cfg_param;
   return false;
@@ -562,7 +580,7 @@ bool tud_rhport_init(uint8_t rhport, const tusb_rhport_init_t* rh_init) {
 #endif
 
   tu_varclr(&_usbd_dev);
-  _usbd_queued_setup = 0;
+  _usbd_unplugged = false;
 
   osal_spin_init(&_usbd_spin);
 
@@ -662,8 +680,6 @@ static void configuration_reset(uint8_t rhport) {
 
 static void usbd_reset(uint8_t rhport) {
   configuration_reset(rhport);
-  // discard any pre-reset SETUP still counted: a stale count skips post-reset SETUPs
-  _usbd_queued_setup = 0;
 }
 
 bool tud_task_event_ready(void) {
@@ -708,13 +724,10 @@ static bool usbd_process_event(dcd_event_t* event) {
       break;
 
     case DCD_EVENT_SETUP_RECEIVED:
-      if (_usbd_queued_setup == 0) {
-        break;
-      }
-      _usbd_queued_setup--;
       TU_LOG_BUF(CFG_TUD_LOG_LEVEL, &event->setup_received, 8);
-      if (_usbd_queued_setup != 0) {
-        TU_LOG_USBD("  Skipped since there is other SETUP in queue\r\n");
+      // only the newest SETUP queued is served: a bus reset or unplug in between needs no bookkeeping
+      if (event->setup_seq != _usbd_setup_seq) {
+        TU_LOG_USBD("  Skipped since there is a newer SETUP in queue\r\n");
         break;
       }
       if (!dcd_edpt0_setup_begin(event->rhport, event->setup_tagid)) {
@@ -846,6 +859,14 @@ bool tud_task_ext(uint32_t timeout_ms, bool in_isr) {
   if (!tud_inited()) {
     return true;
   }
+
+#if CFG_TUSB_OS == OPT_OS_NONE
+  // Avoid masking USB interrupts just to read an empty event queue. No stop can be pending: only an event processed
+  // in the loop below sets it, and the next iteration returns on it before checking the limit or the queue.
+  if (!tud_task_event_ready()) {
+    return false;
+  }
+#endif
 
   // Loop until there are no more events in the queue or CFG_TUD_TASK_EVENTS_PER_RUN is reached
   for (unsigned epr = 0;; epr++) {
@@ -1070,6 +1091,7 @@ static bool process_std_device_request(uint8_t rhport, tusb_control_request_t co
       // or even require stack to not response with status at all
       // Therefore DCD must take full responsibility to response and include zlp status packet if needed.
       dcd_set_address(rhport, (uint8_t) p_request->wValue);
+      tud_address_cb((uint8_t) p_request->wValue);
       _usbd_dev.addressed = 1;
       return true;
 
@@ -1257,6 +1279,12 @@ static bool process_setup_received(uint8_t rhport, tusb_control_request_t const 
       usbd_class_driver_t const * driver = get_driver(_usbd_dev.itf2drv[itf]);
       TU_VERIFY(driver);
 
+      // USB 2.0 9.4.4: GET_INTERFACE is device-to-host. Stall an OUT one before any class driver sees it: a driver
+      // answering from its alternate setting would otherwise arm an OUT data stage that writes host data into it.
+      TU_VERIFY(!(TUSB_REQ_TYPE_STANDARD == p_request->bmRequestType_bit.type &&
+                  TUSB_REQ_GET_INTERFACE == p_request->bRequest &&
+                  TUSB_DIR_IN != p_request->bmRequestType_bit.direction));
+
       // all requests to Interface (STD or Class) is forwarded to class driver.
       // notable requests are: GET HID REPORT DESCRIPTOR, SET_INTERFACE, GET_INTERFACE
       if (!invoke_class_control(rhport, driver, p_request)) {
@@ -1269,6 +1297,7 @@ static bool process_setup_received(uint8_t rhport, tusb_control_request_t const 
 
         switch (p_request->bRequest) { //-V2520
           case TUSB_REQ_GET_INTERFACE: {
+            // the direction is checked before the class driver: only an IN request reaches here
             uint8_t alternate = 0;
             tud_control_xfer(rhport, p_request, &alternate, 1);
             break;
@@ -1381,7 +1410,7 @@ static bool process_set_config(uint8_t rhport, uint8_t cfg_num) {
       continue;
     }
 
-    TU_ASSERT(TUSB_DESC_INTERFACE == tu_desc_type(p_desc));
+    TU_ASSERT(TUSB_DESC_INTERFACE == tu_desc_type(p_desc) && tu_desc_len(p_desc) >= sizeof(tusb_desc_interface_t));
     const tusb_desc_interface_t *desc_itf = (const tusb_desc_interface_t *)p_desc;
 
     // Find driver for this interface
@@ -1509,6 +1538,16 @@ TU_ATTR_FAST_FUNC void dcd_event_handler(dcd_event_t const* event, bool in_isr) 
       _usbd_dev.addressed = 0;
       _usbd_dev.cfg_num = 0;
       _usbd_dev.suspended = 0;
+      _usbd_unplugged = true;
+      // every SETUP already queued is from the disconnected session: make it stale, even if this event is
+      // dropped by a full queue
+      _usbd_setup_seq = (uint8_t) (_usbd_setup_seq + 1u);
+      send = true;
+      break;
+
+    case DCD_EVENT_BUS_RESET_START:
+    case DCD_EVENT_BUS_RESET_END:
+      _usbd_unplugged = false;
       send = true;
       break;
 
@@ -1555,10 +1594,21 @@ TU_ATTR_FAST_FUNC void dcd_event_handler(dcd_event_t const* event, bool in_isr) 
       }
       break;
 
-    case DCD_EVENT_SETUP_RECEIVED:
-      _usbd_queued_setup++;
-      send = true;
-      break;
+    case DCD_EVENT_SETUP_RECEIVED: {
+      // A SETUP behind an unplug and before the next bus reset is left over from the disconnected session: a DCD
+      // can report the unplug ahead of a SETUP latched in the same interrupt (dwc2 handles OTGINT first).
+      if (_usbd_unplugged) {
+        return;
+      }
+      // Stamp a copy as the newest SETUP. The stamp has one writer, so no read-modify-write is shared with
+      // the task (on another core under SMP). A SETUP dropped by a full queue needs no undo: the older ones
+      // still queued are stale against its stamp, and the host retries the control transfer.
+      dcd_event_t setup_event = *event;
+      setup_event.setup_seq = (uint8_t) (_usbd_setup_seq + 1u);
+      _usbd_setup_seq = setup_event.setup_seq;
+      (void) queue_event(&setup_event, in_isr);
+      return;
+    }
 
     case DCD_EVENT_XFER_COMPLETE: {
       // Invoke the class callback associated with the endpoint address
@@ -1594,11 +1644,7 @@ TU_ATTR_FAST_FUNC void dcd_event_handler(dcd_event_t const* event, bool in_isr) 
 
   if (send && !queue_event(event, in_isr)) {
     // event dropped by a full queue: undo state that would otherwise wedge permanently
-    if (event->event_id == DCD_EVENT_SETUP_RECEIVED) {
-      // undo the increment, else every later SETUP is skipped as "other SETUP in queue"
-      // and EP0 is deaf until re-init
-      _usbd_queued_setup--;
-    } else if (event->event_id == DCD_EVENT_XFER_COMPLETE) {
+    if (event->event_id == DCD_EVENT_XFER_COMPLETE) {
       // clear busy + claimed, else the endpoint can never be claimed or re-armed again
       uint8_t const epnum = tu_edpt_number(event->xfer_complete.ep_addr);
       uint8_t const ep_dir = tu_edpt_dir(event->xfer_complete.ep_addr);
@@ -1632,6 +1678,9 @@ bool usbd_open_edpt_pair(uint8_t rhport, const uint8_t *p_desc, uint8_t ep_count
   for (int i = 0; i < ep_count; i++) {
     const tusb_desc_endpoint_t *desc_ep = (const tusb_desc_endpoint_t *)p_desc;
 
+    // bLength must cover the whole endpoint descriptor: usbd_edpt_open() reads wMaxPacketSize and bInterval, and a
+    // short bLength would also step the next iteration into the middle of this one
+    TU_ASSERT(tu_desc_len(p_desc) >= sizeof(tusb_desc_endpoint_t));
     TU_ASSERT(TUSB_DESC_ENDPOINT == desc_ep->bDescriptorType && xfer_type == desc_ep->bmAttributes.xfer);
     TU_ASSERT(usbd_edpt_open(rhport, desc_ep));
 
@@ -1648,7 +1697,7 @@ bool usbd_open_edpt_pair(uint8_t rhport, const uint8_t *p_desc, uint8_t ep_count
 }
 
 // Helper to defer an isr function
-void usbd_defer_func(osal_task_func_t func, void* param, bool in_isr) {
+bool usbd_defer_func(osal_task_func_t func, void* param, bool in_isr) {
   dcd_event_t event = {
       .rhport   = 0,
       .event_id = USBD_EVENT_FUNC_CALL,
@@ -1656,7 +1705,7 @@ void usbd_defer_func(osal_task_func_t func, void* param, bool in_isr) {
   event.func_call.func  = func;
   event.func_call.param = param;
 
-  queue_event(&event, in_isr);
+  return queue_event(&event, in_isr);
 }
 
 bool usbd_defer_func_after_queue(osal_task_func_t func, void* param) {
@@ -1733,6 +1782,17 @@ bool usbd_edpt_xfer(uint8_t rhport, uint8_t ep_addr, uint8_t* buffer, uint16_t t
 
   // Attempt to transfer on a busy endpoint, sound like an race condition !
   TU_ASSERT((_usbd_dev.ep_status[epnum][dir] & TU_EDPT_STATE_BUSY) == 0);
+
+#if TUP_DCD_MEM_ALIGN > 1
+  // The buffer must meet the device controller's alignment (TUP_DCD_MEM_ALIGN): declare it with CFG_TUD_MEM_ALIGN.
+  // A zero-length packet moves no data, so its buffer is not checked. A refused buffer ends the caller's claim, as a
+  // transfer the DCD refuses does.
+  bool const aligned = (total_bytes == 0) || ((((uintptr_t) buffer) & (TUP_DCD_MEM_ALIGN - 1u)) == 0);
+  if (!aligned) {
+    _usbd_dev.ep_status[epnum][dir] &= (uint8_t) ~TU_EDPT_STATE_CLAIMED;
+  }
+  TU_ASSERT(aligned);
+#endif
 
   TU_SYSVIEW_CALL(CFG_TUSB_SYSVIEW_LEVEL_USB, TU_SV_ID_USBD_XFER);
 
@@ -1844,9 +1904,20 @@ void usbd_edpt_clear_stall(uint8_t rhport, uint8_t ep_addr) {
 }
 
 // Not valid for EP0, where dcd_edpt_stall() means "stall the control transfer" rather than "cancel".
-// TODO replace this stall/clear-stall stand-in with a dcd_edpt_abort_xfer() returning bool, like
-// hcd_edpt_abort_xfer(): the stall is wire-visible and the clear resets the toggle.
 void usbd_edpt_abort(uint8_t rhport, uint8_t ep_addr) {
+  rhport = _usbd_rhport;
+
+  uint8_t const epnum = tu_edpt_number(ep_addr);
+  uint8_t const dir = tu_edpt_dir(ep_addr);
+
+  if (!usbd_edpt_stalled(rhport, ep_addr) && dcd_edpt_abort_xfer(rhport, ep_addr)) {
+    // no completion will release the aborted transfer's claim
+    _usbd_dev.ep_status[epnum][dir] &= (uint8_t) ~(TU_EDPT_STATE_BUSY | TU_EDPT_STATE_CLAIMED);
+    return;
+  }
+
+  // A stalled endpoint, or a DCD without dcd_edpt_abort_xfer(): the stall drops the transfer and the clear leaves the
+  // endpoint idle. The stall is visible on the wire meanwhile, and the clear resets the data toggle.
   usbd_edpt_stall(rhport, ep_addr);
   usbd_edpt_clear_stall(rhport, ep_addr);
 }

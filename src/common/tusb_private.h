@@ -41,6 +41,8 @@ typedef struct {
 
   uint16_t mps;
   uint16_t xfer_len;
+  uint16_t tx_pending; // tx: bytes left in ep_buf by a refused transfer, sent before the FIFO's (#4449)
+  // 2 bytes padding
   uint8_t  *ep_buf; // set to NULL to use xfer_fifo when CFG_TUD_EDPT_DEDICATED_HWFIFO = 1
   tu_fifo_t ff;
 
@@ -52,15 +54,10 @@ typedef struct {
 // Endpoint
 //--------------------------------------------------------------------+
 
-// Check if endpoint descriptor is valid per USB specs if debug is enabled
-#if CFG_TUSB_DEBUG
+// Check an endpoint descriptor against USB specs: wMaxPacketSize must be non-zero and within the spec maximum, which
+// endpoint buffers are sized to. Other non-compliant sizes are accepted with a warning, but transfers on them are not
+// guaranteed (e.g. a bulk size that is not a power of 2, see tu_edpt_stream_open).
 bool tu_edpt_validate(const tusb_desc_endpoint_t *desc_ep, tusb_speed_t speed);
-#else
-TU_ATTR_ALWAYS_INLINE static inline bool tu_edpt_validate(const tusb_desc_endpoint_t *desc_ep, tusb_speed_t speed) {
-  (void)speed;
-  return tu_edpt_packet_size(desc_ep) > 0;
-}
-#endif
 
 // Bind drivers to all interfaces and endpoints in the provided configuration descriptor
 bool tu_bind_driver_to_ep_itf(uint8_t driver_id, uint8_t ep2drv[][2], uint8_t itf2drv[], uint8_t itf_max,
@@ -93,7 +90,18 @@ TU_ATTR_ALWAYS_INLINE static inline void tu_edpt_stream_deinit(tu_edpt_stream_t 
 #endif
 }
 
-// Open an endpoint stream
+// Whether a stream's receive buffer of bufsize fits an endpoint armed as one packet, or as the whole buffer
+// (whole_buf): a controller (e.g. dwc2) accepts a full packet whatever the transfer has left, so what is armed must be
+// whole packets. A stream's packet size is a power of 2 (see tu_edpt_stream_open)
+TU_ATTR_ALWAYS_INLINE static inline bool tu_edpt_rx_buf_fits(const tusb_desc_endpoint_t *desc_ep, uint16_t bufsize,
+                                                             bool whole_buf) {
+  const uint16_t mps = tu_edpt_packet_size(desc_ep);
+  return mps > 0 && mps <= bufsize && (!whole_buf || (bufsize & (mps - 1)) == 0);
+}
+
+// Open an endpoint stream. Its packet size must be a power of 2, since whole packets are counted by masking: a Bulk
+// one is when compliant (tu_edpt_validate accepts a non-compliant one, with no guaranteed result), and a class opening a
+// stream on an Interrupt endpoint checks it first (midi_host, midi2_host)
 TU_ATTR_ALWAYS_INLINE static inline void tu_edpt_stream_open(tu_edpt_stream_t *s, uint8_t hwid,
                                                              const tusb_desc_endpoint_t *desc_ep, uint16_t xfer_len) {
   s->hwid    = hwid;
@@ -112,6 +120,7 @@ TU_ATTR_ALWAYS_INLINE static inline void tu_edpt_stream_close(tu_edpt_stream_t* 
 
 TU_ATTR_ALWAYS_INLINE static inline void tu_edpt_stream_clear(tu_edpt_stream_t *s) {
   tu_fifo_clear(&s->ff);
+  s->tx_pending = 0;
 }
 
 TU_ATTR_ALWAYS_INLINE static inline bool tu_edpt_stream_empty(tu_edpt_stream_t *s) {
@@ -122,10 +131,11 @@ TU_ATTR_ALWAYS_INLINE static inline bool tu_edpt_stream_empty(tu_edpt_stream_t *
 // Stream Write
 //--------------------------------------------------------------------+
 
-// Write to stream
+// Write to stream. Return number of bytes queued in the FIFO, which are sent even if a transfer submission is refused
 uint32_t tu_edpt_stream_write(tu_edpt_stream_t *s, const void *buffer, uint32_t bufsize);
 
-// Start an usb transfer if endpoint is not busy. Return number of queued bytes
+// Start an usb transfer if endpoint is not busy. Return number of bytes submitted, 0 if none or the submission was
+// refused (its bytes are kept and submitted first next time)
 uint32_t tu_edpt_stream_write_xfer(tu_edpt_stream_t *s);
 
 // Start an zero-length packet if needed

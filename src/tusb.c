@@ -240,48 +240,52 @@ bool tu_edpt_release(volatile uint8_t* ep_state, osal_mutex_t mutex) {
   return ret;
 }
 
-#if CFG_TUSB_DEBUG
 bool tu_edpt_validate(const tusb_desc_endpoint_t *desc_ep, tusb_speed_t speed) {
   const uint16_t max_packet_size = tu_edpt_packet_size(desc_ep);
+  const bool     is_highspeed    = (speed == TUSB_SPEED_HIGH);
+  uint16_t       spec_max;
+  bool           compliant = true;
   TU_LOG2("  Open EP %02X with Size = %u\r\n", desc_ep->bEndpointAddress, max_packet_size);
-  TU_ASSERT(max_packet_size > 0);
 
   switch (desc_ep->bmAttributes.xfer) {
-    case TUSB_XFER_ISOCHRONOUS: {
-      const uint16_t spec_size = (speed == TUSB_SPEED_HIGH ? 1024 : 1023);
-      TU_ASSERT(max_packet_size <= spec_size);
+    case TUSB_XFER_ISOCHRONOUS:
+      spec_max = is_highspeed ? 1024 : 1023;
       break;
-    }
 
     case TUSB_XFER_BULK:
-      if (speed == TUSB_SPEED_HIGH) {
-        // Bulk highspeed must be EXACTLY 512
-        TU_ASSERT(max_packet_size == 512);
-      } else {
-        // Bulk fullspeed can only be 8, 16, 32, 64. Some non-compliant devices report 4 (e.g. USB-MIDI, the size of
-        // one event packet): accept it with a warning as Linux does, keeping the reported size so the host never sends
-        // the device a packet larger than it can take
-        if (max_packet_size == 4) {
-          TU_LOG1("  WARN: EP %02X bulk fullspeed max packet size 4 is non-compliant\r\n", desc_ep->bEndpointAddress);
-        } else {
-          TU_ASSERT(max_packet_size == 8 || max_packet_size == 16 || max_packet_size == 32 || max_packet_size == 64);
-        }
-      }
+      spec_max = is_highspeed ? 512 : 64;
+      // Bulk highspeed must be exactly 512, fullspeed 8, 16, 32 or 64
+      compliant = is_highspeed ? (max_packet_size == 512)
+                               : (max_packet_size == 8 || max_packet_size == 16 || max_packet_size == 32 ||
+                                  max_packet_size == 64);
       break;
 
-    case TUSB_XFER_INTERRUPT: {
-      const uint16_t spec_size = (speed == TUSB_SPEED_HIGH ? 1024 : 64);
-      TU_ASSERT(max_packet_size <= spec_size);
+    case TUSB_XFER_INTERRUPT:
+      spec_max = is_highspeed ? 1024 : 64;
+      // Interrupt lowspeed is at most 8, above that only non-compliant: buffers are sized to the fullspeed bound
+      compliant = (speed != TUSB_SPEED_LOW) || (max_packet_size <= 8);
       break;
-    }
 
     default:
       return false;
   }
 
+  // endpoint buffers are sized to the spec maximum: a larger size can never be accepted
+  if (max_packet_size == 0 || max_packet_size > spec_max) {
+    TU_LOG1("  EP %02X max packet size %u is invalid\r\n", desc_ep->bEndpointAddress, max_packet_size);
+    return false;
+  }
+
+  // Some devices report a non-compliant size (e.g. USB-MIDI bulk 4, one event packet): accept it with a warning as
+  // Linux does, keeping the reported size so the host never sends the device a packet larger than it can take.
+  // Transfers on such an endpoint are not guaranteed: a bulk size that is not a power of 2 breaks the whole-packet
+  // counting of streams and receive buffers
+  if (!compliant) {
+    TU_LOG1("  WARN: EP %02X max packet size %u is non-compliant\r\n", desc_ep->bEndpointAddress, max_packet_size);
+  }
+
   return true;
 }
-#endif
 
 bool tu_bind_driver_to_ep_itf(uint8_t driver_id, uint8_t ep2drv[][2], uint8_t itf2drv[], uint8_t itf_max,
                               uint8_t ep_max, const uint8_t *p_desc, uint16_t desc_len) {
@@ -290,12 +294,14 @@ bool tu_bind_driver_to_ep_itf(uint8_t driver_id, uint8_t ep2drv[][2], uint8_t it
     const uint8_t desc_type = tu_desc_type(p_desc);
 
     if (desc_type == TUSB_DESC_ENDPOINT) {
+      TU_ASSERT(tu_desc_len(p_desc) >= sizeof(tusb_desc_endpoint_t));
       const uint8_t ep_addr  = ((const tusb_desc_endpoint_t *)p_desc)->bEndpointAddress;
       const uint8_t ep_num   = tu_edpt_number(ep_addr);
       const uint8_t ep_dir   = tu_edpt_dir(ep_addr);
       TU_ASSERT(ep_num < ep_max);
       ep2drv[ep_num][ep_dir] = driver_id;
     } else if (desc_type == TUSB_DESC_INTERFACE) {
+      TU_ASSERT(tu_desc_len(p_desc) >= sizeof(tusb_desc_interface_t));
       const tusb_desc_interface_t *desc_itf = (const tusb_desc_interface_t *)p_desc;
       if (desc_itf->bAlternateSetting == 0) {
         TU_ASSERT(desc_itf->bInterfaceNumber < itf_max);
@@ -330,7 +336,8 @@ bool tu_edpt_stream_init(tu_edpt_stream_t *s, bool is_host, bool is_tx, bool ove
   }
   #endif
 
-  s->ep_buf = ep_buf;
+  s->ep_buf     = ep_buf;
+  s->tx_pending = 0;
 
   return true;
 }
@@ -382,45 +389,101 @@ static bool stream_release(tu_edpt_stream_t *s) {
 //--------------------------------------------------------------------+
 // Stream Write
 //--------------------------------------------------------------------+
-bool tu_edpt_stream_write_zlp_if_needed(tu_edpt_stream_t *s, uint32_t last_xferred_bytes) {
-  // ZLP condition: no pending data, last transferred bytes is multiple of packet size
-  TU_VERIFY(tu_fifo_empty(&s->ff) && last_xferred_bytes > 0 && (0 == (last_xferred_bytes & (s->mps - 1))));
+
+// Serialize the stream's own submissions (tu_edpt_stream_write_xfer(), tu_edpt_stream_write_zlp_if_needed()) with
+// the TX FIFO's write mutex. usbd/usbh release the endpoint as soon as they refuse a submission, so without it
+// another task could claim the endpoint and overwrite ep_buf before the refused bytes are restored as tx_pending
+// (#4449). Without an RTOS nothing preempts a submission, and the macros compile out.
+#if OSAL_MUTEX_REQUIRED
+TU_ATTR_ALWAYS_INLINE static inline void stream_tx_lock(tu_edpt_stream_t *s) {
+  if (s->ff.mutex_wr != NULL) {
+    (void) osal_mutex_lock(s->ff.mutex_wr, OSAL_TIMEOUT_WAIT_FOREVER);
+  }
+}
+
+TU_ATTR_ALWAYS_INLINE static inline void stream_tx_unlock(tu_edpt_stream_t *s) {
+  if (s->ff.mutex_wr != NULL) {
+    (void) osal_mutex_unlock(s->ff.mutex_wr);
+  }
+}
+#else
+  #define stream_tx_lock(_s)
+  #define stream_tx_unlock(_s)
+#endif
+
+static bool stream_write_zlp_locked(tu_edpt_stream_t *s, uint32_t last_xferred_bytes) {
+  // ZLP condition: no pending data, last transferred bytes is multiple of packet size (a power of 2)
+  TU_VERIFY(s->mps > 0 && tu_fifo_empty(&s->ff) && s->tx_pending == 0 && last_xferred_bytes > 0 &&
+            (0 == (last_xferred_bytes & (s->mps - 1u))));
   TU_VERIFY(stream_claim(s));
   TU_ASSERT(stream_xfer(s, 0));
   return true;
 }
 
-uint32_t tu_edpt_stream_write_xfer(tu_edpt_stream_t *s) {
-  const uint16_t ff_count = tu_fifo_count(&s->ff);
-  TU_VERIFY(ff_count > 0, 0); // skip if no data
+bool tu_edpt_stream_write_zlp_if_needed(tu_edpt_stream_t *s, uint32_t last_xferred_bytes) {
+  stream_tx_lock(s);
+  const bool ret = stream_write_zlp_locked(s, last_xferred_bytes);
+  stream_tx_unlock(s);
+  return ret;
+}
+
+// A submission the DCD/HCD refuses must not lose data (#4449). Without ep_buf the transfer reads the FIFO itself, so
+// a refused one leaves the bytes queued. With ep_buf the bytes are moved out of the FIFO before the submission: the
+// FIFO is advanced first so that a completion handled before stream_xfer() returns cannot send them again. A refused
+// submission keeps them in ep_buf as tx_pending, and the next call sends them ahead of the FIFO's. The caller holds
+// the stream lock, so no other submission of this stream runs between the refusal and the restore of tx_pending, and
+// a completion handled meanwhile waits for it before submitting again.
+static uint32_t stream_write_xfer_locked(tu_edpt_stream_t *s) {
+  TU_VERIFY(s->tx_pending > 0 || tu_fifo_count(&s->ff) > 0, 0); // skip if no data
   TU_VERIFY(stream_claim(s), 0);
 
-  // Pull data from FIFO -> EP buf
+  // Pull data from FIFO -> EP buf, behind any bytes a refused submission left there
   uint16_t count;
   if (s->ep_buf == NULL) {
     count = tu_fifo_count(&s->ff); // re-get count since fifo can be changed
   } else {
-    count = tu_fifo_read_n(&s->ff, s->ep_buf, s->xfer_len);
+    count = s->tx_pending;
+    if (count < s->xfer_len) {
+      count = (uint16_t) (count + tu_fifo_read_n(&s->ff, s->ep_buf + count, (uint16_t) (s->xfer_len - count)));
+    }
+    s->tx_pending = 0;
   }
 
-  if (count > 0) {
-    TU_ASSERT(stream_xfer(s, count), 0);
-    return count;
-  } else {
+  if (count == 0) {
     // Release endpoint since we don't make any transfer
     // Note: data is dropped if terminal is not connected
     stream_release(s);
     return 0;
   }
+
+  if (!stream_xfer(s, count)) {
+    // refused: usbd/usbh already released the endpoint. Keep the bytes for the next call.
+    if (s->ep_buf != NULL) {
+      s->tx_pending = count;
+    }
+    return 0;
+  }
+
+  return count;
 }
 
+uint32_t tu_edpt_stream_write_xfer(tu_edpt_stream_t *s) {
+  stream_tx_lock(s);
+  const uint32_t count = stream_write_xfer_locked(s);
+  stream_tx_unlock(s);
+  return count;
+}
+
+// Return the bytes queued in the FIFO. Queued bytes are not lost if a transfer submission is refused, they are sent
+// by a later write, flush or transfer completion; when the endpoint can never send, writes stop queueing once the
+// FIFO is full.
 uint32_t tu_edpt_stream_write(tu_edpt_stream_t *s, const void *buffer, uint32_t bufsize) {
   TU_VERIFY(bufsize > 0);
   const uint16_t ret = tu_fifo_write_n(&s->ff, buffer, (uint16_t) tu_min32(bufsize, UINT16_MAX));
 
-  // flush if fifo has more than packet size or
+  // flush if fifo has more than packet size, a refused transfer left bytes to resend, or
   // in rare case: fifo depth is configured too small (which never reach packet size)
-  if ((tu_fifo_count(&s->ff) >= s->mps) || (tu_fifo_depth(&s->ff) < s->mps)) {
+  if ((tu_fifo_count(&s->ff) >= s->mps) || (s->tx_pending > 0) || (tu_fifo_depth(&s->ff) < s->mps)) {
     tu_edpt_stream_write_xfer(s);
   }
   return ret;
@@ -440,14 +503,17 @@ uint32_t tu_edpt_stream_read_xfer(tu_edpt_stream_t *s) {
   // TODO Actually we can still carry out the transfer, keeping count of received bytes
   // and slowly move it to the FIFO when read().
   // This pre-check reduces endpoint claiming
-  TU_VERIFY(available >= s->mps);
+  TU_VERIFY(s->mps > 0 && available >= s->mps, 0);
   TU_VERIFY(stream_claim(s), 0);
   available = tu_fifo_remaining(&s->ff); // re-get available since fifo can be changed
 
   if (available >= s->mps) {
-    // multiple of packet size limit by ep bufsize
-    uint16_t count = (uint16_t) (available & ~(s->mps - 1));
-    count = tu_min16(count, s->xfer_len);
+    // multiple of packet size limit by ep bufsize, itself in whole packets (at least one): a controller accepts a full
+    // packet whatever the transfer has left, so a transfer that is not whole packets cuts the last one short. The
+    // packet size is a power of 2 (tu_edpt_stream_open)
+    const uint16_t xfer_max = tu_max16(s->mps, (uint16_t) (s->xfer_len & ~(s->mps - 1u)));
+    uint16_t count = (uint16_t) (available & ~(s->mps - 1u));
+    count = tu_min16(count, xfer_max);
     TU_ASSERT(stream_xfer(s, count), 0);
     return count;
   } else {
