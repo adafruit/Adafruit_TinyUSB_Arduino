@@ -507,6 +507,27 @@ class Sync(unittest.TestCase):
         self.assert_refused(['restore', 'src/class/a.c', 'src/tusb.c'], 'src/tusb.c: src/tusb.c is a directory')
         self.assertEqual((self.lib / 'src/class/a.c').read_bytes(), b'local\n')
 
+    @unittest.skipUnless(hasattr(os, 'mkfifo'), 'needs FIFOs')
+    def test_restore_refuses_a_special_file_on_the_path_before_writing(self):
+        self.drift({'src/class/a.c': b'local fix\n', 'src/tusb.c': None})
+        os.mkfifo(self.lib / 'src/tusb.c')
+        self.assertEqual(git(self.lib, 'status', '--porcelain'), '')
+        # a subprocess, so opening the FIFO times out instead of hanging the suite
+        main = 'import sys, pathlib, update_tinyusb as u; sys.exit(u.main(sys.argv[2:], pathlib.Path(sys.argv[1])))'
+        r = subprocess.run([sys.executable, '-c', main, str(self.lib), 'restore', 'src/class/a.c', 'src/tusb.c'],
+                           env={**CLEAN_ENV, 'PYTHONPATH': str(Path(upd.__file__).parent)}, capture_output=True,
+                           timeout=10)
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertIn('src/tusb.c: src/tusb.c is a special file', json.loads(r.stdout)['errors'])
+        self.assertEqual((self.lib / 'src/class/a.c').read_bytes(), b'local fix\n')
+
+    def test_restore_refuses_a_mode_change_git_status_ignores(self):
+        git(self.lib, 'config', 'core.fileMode', 'false')
+        os.chmod(self.lib / 'src/tusb.c', 0o755)
+        self.assertEqual(git(self.lib, 'status', '--porcelain'), '')
+        self.assert_refused(['restore', 'src/tusb.c'], 'not clean')
+        self.assertTrue(os.stat(self.lib / 'src/tusb.c').st_mode & 0o100)
+
     def test_restore_reports_a_partial_write(self):
         self.drift({'src/tusb.c': b'local\n', 'src/class/a.c': b'local\n'})
         real = upd.write_file

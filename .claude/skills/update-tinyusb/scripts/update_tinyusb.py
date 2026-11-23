@@ -284,11 +284,14 @@ def check_restore(root, raw, before, want):
     paths = sorted(before)
     errors = unclean(root, raw, *paths)
     errors += [f'{p} changed while preparing' for p in paths if snapshot(root / p) != before[p]]
-    for p in paths:   # a write through a symlink or file lands outside its path; one onto a directory fails midway
+    # a write through a symlink lands outside its path; through another non-directory or onto a non-regular file
+    # it fails midway, or blocks on a FIFO
+    for p in paths:
         for a in reversed([Path(p), *Path(p).parents][:-1]):
             f, last = root / a, a == Path(p)
-            kind = ('symlink' if f.is_symlink() else 'directory' if last and f.is_dir()
-                    else 'file' if not last and f.is_file() else None)
+            fits = not os.path.lexists(f) or (f.is_file() if last else f.is_dir())
+            kind = ('symlink' if f.is_symlink() else None if fits
+                    else 'directory' if f.is_dir() else 'file' if f.is_file() else 'special file')
             if kind:
                 errors.append(f'{p}: {a.as_posix()} is a {kind}')
                 break
@@ -329,8 +332,9 @@ def cleared(root, path, removed):
 
 def unclean(root, raw, *pathspec):
     """Uncommitted changes under pathspec or to the manifest, and a manifest that is no longer raw."""
-    status = os.fsdecode(git('-C', str(root), 'status', '--porcelain', '--ignored', '--untracked-files=all', '--',
-                             *pathspec, MANIFEST).stdout).splitlines()   # paths may not be UTF-8
+    # core.fileMode=false would hide an executable-bit edit that mismatches() counts as drift; paths may not be UTF-8
+    status = os.fsdecode(git('-C', str(root), '-c', 'core.fileMode=true', 'status', '--porcelain', '--ignored',
+                             '--untracked-files=all', '--', *pathspec, MANIFEST).stdout).splitlines()
     errors = [f'not clean: {line}' for line in status]
     tracked = os.fsdecode(git('-C', str(root), 'ls-files', '-v', '-z', '--', *pathspec, MANIFEST).stdout).split('\0')
     errors += [f'{e[2:]}: marked assume-unchanged or skip-worktree, so git status cannot show its edits'
