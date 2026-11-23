@@ -284,10 +284,13 @@ def check_restore(root, raw, before, want):
     paths = sorted(before)
     errors = unclean(root, raw, *paths)
     errors += [f'{p} changed while preparing' for p in paths if snapshot(root / p) != before[p]]
-    for p in paths:   # a write through either would land outside its path
+    for p in paths:   # a write through a symlink or file lands outside its path; one onto a directory fails midway
         for a in reversed([Path(p), *Path(p).parents][:-1]):
-            if (root / a).is_symlink() or (a != Path(p) and (root / a).is_file()):
-                errors.append(f'{p}: {a.as_posix()} is a {"symlink" if (root / a).is_symlink() else "file"}')
+            f, last = root / a, a == Path(p)
+            kind = ('symlink' if f.is_symlink() else 'directory' if last and f.is_dir()
+                    else 'file' if not last and f.is_file() else None)
+            if kind:
+                errors.append(f'{p}: {a.as_posix()} is a {kind}')
                 break
     diff = mismatches(root, want)
     drifted = set(diff['changed'] + diff['missing'])
@@ -325,6 +328,9 @@ def unclean(root, raw, *pathspec):
     status = git('-C', str(root), 'status', '--porcelain', '--ignored', '--untracked-files=all', '--', *pathspec,
                  MANIFEST).stdout.decode().splitlines()
     errors = [f'not clean: {line}' for line in status]
+    tracked = git('-C', str(root), 'ls-files', '-v', '-z', '--', *pathspec, MANIFEST).stdout.decode().split('\0')
+    errors += [f'{e[2:]}: marked assume-unchanged or skip-worktree, so git status cannot show its edits'
+               for e in tracked if e and (e[0].islower() or e[0] == 'S')]
     try:
         changed = (root / MANIFEST).read_bytes() != raw
     except OSError:

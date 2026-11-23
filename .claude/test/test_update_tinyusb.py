@@ -460,6 +460,17 @@ class Sync(unittest.TestCase):
             self.assert_refused(['restore', 'src/tusb.c'], 'src/tusb.c changed while preparing', unchanged=False)
         self.assertEqual((self.lib / 'src/tusb.c').read_bytes(), b'committed meanwhile\n')
 
+    def test_restore_refuses_an_edit_git_status_cannot_see(self):
+        self.drift({'src/tusb.c': b'local fix\n'})
+        for flag in ('--assume-unchanged', '--skip-worktree'):
+            with self.subTest(flag=flag):
+                put(self.lib, {'src/tusb.c': b'wip\n'})
+                git(self.lib, 'update-index', flag, 'src/tusb.c')
+                self.assertEqual(git(self.lib, 'status', '--porcelain'), '')
+                self.assert_refused(['restore', 'src/tusb.c'], 'src/tusb.c: marked')
+                self.assertEqual((self.lib / 'src/tusb.c').read_bytes(), b'wip\n')
+                git(self.lib, 'update-index', flag.replace('--', '--no-', 1), 'src/tusb.c')
+
     def test_restore_refuses_a_symlink_or_a_file_on_the_path(self):
         os.rename(self.lib / 'src/class', self.lib / 'elsewhere')
         (self.lib / 'src/class').symlink_to('../elsewhere')
@@ -469,6 +480,11 @@ class Sync(unittest.TestCase):
         put(self.lib, {'src/class': b'f\n'})
         commit(self.lib)
         self.assert_refused(['restore', 'src/class/a.c'], 'src/class/a.c: src/class is a file')
+
+    def test_restore_refuses_a_directory_at_the_path_before_writing(self):
+        self.drift({'src/class/a.c': b'local\n', 'src/tusb.c': None, 'src/tusb.c/x.c': b'x\n'})
+        self.assert_refused(['restore', 'src/class/a.c', 'src/tusb.c'], 'src/tusb.c: src/tusb.c is a directory')
+        self.assertEqual((self.lib / 'src/class/a.c').read_bytes(), b'local\n')
 
     def test_restore_reports_a_partial_write(self):
         self.drift({'src/tusb.c': b'local\n', 'src/class/a.c': b'local\n'})
