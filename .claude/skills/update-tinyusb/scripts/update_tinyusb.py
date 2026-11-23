@@ -325,10 +325,10 @@ def cleared(root, path, removed):
 
 def unclean(root, raw, *pathspec):
     """Uncommitted changes under pathspec or to the manifest, and a manifest that is no longer raw."""
-    status = git('-C', str(root), 'status', '--porcelain', '--ignored', '--untracked-files=all', '--', *pathspec,
-                 MANIFEST).stdout.decode().splitlines()
+    status = os.fsdecode(git('-C', str(root), 'status', '--porcelain', '--ignored', '--untracked-files=all', '--',
+                             *pathspec, MANIFEST).stdout).splitlines()   # paths may not be UTF-8
     errors = [f'not clean: {line}' for line in status]
-    tracked = git('-C', str(root), 'ls-files', '-v', '-z', '--', *pathspec, MANIFEST).stdout.decode().split('\0')
+    tracked = os.fsdecode(git('-C', str(root), 'ls-files', '-v', '-z', '--', *pathspec, MANIFEST).stdout).split('\0')
     errors += [f'{e[2:]}: marked assume-unchanged or skip-worktree, so git status cannot show its edits'
                for e in tracked if e and (e[0].islower() or e[0] == 'S')]
     try:

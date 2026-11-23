@@ -471,6 +471,18 @@ class Sync(unittest.TestCase):
                 self.assertEqual((self.lib / 'src/tusb.c').read_bytes(), b'wip\n')
                 git(self.lib, 'update-index', flag.replace('--', '--no-', 1), 'src/tusb.c')
 
+    def test_non_utf8_local_path_reports_json(self):
+        self.drift({'src/tusb.c': b'local fix\n'})
+        bad = self.lib / os.fsdecode(b'src/arduino/bad\xff.cpp')
+        bad.write_bytes(b'x\n')
+        commit(self.lib)
+        self.assertEqual(self.run_op('plan', '--ref', self.base)[0], 2)   # the drift, reported as JSON
+        self.assertEqual(self.run_op('restore', 'src/tusb.c')[0], 0)
+        commit(self.lib)
+        git(self.lib, 'config', 'core.quotePath', 'false')   # git status then prints the raw bytes
+        bad.write_bytes(b'wip\n')
+        self.assert_refused(['plan', '--ref', self.base], 'not clean')
+
     def test_restore_refuses_a_symlink_or_a_file_on_the_path(self):
         os.rename(self.lib / 'src/class', self.lib / 'elsewhere')
         (self.lib / 'src/class').symlink_to('../elsewhere')
