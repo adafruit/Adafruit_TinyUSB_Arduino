@@ -67,9 +67,7 @@ jobs:
            # Ch32v2
            - 'CH32V20x_EVT'
            - 'ch32_community_ch32v20x_tinyusb_usbd'
-           # Metro CH32V4x7
-           - 'ch32_community_metro_ch32v407'
-           - 'ch32_community_metro_ch32v467'
+           # ch32_community_metro_ch32v407/467 wait for a ch32-community core release with CH32V4x7_BOARDS
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
