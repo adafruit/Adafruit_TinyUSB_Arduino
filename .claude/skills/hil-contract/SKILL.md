@@ -15,7 +15,8 @@ Scripts, all in `scripts/`:
 - `hil_ci.py`: CI's setup and packed tree per board on a hosted runner, and the battery over them on the rig (agentrc
   `arduino_ci.py`).
 - `hil_workflow.py`: the CI workflows' selection, build status, and the PR report, rendered through agentrc's `hil`
-  skill's `gh_pr_comment.py`, which `hil_comment.yml` also runs for the PR, the rig attempt and the freshness check.
+  skill's `gh_pr_comment.py`, which `hil_comment.yml` also runs for the PR, the rig attempt and the sticky post,
+  freshness checked.
 - `agentrc_pin.py`: which agentrc both load their shared scripts from: the installed one
   (`${AGENTRC_DIR:-$HOME/.claude}`) on a dev PC, never fetched; in CI the commit `test/hil/agentrc.json` pins; on the
   rig, the copy `hil_remote.py` staged.

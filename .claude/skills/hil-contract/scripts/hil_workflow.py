@@ -2,7 +2,7 @@
 """The HIL workflows' glue (SKILL.md beside this directory, CI): hil.yml's selection and per-board build status, and
 the report hil_comment.yml posts. Stdlib only; the report reads every artifact as untrusted data through agentrc's
 gh_pr_comment.py (the agentrc agentrc_pin.py selects), which hil_comment.yml also runs for the PR, the rig attempt and
-the freshness check.
+the sticky post, freshness checked.
 
   hil_workflow.py select --event E --repository R --run-id N --tested SHA --out FILE [--boards "B ..."]
       the boards a run tests: none outside UPSTREAM; a dispatch's named roster boards; a pull request's from

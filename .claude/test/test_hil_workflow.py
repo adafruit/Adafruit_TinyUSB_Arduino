@@ -104,10 +104,12 @@ class Status(Tmp):
 
 class CommentWorkflow(unittest.TestCase):
     def test_the_comment_job_asks_for_the_rig_job_of_hil_yml(self):
-        """job-attempt and fresh name hil.yml and its rig job, whose attempt names the summary artifact."""
+        """job-attempt and post name hil.yml and its rig job, whose attempt names the summary artifact; post keeps
+        the sticky action's header, so it updates the comment that action posted."""
         comment = (ROOT / '.github/workflows/hil_comment.yml').read_text()
         self.assertIn('--job hil-run', comment)
         self.assertIn('--workflow hil.yml', comment)
+        self.assertIn('post --repo "$GITHUB_REPOSITORY" --pr "$PR" --header hil-report', comment)
         self.assertIn('name: hil-run-${{ steps.rig.outputs.attempt }}', comment)
         hil = (ROOT / '.github/workflows/hil.yml').read_text()
         self.assertIn('\n  hil-run:\n', hil)
