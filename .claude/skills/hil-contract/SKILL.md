@@ -54,9 +54,9 @@ A roster entry:
 - `debug.openocd`: the openocd config the GDB session uses. A registered board whose registry entry has a `debug`
   takes it from there and its roster entry keeps none (a differing copy is refused as drift). With `debug.tool`
   `openocd-esp32`, exactly `-f board/<chip>-builtin.cfg`, `debug.uid` the chip's USB-Serial/JTAG serial and
-  `debug.usb_port` its bus-port, no `vid_pid`. The harness checks that serial at that port and passes the port as openocd's `adapter usb location`;
-  agentrc's whole-bus lookup refuses while a serial-less 303a:1001 (the S3's Arduino DUT) is on the host. No `debug`:
-  no GDB route.
+  `debug.usb_port` its bus-port, no `vid_pid`. The harness checks that serial at that port and passes the port as
+  openocd's `adapter usb location`; agentrc's whole-bus lookup refuses while a serial-less 303a:1001 (the S3's Arduino
+  DUT) is on the host. No `debug`: no GDB route.
 - `arduino.tests`: the tests the battery runs, all of the board's role (device or host, the build contract's board
   table). The devices wired to a host board's USB port are agentrc's board registry's `dev_attached` (the `hil`
   skill's Board registry), resolved into the entry by `probe`, and a registered board's come only from there: its
