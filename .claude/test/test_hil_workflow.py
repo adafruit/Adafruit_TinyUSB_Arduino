@@ -118,7 +118,7 @@ def board(name, verdict='pass', tests=(('cdc_echo', True),), **over):
     r = {'board': name, 'verdict': verdict, 'detail': '', 'flaky': False, 'retry': '', 'waitedS': 0, 'runS': 75,
          'tests': [{'test': t, 'pass': p, 'detail': f'{t} detail'} for t, p in tests],
          'cleanup': {'pass': True, 'state': 'restored', 'holder': None},
-         'firmware': {'platform': {'id': 'rp2040:rp2040', 'version': '5.4.4'}}}
+         'firmware': {'platform': {'id': 'rp2040:rp2040', 'version': '5.4.4', 'git': None}}}
     r.update(over)
     return r
 
@@ -162,17 +162,17 @@ class Render(Tmp):
     def test_a_passing_board(self):
         self.selection()
         self.status('raspberry_pi_pico', 2)
-        fw = {'platform': {'id': 'rp2040:rp2040', 'version': '5.4.5'}}
+        fw = {'platform': {'id': 'rp2040:rp2040', 'version': '5.4.5', 'git': None}}
         self.summary([board('raspberry_pi_pico', tests=[('cdc_echo', True), ('hid_inout', True)], firmware=fw)])
         text = self.render()
         self.assertTrue(text.startswith(W.TITLE))
         self.assertIn('**1** pass', text)
         row = next(ln for ln in text.splitlines() if ln.startswith('| `raspberry_pi_pico`'))
         self.assertEqual(row, '| `raspberry_pi_pico` | ✅ | ✅ pass | ✅ | ✅ | — | — | ✅ | 1m15s | '
-                              '`rp2040:rp2040 5.4.5` |')  # the firmware's core outranks the build status
+                              '`rp2040:rp2040 5.4.5, non-git: id/version only` |')  # the firmware's outranks the status
         self.assertIn('[run 9 attempt 2](https://github.com/x/y/actions/runs/9)', text)
         self.summary([board('raspberry_pi_pico', tests=[('cdc_echo', True), ('hid_inout', True)], firmware=None)])
-        self.assertIn(row.replace('5.4.5', '5.4.4'), self.render())  # the core falls back to the build status
+        self.assertIn(row.replace('5.4.5, non-git: id/version only', '5.4.4'), self.render())  # else the build status's
 
     def test_the_core_column_shows_the_records_core_provenance(self):
         plat = {'id': 'adafruit:samd', 'version': '1.7.17'}
@@ -183,17 +183,19 @@ class Render(Tmp):
              f'`adafruit:samd 1.7.17, commit {"a" * 12}, content {"c" * 12}`'),
             ({'commit': commit, 'dirty': True, 'content': content},
              f'`adafruit:samd 1.7.17, commit {"a" * 12}, modified, content {"c" * 12}`'),
-            ({'commit': commit, 'dirty': True, 'content': None, 'contentError': 'x'},
-             f'`adafruit:samd 1.7.17, commit {"a" * 12}, modified, content unavailable`'),
-            ({'commit': 7, 'dirty': 'yes', 'content': ['x']}, '`adafruit:samd 1.7.17, commit ?, content unavailable`'),
+            ({'commit': commit, 'dirty': True, 'content': None, 'contentError': 'not | a `tree`'},
+             f'`` adafruit:samd 1.7.17, commit {"a" * 12}, modified, content unavailable: not \\| a `tree` ``'),
+            ({'commit': 7, 'dirty': 'yes', 'content': ['x']},
+             '`adafruit:samd 1.7.17, commit ?, dirty ?, content unavailable`'),
+            ('dirty', '`adafruit:samd 1.7.17, malformed git provenance`'),
         ]
         for git, cell in cases:
             with self.subTest(git=git):
                 self.assertEqual(W.core_of(None, {'firmware': {'platform': {**plat, 'git': git}}}), cell)
-        id_only = '`adafruit:samd 1.7.17`'   # a record without git, a malformed one, or a build status
-        self.assertEqual(W.core_of(None, {'firmware': {'platform': plat}}), id_only)
-        self.assertEqual(W.core_of(None, {'firmware': {'platform': {**plat, 'git': 'dirty'}}}), id_only)
-        self.assertEqual(W.core_of({'platform': {**plat, 'git': None}}, None), id_only)
+        # a record always writes git; a build status's platform has id/version only
+        self.assertEqual(W.core_of(None, {'firmware': {'platform': plat}}),
+                         '`adafruit:samd 1.7.17, malformed git provenance`')
+        self.assertEqual(W.core_of({'platform': {**plat, 'git': None}}, None), '`adafruit:samd 1.7.17`')
 
     def test_failures_retries_and_waits_are_noted(self):
         self.selection(boards=('metro_m4_express', 'raspberry_pi_pico'))
@@ -316,7 +318,7 @@ class Render(Tmp):
             self.summary([board('raspberry_pi_pico', runS='RUN_S')])
             p = self.tmp / 'run' / 'summary.json'
             p.write_text(p.read_text().replace('"RUN_S"', run_s))
-            self.assertIn('| ✅ | — | `rp2040:rp2040 5.4.4` |', self.render())
+            self.assertIn('| ✅ | — | `rp2040:rp2040 5.4.4, non-git: id/version only` |', self.render())
 
     def test_a_huge_report_is_truncated(self):
         self.selection(boards=tuple(f'b{i}' for i in range(400)))

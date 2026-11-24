@@ -159,14 +159,9 @@ def core_of(status, r):
     plat = rec if isinstance(rec, dict) else (status or {}).get('platform')
     if not isinstance(plat, dict) or not plat.get('id'):
         return '—'
-    git = plat.get('git')
-    # only a build record's platform carries git (None for a non-git core); a build status's has id/version only
-    if plat is rec and 'git' in plat and (git is None or isinstance(git, dict)):
-        clean_git = None if git is None else {'commit': as_str(git.get('commit')), 'dirty': git.get('dirty') is True,
-                                              'content': as_str(git.get('content'))}
-        clean = {'id': as_str(plat['id']), 'version': as_str(plat.get('version')), 'git': clean_git}
-        return literal(hil_lib().core_provenance(clean), True)
-    return literal(f'{plat["id"]} {plat.get("version") or "?"}', True)
+    # a build record's platform carries its git provenance; a build status's has id/version only
+    text = hil_lib().core_provenance(plat) if plat is rec else f'{plat["id"]} {plat.get("version") or "?"}'
+    return literal(text, True)
 
 
 def render(sel, statuses, summary, a):
