@@ -19,7 +19,8 @@
 - Keep each file's line endings; some are CRLF (`src/tusb_config.h`, several `tusb_config_<mcu>.h`).
 - Vendored TinyUSB is hathach/tinyusb's bytes, except `src/tusb_option.h`'s ESP32 branch (the ESP32 core's own
   TinyUSB headers come first on the include path, `tusb_config_esp32.h:32`). Sync and verify it only with the
-  `update-tinyusb` skill (`.claude/skills/update-tinyusb/SKILL.md`).
+  `update-tinyusb` skill (`.claude/skills/update-tinyusb/SKILL.md`). A sync PR carries the sync only; a fix that changes
+  vendored code goes to hathach/tinyusb (that skill's Findings on vendored code).
 - Ports implement the `TinyUSB_Port_*` hooks of `src/arduino/Adafruit_TinyUSB_API.h`. On cores with built-in support
   (SAMD, nRF, RP2040, CH32) the core initialises and services the stack through that header's `TinyUSB_Device_*`
   functions (nRF from the library's own RTOS task); elsewhere (STM32, mbed RP2040) `TINYUSB_NEED_POLLING_TASK` is set
@@ -66,9 +67,16 @@
   one, authorizes one headless `chief` to drive its reviews and CI to green: push commits to its branch, reply to and
   resolve its review threads through `pr-babysit` with `autoPush: true` and `markSonar: true`. Launch it in the PR
   worktree through agentrc's `headless-chief` skill (`chief_run.py`), never a bare `claude -p`, and relay its exit as
-  that skill directs. Merging needs the human's own words asking to merge that PR. `pr-babysit` args:
-  `{"pr": <num>, "protected": "^test/hil/[^/]+\\.json$"}`; reviewers are agentrc's default (`protected` keeps the HIL
-  rosters and the agentrc pin out of automated fixes).
+  that skill directs. Merging needs the human's own words asking to merge that PR. `pr-babysit` args, reviewers
+  agentrc's default:
+
+  ```json
+  {"pr": <num>,
+   "protected": "^(test/hil/[^/]+\\.json|src/(?!arduino/|Adafruit_TinyUSB\\.h$|tusb_config\\.h$).+|\\.claude/skills/update-tinyusb/upstream\\.json)$"}
+  ```
+
+  `protected` keeps the HIL rosters, the agentrc pin and the vendored TinyUSB out of automated fixes; it neither refutes
+  a finding nor waives a failure.
 - The follow-up label is `follow-up`.
 
 ## Agent files
