@@ -209,6 +209,12 @@ uint16_t printerd_open(uint8_t rhport, const tusb_desc_interface_t *itf_desc, ui
       tu_edpt_stream_clear(stream_tx);
     } else {
       tu_edpt_stream_t *stream_rx = &p->rx_stream;
+      // The rx stream arms one packet into its buffer, CFG_TUD_PRINTER_RX_EPSIZE, which must hold it (512 bytes at
+      // high speed): else a full packet writes past it. Failing here fails the open, so SET_CONFIGURATION stalls. A
+      // dedicated hw FIFO has no RAM buffer
+      TU_ASSERT(TUD_VALIDATE_BASIC(stream_rx->ep_buf == NULL ||
+                                   tu_edpt_rx_buf_fits(desc_ep, CFG_TUD_PRINTER_RX_EPSIZE, false)),
+                0);
       tu_edpt_stream_open(stream_rx, rhport, desc_ep, tu_edpt_packet_size(desc_ep));
       tu_edpt_stream_clear(stream_rx);
       TU_ASSERT(tu_edpt_stream_read_xfer(stream_rx) > 0, 0);
@@ -248,6 +254,8 @@ bool printerd_control_xfer_cb(uint8_t rhport, uint8_t stage, const tusb_control_
   if (stage == CONTROL_STAGE_SETUP) {
     switch (request->bRequest) {
       case TUSB_PRINTER_REQUEST_GET_DEVICE_ID: {
+        // device-to-host (Printer 1.1 4.2.1): an OUT data stage would write host data into the application's device ID
+        TU_VERIFY(request->bmRequestType_bit.direction == TUSB_DIR_IN);
         const uint8_t *device_id = tud_printer_get_device_id_cb(itf);
         TU_VERIFY(device_id);
         const uint16_t total_len = (uint16_t)((device_id[0] << 8) | device_id[1]);

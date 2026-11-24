@@ -67,6 +67,10 @@ bool usbd_edpt_open(uint8_t rhport, tusb_desc_endpoint_t const * desc_ep);
 void usbd_edpt_close(uint8_t rhport, uint8_t ep_addr);
 
 // Submit a usb transfer
+// OUT: with TUP_DCD_EDPT_OUT_WHOLE_PACKET (e.g. dwc2 DMA, samd) the controller writes a full packet whatever the
+// transfer has left: the buffer must hold total_bytes rounded up to the packet size (EP0 goes to the usbd control
+// buffer, which does), or a host sending more than armed writes past it. Other controllers cut a longer packet to the
+// transfer.
 bool usbd_edpt_xfer(uint8_t rhport, uint8_t ep_addr, uint8_t * buffer, uint16_t total_bytes, bool is_isr);
 
 // Submit a usb ISO transfer by use of a FIFO (ring buffer) - all bytes in FIFO get transmitted
@@ -94,7 +98,8 @@ void usbd_edpt_clear_stall(uint8_t rhport, uint8_t ep_addr);
 bool usbd_edpt_stalled(uint8_t rhport, uint8_t ep_addr);
 
 // Abort an in-flight transfer on a non-control endpoint and release its claim, so the endpoint
-// can be armed again
+// can be armed again. A stall is cleared. Without dcd_edpt_abort_xfer() in the DCD, or on a stalled
+// endpoint, it is a stall and clear-stall, which also resets the data toggle.
 void usbd_edpt_abort(uint8_t rhport, uint8_t ep_addr);
 
 // Allocate packet buffer used by ISO endpoints
@@ -115,7 +120,9 @@ bool usbd_edpt_ready(uint8_t rhport, uint8_t ep_addr) {
 void usbd_sof_enable(uint8_t rhport, sof_consumer_t consumer, bool en);
 
 bool usbd_open_edpt_pair(uint8_t rhport, uint8_t const* p_desc, uint8_t ep_count, uint8_t xfer_type, uint8_t* ep_out, uint8_t* ep_in);
-void usbd_defer_func(osal_task_func_t func, void *param, bool in_isr);
+
+// Queue func(param) to run in the usbd task. False if the event could not be queued (OS_NONE: queue full).
+bool usbd_defer_func(osal_task_func_t func, void *param, bool in_isr);
 
 // Call func(param) in the usbd task once its event queue is found empty, i.e. after every event
 // queued before this call. Nothing is queued, so it neither blocks nor is lost on a full queue.

@@ -126,6 +126,22 @@ tu_static CFG_TUD_MEM_SECTION struct {
   TUD_EPBUF_DEF(buf_3, CFG_TUD_AUDIO_FUNC_3_EP_OUT_SZ_MAX);
   #endif
 } lin_buf_out;
+
+// Size of a function's OUT linear buffer, CFG_TUD_AUDIO_FUNC_n_EP_OUT_SZ_MAX
+static uint16_t audiod_lin_buf_out_size(uint8_t func_id) {
+  switch (func_id) {
+  #if CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX > 0
+    case 0: return CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX;
+  #endif
+  #if CFG_TUD_AUDIO > 1 && CFG_TUD_AUDIO_FUNC_2_EP_OUT_SZ_MAX > 0
+    case 1: return CFG_TUD_AUDIO_FUNC_2_EP_OUT_SZ_MAX;
+  #endif
+  #if CFG_TUD_AUDIO > 2 && CFG_TUD_AUDIO_FUNC_3_EP_OUT_SZ_MAX > 0
+    case 2: return CFG_TUD_AUDIO_FUNC_3_EP_OUT_SZ_MAX;
+  #endif
+    default: return 0;
+  }
+}
 #endif// CFG_TUD_AUDIO_ENABLE_EP_OUT && !CFG_TUD_EDPT_DEDICATED_HWFIFO
 
 // Control buffer
@@ -818,7 +834,7 @@ uint16_t audiod_open(uint8_t rhport, tusb_desc_interface_t const *itf_desc, uint
     }
 
     // Verify next interface is Audio Streaming (subclass 2), not MIDI Streaming (subclass 3)
-    if (p_desc_end - p_desc >= (int)sizeof(tusb_desc_interface_t)) {
+    if (tu_desc_in_bounds(p_desc, p_desc_end) && tu_desc_len(p_desc) >= sizeof(tusb_desc_interface_t)) {
       tusb_desc_interface_t const *next_itf = (tusb_desc_interface_t const *) p_desc;
       TU_VERIFY(next_itf->bInterfaceClass == TUSB_CLASS_AUDIO &&
                 next_itf->bInterfaceSubClass == AUDIO_SUBCLASS_STREAMING, 0);
@@ -1210,6 +1226,10 @@ static bool audiod_set_interface(uint8_t rhport, tusb_control_request_t const *p
 
             // Prepare for incoming data
   #if !CFG_TUD_EDPT_DEDICATED_HWFIFO
+            // Each transfer is one packet into the linear buffer, which must hold it: a smaller
+            // CFG_TUD_AUDIO_FUNC_n_EP_OUT_SZ_MAX than this setting's wMaxPacketSize would let a full packet write past
+            // it. Failing here stalls SET_INTERFACE, so the host cannot select this setting
+            TU_VERIFY(TUD_VALIDATE_BASIC(audio->ep_out_sz <= audiod_lin_buf_out_size(func_id)));
             TU_VERIFY(usbd_edpt_xfer(rhport, audio->ep_out, audio->lin_buf_out, audio->ep_out_sz, false));
   #else
             TU_VERIFY(usbd_edpt_xfer_fifo(rhport, audio->ep_out, &audio->ep_out_ff, audio->ep_out_sz, false));
@@ -1294,8 +1314,12 @@ static bool audiod_control_complete(uint8_t rhport, tusb_control_request_t const
           // Check if entity is present and get corresponding driver index
           TU_VERIFY(audiod_verify_entity_exists(itf, entityID, &func_id));
 
+          // Invoke callback
+          bool ret = tud_audio_set_req_entity_cb(rhport, p_request, get_ctrl_buffer());
+
 #if CFG_TUD_AUDIO_ENABLE_EP_IN && CFG_TUD_AUDIO_EP_IN_FLOW_CONTROL
-          if (tud_audio_n_version(func_id) == 2) {
+          // Commit the new TX rate only once the application accepted it, a stalled request keeps the current one
+          if (ret && tud_audio_n_version(func_id) == 2) {
             uint8_t ctrlSel = TU_U16_HIGH(p_request->wValue);
             if (_audiod_fct[func_id].bclock_id_tx == entityID && ctrlSel == AUDIO20_CS_CTRL_SAM_FREQ && p_request->bRequest == AUDIO20_CS_REQ_CUR) {
               _audiod_fct[func_id].sample_rate_tx = tu_unaligned_read32(get_ctrl_buffer());
@@ -1304,8 +1328,7 @@ static bool audiod_control_complete(uint8_t rhport, tusb_control_request_t const
           }
 #endif
 
-          // Invoke callback
-          return tud_audio_set_req_entity_cb(rhport, p_request, get_ctrl_buffer());
+          return ret;
         } else {
           // Find index of audio driver structure and verify interface really exists
           TU_VERIFY(audiod_verify_itf_exists(itf, &func_id));
@@ -1321,30 +1344,31 @@ static bool audiod_control_complete(uint8_t rhport, tusb_control_request_t const
         // Check if entity is present and get corresponding driver index
         TU_VERIFY(audiod_verify_ep_exists(ep, &func_id));
 
+        // Invoke callback
+        bool ret = tud_audio_set_req_ep_cb(rhport, p_request, get_ctrl_buffer());
+
 #if CFG_TUD_AUDIO_ENABLE_EP_IN && CFG_TUD_AUDIO_EP_IN_FLOW_CONTROL
-          if (tud_audio_n_version(func_id) == 1) {
-            if (_audiod_fct[func_id].ep_in == ep) {
-              uint8_t ctrlSel = TU_U16_HIGH(p_request->wValue);
-              if (ctrlSel == AUDIO10_EP_CTRL_SAMPLING_FREQ && p_request->bRequest == AUDIO10_CS_REQ_SET_CUR) {
-                _audiod_fct[func_id].sample_rate_tx = tu_unaligned_read32(get_ctrl_buffer()) & 0x00FFFFFF;
-                audiod_calc_tx_packet_sz(&_audiod_fct[func_id]);
-              }
+        // Commit the new TX rate only once the application accepted it, a stalled request keeps the current one
+        if (ret && tud_audio_n_version(func_id) == 1) {
+          if (_audiod_fct[func_id].ep_in == ep) {
+            uint8_t ctrlSel = TU_U16_HIGH(p_request->wValue);
+            if (ctrlSel == AUDIO10_EP_CTRL_SAMPLING_FREQ && p_request->bRequest == AUDIO10_CS_REQ_SET_CUR) {
+              _audiod_fct[func_id].sample_rate_tx = tu_unaligned_read32(get_ctrl_buffer()) & 0x00FFFFFF;
+              audiod_calc_tx_packet_sz(&_audiod_fct[func_id]);
             }
           }
+        }
 #endif
 
-          // Invoke callback
-          bool ret = tud_audio_set_req_ep_cb(rhport, p_request, get_ctrl_buffer());
-
 #if CFG_TUD_AUDIO_ENABLE_EP_OUT && CFG_TUD_AUDIO_ENABLE_FEEDBACK_EP
-          if (ret && tud_audio_n_version(func_id) == 1) {
-            if (_audiod_fct[func_id].ep_out == ep) {
-              uint8_t ctrlSel = TU_U16_HIGH(p_request->wValue);
-              if (ctrlSel == AUDIO10_EP_CTRL_SAMPLING_FREQ && p_request->bRequest == AUDIO10_CS_REQ_SET_CUR) {
-                audiod_fb_params_prepare(func_id, _audiod_fct[func_id].ep_out_alt);
-              }
+        if (ret && tud_audio_n_version(func_id) == 1) {
+          if (_audiod_fct[func_id].ep_out == ep) {
+            uint8_t ctrlSel = TU_U16_HIGH(p_request->wValue);
+            if (ctrlSel == AUDIO10_EP_CTRL_SAMPLING_FREQ && p_request->bRequest == AUDIO10_CS_REQ_SET_CUR) {
+              audiod_fb_params_prepare(func_id, _audiod_fct[func_id].ep_out_alt);
             }
           }
+        }
 #endif
         return ret;
       } break;

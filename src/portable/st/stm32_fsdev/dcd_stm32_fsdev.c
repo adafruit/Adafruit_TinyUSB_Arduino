@@ -282,7 +282,9 @@ static void handle_ctr_setup(uint32_t ep_id) {
   uint16_t rx_addr  = (uint16_t)btable_get_addr(ep_id, BTABLE_BUF_RX);
   uint8_t  setup_packet[8] TU_ATTR_ALIGNED(4);
 
-  tu_hwfifo_read(PMA_BUF_AT(rx_addr), setup_packet, rx_count, NULL);
+  // EP0 RX is sized to max packet size after a control OUT completes, so the hardware stores a SETUP data
+  // packet of up to that size: copy at most 8 bytes, any other count is dropped below
+  tu_hwfifo_read(PMA_BUF_AT(rx_addr), setup_packet, tu_min16(rx_count, (uint16_t) sizeof(setup_packet)), NULL);
 
   // Clear CTR RX if another setup packet arrived before this, it will be discarded
   ep_write_clear_ctr(ep_id, TUSB_DIR_OUT);
@@ -338,12 +340,14 @@ static void handle_ctr_rx(uint32_t ep_id) {
   uint16_t         pma_addr = (uint16_t)btable_get_addr(ep_id, buf_id);
   fsdev_pma_buf_t *pma_buf  = PMA_BUF_AT(pma_addr);
 
+  // A full packet may exceed what the transfer has left: keep that much, the rest stays in PMA
+  const uint16_t xact_len = tu_min16(rx_count, (uint16_t)(xfer->total_len - xfer->queued_len));
   if (xfer->ff) {
-    tu_hwfifo_read_to_fifo(pma_buf, xfer->ff, rx_count, NULL);
+    tu_hwfifo_read_to_fifo(pma_buf, xfer->ff, xact_len, NULL);
   } else {
-    tu_hwfifo_read(pma_buf, xfer->buffer + xfer->queued_len, rx_count, NULL);
+    tu_hwfifo_read(pma_buf, xfer->buffer + xfer->queued_len, xact_len, NULL);
   }
-  xfer->queued_len += rx_count;
+  xfer->queued_len += xact_len;
 
   if ((rx_count < xfer->max_packet_size) || (xfer->queued_len >= xfer->total_len)) {
     // all bytes received or short packet
@@ -474,6 +478,10 @@ void dcd_edpt0_status_complete(uint8_t rhport, const tusb_control_request_t *req
 static uint32_t dcd_pma_alloc(uint16_t len, bool dbuf) {
   uint8_t  blsize, num_block;
   uint16_t aligned_len = pma_align_buffer_size(len, &blsize, &num_block);
+#ifdef CFG_TUSB_FSDEV_32BIT
+  // 32-bit PMA buffers must be word aligned (RM0444/RM0503): btable_set_addr() drops ADDR bits 1:0
+  aligned_len = (uint16_t)tu_align4(aligned_len + 3u);
+#endif
   (void)blsize;
   (void)num_block;
 
@@ -809,6 +817,10 @@ void dcd_edpt_stall(uint8_t rhport, uint8_t ep_addr) {
   const uint8_t    ep_num = tu_edpt_number(ep_addr);
   const tusb_dir_t dir    = tu_edpt_dir(ep_addr);
   xfer_ctl_t      *xfer   = xfer_ctl_ptr(ep_num, dir);
+  // ISO has no handshake: only VALID/DISABLED STAT are legal and DTOG selects the buffer (RM0091 30.5.4)
+  if (ep_alloc_status[xfer->ep_idx].ep_type == TUSB_XFER_ISOCHRONOUS) {
+    return;
+  }
   const uint8_t    ep_idx = xfer->ep_idx;
 
   uint32_t ep_reg = ep_read(ep_idx) | U_EP_CTR_TX | U_EP_CTR_RX; // reserve CTR bits
@@ -832,6 +844,10 @@ void dcd_edpt_clear_stall(uint8_t rhport, uint8_t ep_addr) {
   const uint8_t    ep_num = tu_edpt_number(ep_addr);
   const tusb_dir_t dir    = tu_edpt_dir(ep_addr);
   xfer_ctl_t      *xfer   = xfer_ctl_ptr(ep_num, dir);
+  // ISO has no handshake: only VALID/DISABLED STAT are legal and DTOG selects the buffer (RM0091 30.5.4)
+  if (ep_alloc_status[xfer->ep_idx].ep_type == TUSB_XFER_ISOCHRONOUS) {
+    return;
+  }
   const uint8_t    ep_idx = xfer->ep_idx;
 
   uint32_t ep_reg = ep_read(ep_idx) | U_EP_CTR_TX | U_EP_CTR_RX; // reserve CTR bits

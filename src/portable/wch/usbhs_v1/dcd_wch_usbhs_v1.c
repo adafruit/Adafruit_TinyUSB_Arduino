@@ -8,9 +8,9 @@
  */
 #include "tusb_option.h"
 
-#if CFG_TUD_ENABLED && defined(TUP_USBIP_WCH_USBHS) && defined(CFG_TUD_WCH_USBIP_USBHS) && \
+#if CFG_TUD_ENABLED && defined(TUP_USBIP_WCH_USBHS_V1) && defined(CFG_TUD_WCH_USBIP_USBHS) && \
   (CFG_TUD_WCH_USBIP_USBHS == 1)
-  #include "ch32_usbhs_reg.h"
+  #include "wch_usbhs_v1_reg.h"
 
   #include "device/dcd.h"
 
@@ -41,6 +41,9 @@ static xfer_ctl_t xfer_status[EP_MAX][2];
 TU_ATTR_ALIGNED(4) static uint8_t ep0_buffer[CFG_TUD_ENDPOINT0_SIZE];
 static bool ep0_tog;
 static bool reset_evt_pending;
+// TX_CTRL toggle bits each bulk/interrupt IN packet in flight was armed with (one byte per endpoint:
+// written from task and ISR context, so never a shared read-modify-write)
+static uint8_t in_pkt_tog[EP_MAX];
 
 static void queue_in_packet(uint8_t ep_num, xfer_ctl_t* xfer) {
   uint16_t remaining = xfer->total_len - xfer->queued_len;
@@ -61,7 +64,9 @@ static void queue_in_packet(uint8_t ep_num, xfer_ctl_t* xfer) {
   } else if (xfer->is_iso) {
     EP_TX_CTRL(ep_num) = (EP_TX_CTRL(ep_num) & ~(USBHS_EP_T_RES_MASK)) | USBHS_EP_T_RES_NYET;
   } else {
-    EP_TX_CTRL(ep_num) = (EP_TX_CTRL(ep_num) & ~(USBHS_EP_T_RES_MASK)) | USBHS_EP_T_RES_ACK;
+    uint8_t const tx_ctrl = EP_TX_CTRL(ep_num);
+    in_pkt_tog[ep_num] = tx_ctrl & USBHS_EP_T_TOG_MASK;
+    EP_TX_CTRL(ep_num) = (tx_ctrl & ~(USBHS_EP_T_RES_MASK)) | USBHS_EP_T_RES_ACK;
   }
 }
 
@@ -87,6 +92,17 @@ static void update_in(uint8_t rhport, uint8_t ep_num, bool force) {
   xfer_ctl_t* xfer = XFER_CTL_BASE(ep_num, TUSB_DIR_IN);
   if (!xfer->valid) {
     return;
+  }
+
+  // The completion of a bulk/interrupt IN packet means the host ACKed it, so its data toggle must have
+  // advanced. USBHS drops that update when the IN ACK is closely followed by a PING/OUT on the same
+  // endpoint number: the next packet would go out with the old toggle and the host would discard it
+  // as a retransmission. Advance the toggle here when the controller did not.
+  if (!force && ep_num != 0 && !xfer->is_iso) {
+    uint8_t const tx_ctrl = EP_TX_CTRL(ep_num);
+    if ((tx_ctrl & USBHS_EP_T_TOG_MASK) == in_pkt_tog[ep_num]) {
+      EP_TX_CTRL(ep_num) = (tx_ctrl & ~(USBHS_EP_T_TOG_MASK)) | (in_pkt_tog[ep_num] ^ USBHS_EP_T_TOG_1);
+    }
   }
 
   if (force || (xfer->total_len > xfer->queued_len)) {
@@ -473,7 +489,11 @@ void dcd_int_handler(uint8_t rhport) {
 
     USBHSD->INT_FG = USBHS_SETUP_FLAG; /* Clear flag */
   } else if (int_flag & USBHS_SUSPEND_FLAG) {
-    dcd_event_t event = {.rhport = rhport, .event_id = DCD_EVENT_SUSPEND};
+    // The SUSPEND interrupt fires on both suspend and resume; MIS_ST's suspend bit tells them apart
+    // (set while suspended, clear once resumed). Reporting both as suspend leaves usbd suspended for
+    // good: SOF interrupts are off after reset, so nothing else clears it and tud_ready() stays false.
+    dcd_event_t event = {.rhport = rhport,
+                         .event_id = (USBHSD->MIS_ST & USBHS_SUSPEND) ? DCD_EVENT_SUSPEND : DCD_EVENT_RESUME};
     dcd_event_handler(&event, true);
 
     USBHSD->INT_FG = USBHS_SUSPEND_FLAG; /* Clear flag */

@@ -303,7 +303,8 @@ uint16_t cdcd_open(uint8_t rhport, const tusb_desc_interface_t* itf_desc, uint16
   }
 
   // notification endpoint (optional)
-  if (TUSB_DESC_ENDPOINT == tu_desc_type(p_desc)) {
+  if (tu_desc_in_bounds(p_desc, desc_end) && TUSB_DESC_ENDPOINT == tu_desc_type(p_desc)) {
+    TU_ASSERT(tu_desc_len(p_desc) >= sizeof(tusb_desc_endpoint_t), 0);
     const tusb_desc_endpoint_t* desc_ep = (const tusb_desc_endpoint_t*) p_desc;
     TU_ASSERT(usbd_edpt_open(rhport, desc_ep), 0);
     p_cdc->ep_notify = desc_ep->bEndpointAddress;
@@ -312,17 +313,24 @@ uint16_t cdcd_open(uint8_t rhport, const tusb_desc_interface_t* itf_desc, uint16
   }
 
   //------------- Data Interface (optional) -------------//
-  if (TUSB_DESC_INTERFACE == tu_desc_type(p_desc)) {
+  if (tu_desc_in_bounds(p_desc, desc_end) && TUSB_DESC_INTERFACE == tu_desc_type(p_desc)) {
+    TU_ASSERT(tu_desc_len(p_desc) >= sizeof(tusb_desc_interface_t), 0);
     const tusb_desc_interface_t *data_itf_desc = (const tusb_desc_interface_t *)p_desc;
     if (TUSB_CLASS_CDC_DATA == data_itf_desc->bInterfaceClass) {
       for (uint8_t e = 0; e < data_itf_desc->bNumEndpoints; e++) {
-        if (!tu_desc_in_bounds(p_desc, desc_end)) {
-          break;
-        }
         p_desc = tu_desc_next(p_desc);
+        TU_ASSERT(tu_desc_in_bounds(p_desc, desc_end) && tu_desc_len(p_desc) >= sizeof(tusb_desc_endpoint_t), 0);
 
         const tusb_desc_endpoint_t *desc_ep = (const tusb_desc_endpoint_t *)p_desc;
         TU_ASSERT(TUSB_DESC_ENDPOINT == desc_ep->bDescriptorType && TUSB_XFER_BULK == desc_ep->bmAttributes.xfer, 0);
+        // The rx stream arms the whole packets that fit its buffer, at least one (tu_edpt_stream_read_xfer()): the
+        // buffer, CFG_TUD_CDC_RX_EPSIZE, must hold a packet of the endpoint (512 bytes at high speed), else a full
+        // packet writes past it. Failing here fails the open, so SET_CONFIGURATION stalls. A dedicated hw FIFO has no
+        // RAM buffer
+        TU_ASSERT(TUD_VALIDATE_BASIC(tu_edpt_dir(desc_ep->bEndpointAddress) == TUSB_DIR_IN ||
+                                     p_cdc->rx_stream.ep_buf == NULL ||
+                                     tu_edpt_rx_buf_fits(desc_ep, CFG_TUD_CDC_RX_EPSIZE, false)),
+                  0);
 
         TU_ASSERT(usbd_edpt_open(rhport, desc_ep), 0);
         if (tu_edpt_dir(desc_ep->bEndpointAddress) == TUSB_DIR_IN) {

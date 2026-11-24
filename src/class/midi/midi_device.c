@@ -463,7 +463,9 @@ uint16_t midid_open(uint8_t rhport, const tusb_desc_interface_t *desc_itf, uint1
   }
 
   // 2nd Interface is MIDI Streaming
-  TU_VERIFY(TUSB_DESC_INTERFACE == tu_desc_type(p_desc), 0);
+  TU_VERIFY(tu_desc_in_bounds(p_desc, desc_end) && TUSB_DESC_INTERFACE == tu_desc_type(p_desc) &&
+              tu_desc_len(p_desc) >= sizeof(tusb_desc_interface_t),
+            0);
   const tusb_desc_interface_t* desc_midi = (const tusb_desc_interface_t*) p_desc;
 
   TU_VERIFY(TUSB_CLASS_AUDIO == desc_midi->bInterfaceClass &&
@@ -485,6 +487,7 @@ uint16_t midid_open(uint8_t rhport, const tusb_desc_interface_t *desc_itf, uint1
   uint8_t found_ep = 0;
   while ((found_ep < desc_midi->bNumEndpoints) && tu_desc_in_bounds(p_desc, desc_end)) {
     if (TUSB_DESC_ENDPOINT == tu_desc_type(p_desc)) {
+      TU_ASSERT(tu_desc_len(p_desc) >= sizeof(tusb_desc_endpoint_t), 0);
       const tusb_desc_endpoint_t *desc_ep = (const tusb_desc_endpoint_t *)p_desc;
       TU_ASSERT(usbd_edpt_open(rhport, desc_ep), 0);
       const uint8_t ep_addr = ((const tusb_desc_endpoint_t *)p_desc)->bEndpointAddress;
@@ -495,6 +498,12 @@ uint16_t midid_open(uint8_t rhport, const tusb_desc_interface_t *desc_itf, uint1
         tu_edpt_stream_clear(stream_tx);
       } else {
         tu_edpt_stream_t *stream_rx = &p_midi->ep_stream.rx;
+        // The rx stream arms one packet into its buffer, CFG_TUD_MIDI_RX_EPSIZE, which must hold it (512 bytes for
+        // bulk at high speed): else a full packet writes past it. Failing here fails the open, so SET_CONFIGURATION
+        // stalls. A dedicated hw FIFO has no RAM buffer
+        TU_ASSERT(TUD_VALIDATE_BASIC(stream_rx->ep_buf == NULL ||
+                                     tu_edpt_rx_buf_fits(desc_ep, CFG_TUD_MIDI_RX_EPSIZE, false)),
+                  0);
         tu_edpt_stream_open(stream_rx, rhport, desc_ep, tu_edpt_packet_size(desc_ep));
         tu_edpt_stream_clear(stream_rx);
         TU_ASSERT(tu_edpt_stream_read_xfer(stream_rx) > 0, 0);         // prepare to receive data
