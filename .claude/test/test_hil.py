@@ -72,6 +72,8 @@ class Tables(unittest.TestCase):
                                        'espressif_p4_function_ev'})
         for name, b in boards.items():   # the S3's OTG takes its USB-Serial/JTAG PHY: no debug route
             self.assertEqual('openocd' in b.get('debug', {}), name != 'espressif_s3_devkitm')
+        raw = json.loads((ROOT / 'test/hil/ci.json').read_text())['boards']   # the registry holds the others' routes
+        self.assertEqual([b['name'] for b in raw if 'debug' in b], ['espressif_p4_function_ev'])
         for name in ('espressif_s3_devkitm', 'espressif_p4_function_ev'):   # Arduino on ESP32 reports no serial
             self.assertTrue(boards[name]['no_serial'])
 

@@ -50,9 +50,10 @@ A roster entry:
 - `probe`: the serial of the debug probe wired to the board (esptool: its USB-UART bridge's), its key in agentrc's
   board registry (`skills/hil/boards.json`), which supplies the flasher. A dev PC's unregistered board carries its own
   `flasher` instead (the `hil` skill's Flashers: `openocd`, `jlink` or `esptool` here).
-- `debug.openocd`: the openocd config the GDB session uses; with `debug.tool` `openocd-esp32`, exactly
-  `-f board/<chip>-builtin.cfg`, `debug.uid` the chip's USB-Serial/JTAG serial and `debug.usb_port` its bus-port, no
-  `vid_pid`. The harness checks that serial at that port and passes the port as openocd's `adapter usb location`;
+- `debug.openocd`: the openocd config the GDB session uses. A registered board whose registry entry has a `debug`
+  takes it from there and its roster entry keeps none (a differing copy is refused as drift). With `debug.tool`
+  `openocd-esp32`, exactly `-f board/<chip>-builtin.cfg`, `debug.uid` the chip's USB-Serial/JTAG serial and
+  `debug.usb_port` its bus-port, no `vid_pid`. The harness checks that serial at that port and passes the port as openocd's `adapter usb location`;
   agentrc's whole-bus lookup refuses while a serial-less 303a:1001 (the S3's Arduino DUT) is on the host. No `debug`:
   no GDB route.
 - `arduino.tests`: the tests the battery runs, all of the board's role (device or host, the build contract's board
