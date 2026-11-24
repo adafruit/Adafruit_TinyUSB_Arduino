@@ -60,6 +60,10 @@ static void max3421_isr(void);
 
 #if defined(ARDUINO_ARCH_ESP32)
 SemaphoreHandle_t max3421_intr_sem;
+// Held by the interrupt task while it runs the handler. end() takes it to wait
+// for a handler that is running, and clears max3421_intr_enabled under it.
+static SemaphoreHandle_t max3421_intr_lock;
+static volatile bool max3421_intr_enabled;
 static void max3421_intr_task(void *param);
 #endif
 
@@ -123,15 +127,33 @@ bool Adafruit_USBH_Host::begin(uint8_t rhport) {
   // ESP32 SPI assign pins when begin() of declaration as standard API
   _spi->begin(_sck, _miso, _mosi, -1);
 
-  // Create an task for executing interrupt handler in thread mode
-  max3421_intr_sem = xSemaphoreCreateBinary();
-  xTaskCreateUniversal(max3421_intr_task, "max3421 intr", 2048, NULL, 5, NULL,
-                       ARDUINO_RUNNING_CORE);
+  // Create an task for executing interrupt handler in thread mode.
+  // Only once: begin() is called again after end().
+  if (max3421_intr_sem == NULL) {
+    max3421_intr_sem = xSemaphoreCreateBinary();
+    max3421_intr_lock = xSemaphoreCreateMutex();
+    if (max3421_intr_sem == NULL || max3421_intr_lock == NULL ||
+        xTaskCreateUniversal(max3421_intr_task, "max3421 intr", 2048, NULL, 5,
+                             NULL, ARDUINO_RUNNING_CORE) != pdPASS) {
+      // undo, so that a later begin() tries again
+      if (max3421_intr_sem != NULL) {
+        vSemaphoreDelete(max3421_intr_sem);
+        max3421_intr_sem = NULL;
+      }
+      if (max3421_intr_lock != NULL) {
+        vSemaphoreDelete(max3421_intr_lock);
+        max3421_intr_lock = NULL;
+      }
+      return false;
+    }
+  }
 #else
   _spi->begin();
 #endif
 
-  // Interrupt pin
+  // Interrupt pin. On ESP32 the interrupt task runs the handler only once
+  // tusb_init() below has set up the driver (a notification from before an
+  // end() may still be pending).
   pinMode(_intr, INPUT_PULLUP);
   attachInterrupt(_intr, max3421_isr, FALLING);
 #endif
@@ -141,11 +163,63 @@ bool Adafruit_USBH_Host::begin(uint8_t rhport) {
       .role = TUSB_ROLE_HOST,
       .speed = TUH_OPT_HIGH_SPEED ? TUSB_SPEED_HIGH : TUSB_SPEED_FULL,
   };
-  return tusb_init(rhport, &rh_init);
+  bool const ok = tusb_init(rhport, &rh_init);
+
+#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421 && defined(ARDUINO_ARCH_ESP32)
+  if (ok) {
+    xSemaphoreTake(max3421_intr_lock, portMAX_DELAY);
+    max3421_intr_enabled = true;
+    xSemaphoreGive(max3421_intr_lock);
+    // run the handler once: an interrupt during tusb_init() was skipped
+    xSemaphoreGive(max3421_intr_sem);
+  }
+#endif
+
+  return ok;
 }
 
 void Adafruit_USBH_Host::task(uint32_t timeout_ms, bool in_isr) {
   tuh_task_ext(timeout_ms, in_isr);
+}
+
+bool Adafruit_USBH_Host::end(void) {
+#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
+  // No interrupt handler may run once tuh_deinit() frees the driver's state
+#ifdef ARDUINO_ARCH_ESP32
+  if (max3421_intr_lock != NULL) {
+    // Wait for a handler that is running. It can wait for space in the host
+    // event queue, which only task() empties: keep emptying it meanwhile
+    // (end() runs where task() runs). The interrupt stays on until the lock
+    // is held, so work that task() runs here (e.g. a mount callback that
+    // reads the drive) can still complete.
+    while (xSemaphoreTake(max3421_intr_lock, pdMS_TO_TICKS(1)) != pdTRUE) {
+      tuh_task_ext(0, false);
+    }
+    // a notification that is still pending is then ignored
+    max3421_intr_enabled = false;
+    detachInterrupt(_intr);
+    xSemaphoreGive(max3421_intr_lock);
+  } else {
+    detachInterrupt(_intr);
+  }
+#else
+  detachInterrupt(_intr);
+#endif
+#endif
+
+  bool const ok = tuh_deinit(_rhport);
+
+#if defined(CFG_TUH_MAX3421) && CFG_TUH_MAX3421
+  if (!ok) {
+    // the host is still running: give it its interrupt back
+#ifdef ARDUINO_ARCH_ESP32
+    max3421_intr_enabled = true;
+#endif
+    attachInterrupt(_intr, max3421_isr, FALLING);
+  }
+#endif
+
+  return ok;
 }
 
 // Invoked when received report from device via interrupt endpoint
@@ -181,7 +255,11 @@ static void max3421_intr_task(void *param) {
 
   while (1) {
     xSemaphoreTake(max3421_intr_sem, portMAX_DELAY);
-    tuh_int_handler_esp32(1, false);
+    xSemaphoreTake(max3421_intr_lock, portMAX_DELAY);
+    if (max3421_intr_enabled) {
+      tuh_int_handler_esp32(1, false);
+    }
+    xSemaphoreGive(max3421_intr_lock);
   }
 }
 
