@@ -109,7 +109,7 @@ quotes `firstError` (and `error`). Each `warnings` entry is quoted in `notes`.
   options, then each image at its offset, every file in the build dir, ascending, not overlapping, inside the span.
   A device sketch needs its VID:PID: a `-D` define, on ESP32 the variant's `pins_arduino.h` (the S3's 303a:1001),
   else the library's fallback. A differing foreign header refuses unless the build's core bundles it, its
-  drift then noted in the HIL report. It records (schema 2, the `arduino`
+  drift then noted in the HIL report. It records (schema 3, the `arduino`
   skill's The HIL build record) HEAD, the FQBN, the platform (id, version, install dir, and commit and dirty state
   when the core is a git checkout), the arduino-cli version, the resolved dependencies with their contents' sha256,
   the roster's sha256, the contract files' and the agentrc engines' sha256, the board's role, ESP `chip` and `fixture` (path and sha256), and per sketch its
