@@ -182,12 +182,17 @@ class Selection(unittest.TestCase):
         self.assertEqual(set(sel['builds']), {'metro_m0_tinyusb'})    # .metro_m0_tinyusb.test.only
 
     def test_example_eligible_on_no_board_is_uncovered(self):
-        sketch = 'examples/MassStorage/msc_esp32_file_browser'    # .funhouse/.magtag/.metroesp32s2.test.only
-        self.assertEqual(eng.unbuildable_examples(), [sketch])   # CI's matrix builds it on no board either
-        path = f'{sketch}/msc_esp32_file_browser.ino'
-        sel = eng.select([path])
-        self.assertEqual(sel['builds'], {})
-        self.assertEqual([u['path'] for u in sel['uncovered']], [path])
+        sketches = [
+            'examples/MassStorage/msc_esp32_file_browser',  # .funhouse/.magtag/.metroesp32s2.test.only
+            'examples/MassStorage/msc_sdio_ch32',           # .none.test.only: no Metro SDIO target in CI
+        ]
+        self.assertEqual(eng.unbuildable_examples(), sketches)
+        for sketch in sketches:
+            with self.subTest(sketch=sketch):
+                path = f'{sketch}/{Path(sketch).name}.ino'
+                sel = eng.select([path])
+                self.assertEqual(sel['builds'], {})
+                self.assertEqual([u['path'] for u in sel['uncovered']], [path])
 
     def test_skip_txt_lines(self):
         self.assertFalse(eng.eligible('CH32V20x_EVT', 'examples/WebUSB/webusb_rgb'))
